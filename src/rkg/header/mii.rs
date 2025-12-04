@@ -75,6 +75,7 @@ pub struct Mii {
 
 impl Mii {
     pub fn new(mii_data: &[u8]) -> Self {
+        // TODO: read mii data
         mii_data[0]; // This line is only here to avoid complaining about unused variables, remove this when implementing actual data reading
         Self::default()
     }

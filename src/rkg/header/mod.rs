@@ -5,7 +5,6 @@ use crate::rkg::header::{finish_time::FinishTime, mii::Mii};
 pub mod finish_time;
 pub mod mii;
 
-#[allow(dead_code)]
 pub struct Header {
     rkgd: String,                        // 0x04, offset 0x00
     finish_time: FinishTime,             // 0x03, offset 0x04

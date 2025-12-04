@@ -8,8 +8,9 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     // TODO: gather several more test ghosts and data to test data reading
+    // TODO: create structs for input data and CTGP metadata footer
 
-    // get the path of the current executable and then go 2 directories up (since .exe is in debug/build)
+    // get the path of the current executable and then go 3 directories up (since .exe is in target/debug/build)
     let mut ghost_file_path: PathBuf = env::current_exe().expect("Failed to get current exe path");
     ghost_file_path.pop();
     ghost_file_path.pop();
@@ -44,7 +45,7 @@ fn main() {
     assert_eq!(header.finish_time().seconds(), 3);
     assert_eq!(header.finish_time().milliseconds(), 904);
     assert_eq!(header.finish_time().string(), "01:03.904");
-    
+
     // Every commented out assert here signifies data that isn't being read by the program yet (i.e. this is the amount of work i have left to do on data reading)
     /*
     assert_eq!(header.track_id(), 0x08);
@@ -67,8 +68,6 @@ fn main() {
     assert_eq!(header.location_code(), 0xFFFF);
     assert_eq!(header.mii_crc16(), 1780);
     */
-
-
 
     println!("\nAll tests passed!");
 }
