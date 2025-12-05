@@ -1,43 +1,16 @@
 // TODO: Once RKG struct is defined in lib.rs, move this to tests/ in the root directory
+// TODO: Once more test files are gathered, write more tests
 
 use crate::header::Header;
-use std::env;
-use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
 
 #[test]
 fn test_rkg_header() {
-    // TODO: gather several more test ghosts and data to test data reading
-
-    // get the path of the current executable and then go 4 directories up (since .exe is in target/debug/deps)
-    let mut ghost_file_path: PathBuf = env::current_exe().expect("Failed to get current exe path");
-    ghost_file_path.pop();
-    ghost_file_path.pop();
-    ghost_file_path.pop();
-    ghost_file_path.pop();
-    ghost_file_path.push("test_ghosts");
-    ghost_file_path.push("JC_LC.rkg");
-
-    // Path to rkg
-    let path: &Path = Path::new(&ghost_file_path);
-    let display: std::path::Display<'_> = path.display();
-
     let mut rkg_data: Vec<u8> = Vec::new();
-
-    // Open file and extract bytes
-    match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {}", display, why),
-        Ok(file) => {
-            println!("File opened successfully!\n");
-            for byte_result in file.bytes() {
-                match byte_result {
-                    Err(why) => panic!("Failed to read byte: {}", why),
-                    Ok(byte) => rkg_data.push(byte),
-                }
-            }
-        }
-    };
+    std::fs::File::open("./test_ghosts/JC_LC.rkg")
+        .expect("Couldn't find `./test_ghosts/JC_LC.rkg`")
+        .read_to_end(&mut rkg_data)
+        .expect("Couldn't read bytes in file");
 
     let header: Header = Header::new(&rkg_data);
 
