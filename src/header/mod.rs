@@ -6,7 +6,6 @@ use crate::header::{
     slot_id::{SlotId, SlotIdError},
 };
 
-pub mod combo;
 pub mod finish_time;
 pub mod mii;
 pub mod slot_id;
