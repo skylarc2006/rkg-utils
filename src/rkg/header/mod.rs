@@ -39,7 +39,7 @@ impl Header {
         let mut rkg_reader: BitReader<'_> = BitReader::new(&rkg_data);
 
         let rkgd: String = get_rkgd(&mut rkg_reader);
-        let finish_time: FinishTime = FinishTime::from_reader(&mut rkg_reader);
+        let finish_time: FinishTime = FinishTime::from(&mut rkg_reader);
         let track_id: u8 = rkg_reader.read_u8(6).expect("Failed to read track ID");
         let unknown1: u8 = rkg_reader.read_u8(2).expect("Failed to read unknown1");
         let vehicle_id: u8 = rkg_reader.read_u8(6).expect("Failed to read vehicle ID");
@@ -71,7 +71,7 @@ impl Header {
 
         let mut lap_split_times: Vec<FinishTime> = Vec::new();
         for _ in 1..=9 {
-            lap_split_times.push(FinishTime::from_reader(&mut rkg_reader));
+            lap_split_times.push(FinishTime::from(&mut rkg_reader));
         }
 
         // Skip garbage RAM data
