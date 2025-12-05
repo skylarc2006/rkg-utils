@@ -1,6 +1,7 @@
 use bitreader::BitReader;
 
 use crate::header::{
+    combo::{Combo, ComboError},
     finish_time::FinishTime,
     mii::Mii,
     slot_id::{SlotId, SlotIdError},
@@ -19,14 +20,15 @@ pub enum HeaderError {
     BitReaderError(#[from] bitreader::BitReaderError),
     #[error("Slot ID Error: {0}")]
     SlotIdError(#[from] SlotIdError),
+    #[error("Combo Error: {0}")]
+    ComboError(#[from] ComboError),
 }
 
 pub struct Header {
-    finish_time: FinishTime,             // 0x03, offset 0x04
-    slot_id: SlotId,                     // 6 bits, offset 0x07
-    unknown1: u8,                        // 2 bits, offset 0x07.6, likely padding
-    vehicle_id: u8,                      // 6 bits, offset 0x08
-    character_id: u8,                    // 6 bits, offset 0x08.6
+    finish_time: FinishTime,
+    slot_id: SlotId,
+    unknown1: u8,
+    combo: Combo,
     year_set: u16, // 7 bits, offset 0x09.4 (Stores year relative to 2000 but will be stored as actual year here)
     month_set: u8, // 4 bits, offset 0x0A.3
     day_set: u8,   // 5 bits, offset 0x0A.7
@@ -62,8 +64,8 @@ impl Header {
 
         let unknown1 = rkg_reader.read_u8(2)?; // Padding
 
-        let vehicle_id = rkg_reader.read_u8(6)?;
-        let character_id = rkg_reader.read_u8(6)?;
+        let combo = Combo::try_from(&mut rkg_reader)?;
+
         let year_set = rkg_reader.read_u16(7)? + 2000;
         let month_set = rkg_reader.read_u8(4)?;
         let day_set = rkg_reader.read_u8(5)?;
@@ -112,8 +114,7 @@ impl Header {
             finish_time,
             slot_id,
             unknown1,
-            vehicle_id,
-            character_id,
+            combo,
             year_set,
             month_set,
             day_set,
@@ -148,12 +149,8 @@ impl Header {
         self.unknown1
     }
 
-    pub fn vehicle_id(&self) -> u8 {
-        self.vehicle_id
-    }
-
-    pub fn character_id(&self) -> u8 {
-        self.character_id
+    pub fn combo(&self) -> &Combo {
+        &self.combo
     }
 
     pub fn year_set(&self) -> u16 {
