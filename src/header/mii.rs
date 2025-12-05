@@ -1,78 +1,75 @@
 use bitreader::BitReader;
 
-// TEMPORARY!!! Both of these traits are only here until work on reading mii data actually begins
-#[allow(dead_code)]
-#[derive(Default)]
 pub struct Mii {
-    unknown1: bool,                 // 1 bit, offset 0x00
-    is_girl: bool,                  // 1 bit, offset 0x00.1
-    month: u8,                      // 4 bits, offset 0x00.2
-    day: u8,                        // 5 bits, offset 0x00.6
-    favorite_color: u8,             // 4 bits, offset 0x01.3
-    is_favorite: bool,              // 1 bit, offset 0x01.7
-    name: String,                   // 0x14 (10 chars), offset 0x02
-    height: u8,                     // 0x01, offset 0x16
-    weight: u8,                     // 0x01, offset 0x17
-    mii_id1: u8,                    // 0x01, offset 0x18
-    mii_id2: u8,                    // 0x01, offset 0x19
-    mii_id3: u8,                    // 0x01, offset 0x1A
-    mii_id4: u8,                    // 0x01, offset 0x1B
-    system_id0: u8,                 // 0x01, offset 0x1C
-    system_id1: u8,                 // 0x01, offset 0x1D
-    system_id2: u8,                 // 0x01, offset 0x1E
-    system_id3: u8,                 // 0x01, offset 0x1F
-    face_shape: u8,                 // 3 bits, offset 0x20
-    skin_color: u8,                 // 3 bits, offset 0x20.3
-    facial_feature: u8,             // 4 bits, offset 0x20.6
-    unknown2: u8,                   // 3 bits, offset 0x21.2
-    mingle_off: bool,               // 1 bit, offset 0x21.5
-    unknown3: bool,                 // 1 bit, offset 0x21.6
-    downloaded: bool,               // 1 bit, offset 0x21.7
-    hair_type: u8,                  // 7 bits, offset 0x22
-    hair_color: u8,                 // 3 bits, offset 0x22.7
-    hair_part_reversed: bool,       // 1 bit, offset 0x23.2
-    unknown4: u8,                   // 5 bits, offset 0x23.3
-    eyebrow_type: u8,               // 5 bits, offset 0x24
-    unknown5: bool,                 // 1 bit, offset 0x24.5
-    eyebrow_rotation: u8,           // 4 bits, offset 0x24.6
-    unknown6: u8,                   // 6 bits, offset 0x25.2
-    eyebrow_color: u8,              // 3 bits, offset 0x26
-    eyebrow_size: u8,               // 4 bits, offset 0x26.3
-    eyebrow_vertical_pos: u8,       // 5 bits, offset 0x26.7
-    eyebrow_horizontal_spacing: u8, // 4 bits, offset 0x27.4
-    eye_type: u8,                   // 6 bits, offset 0x28
-    unknown7: u8,                   // 2 bits, offset 0x28.6
-    eye_rotation: u8,               // 3 bits, offset 0x29
-    eye_vertical_pos: u8,           // 5 bits, offset 0x29.3
-    eye_color: u8,                  // 3 bits, offset 0x2A
-    unknown8: bool,                 // 1 bit, offset 0x2A.3
-    eye_size: u8,                   // 3 bits, offset 0x2A.4
-    eye_horizontal_spacing: u8,     // 4 bits, offset 0x2A.7
-    unknown9: u8,                   // 5 bits, offset 0x2B.3
-    nose_type: u8,                  // 4 bits, offset 0x2C
-    nose_size: u8,                  // 4 bits, offset 0x2C.4
-    nose_vertical_pos: u8,          // 5 bits, offset 0x2D
-    unknown10: u8,                  // 3 bits, offset 0x2D.5
-    lip_type: u8,                   // 5 bits, offset 0x2E
-    lip_color: u8,                  // 2 bits, offset 0x2E.5
-    lip_size: u8,                   // 4 bits, offset 0x2E.7
-    lip_vertical_pos: u8,           // 5 bits, offset 0x2F.3
-    glasses_type: u8,               // 4 bits, offset 0x30
-    glasses_color: u8,              // 3 bits, offset 0x30.4
-    unknown11: bool,                // 1 bit, offset 0x30.7
-    glasses_size: u8,               // 3 bits, offset 0x31
-    glasses_vertical_pos: u8,       // 5 bits, offset 0x31.3
-    mustache_type: u8,              // 2 bits, offset 0x32
-    beard_type: u8,                 // 2 bits, offset 0x32.2
-    facial_hair_color: u8,          // 3 bits, offset 0x32.4
-    mustache_size: u8,              // 4 bits, offset 0x32.7
-    mustache_vertical_pos: u8,      // 5 bits, offset 0x33.3
-    has_mole: bool,                 // 1 bit, offset 0x34
-    mole_size: u8,                  // 4 bits, offset 0x34.1
-    mole_vertical_pos: u8,          // 5 bits, offset 0x34.5
-    mole_horizontal_pos: u8,        // 5 bits, offset 0x35.2
-    unknown12: bool,                // 1 bit, offset 0x35.7
-    creator_name: String,           // 0x14 (10 chars), offset 0x36
+    unknown1: bool,
+    is_girl: bool,
+    month: u8,
+    day: u8,
+    favorite_color: u8,
+    is_favorite: bool,
+    name: String,
+    height: u8,
+    weight: u8,
+    mii_id1: u8,
+    mii_id2: u8,
+    mii_id3: u8,
+    mii_id4: u8,
+    system_id0: u8,
+    system_id1: u8,
+    system_id2: u8,
+    system_id3: u8,
+    face_shape: u8,
+    skin_color: u8,
+    facial_feature: u8,
+    unknown2: u8,
+    mingle_off: bool,
+    unknown3: bool,
+    downloaded: bool,
+    hair_type: u8,
+    hair_color: u8,
+    hair_part_reversed: bool,
+    unknown4: u8,
+    eyebrow_type: u8,
+    unknown5: bool,
+    eyebrow_rotation: u8,
+    unknown6: u8,
+    eyebrow_color: u8,
+    eyebrow_size: u8,
+    eyebrow_vertical_pos: u8,
+    eyebrow_horizontal_spacing: u8,
+    eye_type: u8,
+    unknown7: u8,
+    eye_rotation: u8,
+    eye_vertical_pos: u8,
+    eye_color: u8,
+    unknown8: bool,
+    eye_size: u8,
+    eye_horizontal_spacing: u8,
+    unknown9: u8,
+    nose_type: u8,
+    nose_size: u8,
+    nose_vertical_pos: u8,
+    unknown10: u8,
+    lip_type: u8,
+    lip_color: u8,
+    lip_size: u8,
+    lip_vertical_pos: u8,
+    glasses_type: u8,
+    glasses_color: u8,
+    unknown11: bool,
+    glasses_size: u8,
+    glasses_vertical_pos: u8,
+    mustache_type: u8,
+    beard_type: u8,
+    facial_hair_color: u8,
+    mustache_size: u8,
+    mustache_vertical_pos: u8,
+    has_mole: bool,
+    mole_size: u8,
+    mole_vertical_pos: u8,
+    mole_horizontal_pos: u8,
+    unknown12: bool,
+    creator_name: String,
 }
 
 impl Mii {

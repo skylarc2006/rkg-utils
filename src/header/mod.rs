@@ -21,31 +21,30 @@ pub enum HeaderError {
 }
 
 pub struct Header {
-    finish_time: FinishTime,             // 0x03, offset 0x04
-    slot_id: SlotId,                     // 6 bits, offset 0x07
-    unknown1: u8,                        // 2 bits, offset 0x07.6, likely padding
-    vehicle_id: u8,                      // 6 bits, offset 0x08
-    character_id: u8,                    // 6 bits, offset 0x08.6
-    year_set: u16, // 7 bits, offset 0x09.4 (Stores year relative to 2000 but will be stored as actual year here)
-    month_set: u8, // 4 bits, offset 0x0A.3
-    day_set: u8,   // 5 bits, offset 0x0A.7
-    controller_id: u8, // 4 bits, offset 0x0B.4
-    unknown2: u8,  // 4 bits, offset 0x0C, always 0?
-    is_compressed: bool, // 1 bit, offset 0xC.4
-    unknown3: u8,  // 2 bits, offset 0x0C.5, always 0?
-    ghost_type: u8, // 7 bits, offset 0x0C.7
-    is_automatic_drift: bool, // 1 bit, offset 0x0D.6
-    unknown4: bool, // 1 bit, offset 0x0D.7, likely padding
-    decompressed_input_data_length: u16, // 0x02, offset 0x0E
-    lap_count: u8, // 0x01, offset 0x10
-    lap_split_times: Vec<FinishTime>, // 0x0F, offset 0x11, first 5 laps
-    // 0x14, offset 0x20, vanilla game attempts to store laps greater than 5 but fails.
-    country_code: u8,   // 0x01, offset 0x34
-    state_code: u8,     // 0x01, offset 0x35
-    location_code: u16, // 0x02, offset 0x36
-    unknown6: u32,      // 0x04, offset 0x38, typically 0
-    mii_data: Mii,      // 0x4A, offset 0x3C
-    mii_crc16: u16,     // 0x02, offset 0x86
+    finish_time: FinishTime,
+    slot_id: SlotId,
+    unknown1: u8,
+    vehicle_id: u8,
+    character_id: u8,
+    year_set: u16,
+    month_set: u8,
+    day_set: u8,
+    controller_id: u8,
+    unknown2: u8,
+    is_compressed: bool,
+    unknown3: u8,
+    ghost_type: u8,
+    is_automatic_drift: bool,
+    unknown4: bool,
+    decompressed_input_data_length: u16,
+    lap_count: u8,
+    lap_split_times: Vec<FinishTime>,
+    country_code: u8,
+    state_code: u8,
+    location_code: u16,
+    unknown6: u32,
+    mii_data: Mii,
+    mii_crc16: u16,
 }
 
 impl Header {

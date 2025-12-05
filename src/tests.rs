@@ -1,6 +1,3 @@
-// TODO: Once RKG struct is defined in lib.rs, move this to tests/ in the root directory
-// TODO: Once more test files are gathered, write more tests
-
 use crate::header::{Header, slot_id::SlotId};
 use std::io::Read;
 
@@ -108,5 +105,5 @@ fn test_rkg_header() {
 
     assert_eq!(header.mii_data().creator_name(), "JC");
 
-    assert_eq!(header.mii_crc16(), 1780);
+    assert_eq!(header.mii_crc16(), 0x06F4);
 }
