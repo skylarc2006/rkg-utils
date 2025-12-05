@@ -83,19 +83,19 @@ impl Mii {
         let is_girl: bool = mii_reader.read_bool().expect("Failed to read is_girl");
         let month: u8 = mii_reader.read_u8(4).expect("Failed to read month");
         let day: u8 = mii_reader.read_u8(5).expect("Failed to read day");
-        
+
         let favorite_color: u8 = mii_reader
             .read_u8(4)
             .expect("Failed to read favorite color");
-        
+
         let is_favorite: bool = mii_reader.read_bool().expect("Failed to read is_favorite");
         let name: String = get_name(&mut mii_reader);
         let height: u8 = mii_reader.read_u8(8).expect("Failed to read height");
-        
+
         let weight: u8 = mii_reader
             .read_u8(8)
             .expect("Failed to read weight (fatass)");
-        
+
         // TODO: everything past this point
         let mii_id1: u8 = 0;
         let mii_id2: u8 = 0;
