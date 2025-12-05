@@ -59,3 +59,25 @@ impl From<&mut bitreader::BitReader<'_>> for FinishTime {
         }
     }
 }
+
+impl From<[u8; 3]> for FinishTime {
+    fn from(value: [u8; 3]) -> Self {
+        // 3 Bytes, where M = Minutes, S = Seconds and C = Millis.
+        // 1. 0bMMMMMMMS
+        // 2. 0bSSSSSSCC
+        // 3. 0bCCCCCCCC
+
+        // max M = 5    // 0b0000101
+        // max S = 59   // 0b0111011
+        // max C = 999  // 0b1111100111
+        // 1. 0b00001010
+        // 2. 0b11101111
+        // 3. 0b11100111
+
+        Self {
+            minutes: value[0],
+            seconds: value[1] >> 2,
+            milliseconds: (((value[1] & 0b00000011) as u16) << 8) | (value[2] as u16),
+        }
+    }
+}
