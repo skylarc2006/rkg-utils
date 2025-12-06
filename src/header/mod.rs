@@ -4,8 +4,8 @@ use crate::header::{
     combo::{Combo, ComboError},
     controller::{Controller, ControllerError},
     date::{Date, DateError},
-    finish_time::{FinishTime, FinishTimeError},
     ghost_type::{GhostType, GhostTypeError},
+    in_game_time::{InGameTime, InGameTimeError},
     mii::Mii,
     slot_id::{SlotId, SlotIdError},
 };
@@ -13,8 +13,8 @@ use crate::header::{
 pub mod combo;
 pub mod controller;
 pub mod date;
-pub mod finish_time;
 pub mod ghost_type;
+pub mod in_game_time;
 pub mod mii;
 pub mod slot_id;
 
@@ -26,8 +26,8 @@ pub enum HeaderError {
     NotCorrectSize,
     #[error("BitReader Error: {0}")]
     BitReaderError(#[from] bitreader::BitReaderError),
-    #[error("Finish Time Error: {0}")]
-    FinishTimeError(#[from] FinishTimeError),
+    #[error("In Game Time Error: {0}")]
+    InGameTimeError(#[from] InGameTimeError),
     #[error("Slot ID Error: {0}")]
     SlotIdError(#[from] SlotIdError),
     #[error("Combo Error: {0}")]
@@ -41,7 +41,7 @@ pub enum HeaderError {
 }
 
 pub struct Header {
-    finish_time: FinishTime,
+    finish_time: InGameTime,
     slot_id: SlotId,
     combo: Combo,
     date_set: Date,
@@ -51,7 +51,7 @@ pub struct Header {
     is_automatic_drift: bool,
     decompressed_input_data_length: u16,
     lap_count: u8,
-    lap_split_times: Vec<FinishTime>,
+    lap_split_times: [InGameTime; 8],
     country_code: u8,
     state_code: u8,
     location_code: u16,
@@ -69,7 +69,7 @@ impl Header {
             return Err(HeaderError::NotCorrectSize);
         }
 
-        let finish_time = FinishTime::try_from(&mut header_reader)?;
+        let finish_time = InGameTime::try_from(&mut header_reader)?;
         let slot_id = SlotId::try_from(&mut header_reader)?;
 
         header_reader.skip(2)?; // Padding
@@ -95,10 +95,22 @@ impl Header {
 
         let lap_count = header_reader.read_u8(8)?;
 
-        let mut lap_split_times: Vec<FinishTime> = Vec::with_capacity(8);
-        for _ in 1..=9 {
-            lap_split_times.push(FinishTime::try_from(&mut header_reader)?);
+        let mut lap_split_times: [InGameTime; 8] = [
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        ];
+        for index in 0..lap_count {
+            lap_split_times[index as usize] = InGameTime::try_from(&mut header_reader)?;
         }
+        
+        // Skip non-read laps
+        header_reader.skip(((9 - lap_count) * 24) as u64)?;
 
         // Skip garbage RAM data
         header_reader.skip(64)?;
@@ -138,7 +150,7 @@ impl Header {
         })
     }
 
-    pub fn finish_time(&self) -> &FinishTime {
+    pub fn finish_time(&self) -> &InGameTime {
         &self.finish_time
     }
 
@@ -178,7 +190,7 @@ impl Header {
         self.lap_count
     }
 
-    pub fn lap_split_times(&self) -> &[FinishTime] {
+    pub fn lap_split_times(&self) -> &[InGameTime] {
         &self.lap_split_times
     }
 
