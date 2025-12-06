@@ -1,18 +1,19 @@
 use std::fmt::Display;
 
 #[derive(thiserror::Error, Debug)]
-pub enum FinishTimeError {
+pub enum InGameTimeError {
     #[error("BitReader Error: {0}")]
     BitReaderError(#[from] bitreader::BitReaderError),
 }
 
-pub struct FinishTime {
+#[derive(Default)]
+pub struct InGameTime {
     minutes: u8,
     seconds: u8,
     milliseconds: u16,
 }
 
-impl FinishTime {
+impl InGameTime {
     #[inline(always)]
     pub fn new(minutes: u8, seconds: u8, milliseconds: u16) -> Self {
         Self {
@@ -35,7 +36,7 @@ impl FinishTime {
     }
 }
 
-impl Display for FinishTime {
+impl Display for InGameTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -45,8 +46,8 @@ impl Display for FinishTime {
     }
 }
 
-impl TryFrom<&mut bitreader::BitReader<'_>> for FinishTime {
-    type Error = FinishTimeError;
+impl TryFrom<&mut bitreader::BitReader<'_>> for InGameTime {
+    type Error = InGameTimeError;
     fn try_from(value: &mut bitreader::BitReader<'_>) -> Result<Self, Self::Error> {
         Ok(Self::new(
             value.read_u8(7)?,
@@ -56,7 +57,7 @@ impl TryFrom<&mut bitreader::BitReader<'_>> for FinishTime {
     }
 }
 
-impl From<[u8; 3]> for FinishTime {
+impl From<[u8; 3]> for InGameTime {
     fn from(value: [u8; 3]) -> Self {
         // 3 Bytes, where M = Minutes, S = Seconds and C = Millis.
         // 1. 0bMMMMMMMS
