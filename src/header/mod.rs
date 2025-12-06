@@ -70,8 +70,7 @@ impl Header {
 
         if header_reader.read_u32(32)? != 0x524B4744 {
             return Err(HeaderError::NotRKGD);
-        }
-        else if header_data.len() != 0x88 {
+        } else if header_data.len() != 0x88 {
             return Err(HeaderError::NotCorrectSize);
         }
 
