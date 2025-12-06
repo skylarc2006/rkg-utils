@@ -1,3 +1,5 @@
+// http://wiibrew.org/wiki/Mii_Data#Mii_format
+
 use bitreader::BitReader;
 
 #[derive(thiserror::Error, Debug)]

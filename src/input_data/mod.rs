@@ -1,3 +1,5 @@
+// https://wiki.tockdom.com/wiki/RKG_(File_Format)#Controller_Input_Data
+
 pub mod face_input;
 
 pub struct InputData {

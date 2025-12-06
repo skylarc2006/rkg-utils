@@ -1,3 +1,5 @@
+// https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header
+
 use bitreader::BitReader;
 
 use crate::header::{

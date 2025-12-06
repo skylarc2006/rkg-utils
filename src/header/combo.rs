@@ -1,3 +1,6 @@
+// https://wiki.tockdom.com/wiki/List_of_Identifiers#Characters
+// https://wiki.tockdom.com/wiki/List_of_Identifiers#Vehicles
+
 pub struct Combo {
     character: Character,
     vehicle: Vehicle,
