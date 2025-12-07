@@ -132,4 +132,8 @@ fn test_rkg_input_data() {
     for (index, face_input) in input_data.face_inputs().iter().enumerate() {
         println!("Face input {}: {:?}", index + 1, face_input);
     }
+    println!("");
+    for (index, trick_input) in input_data.trick_inputs().iter().enumerate() {
+        println!("Trick input {}: {:?}", index + 1, trick_input);
+    }
 }

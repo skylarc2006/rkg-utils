@@ -3,13 +3,18 @@
 use bitreader::BitReader;
 
 use crate::input_data::face_input::FaceInput;
+use crate::input_data::trick_input::TrickInput;
 
+pub mod direction_input;
 pub mod face_input;
+pub mod trick_input;
 
 #[derive(thiserror::Error, Debug)]
 pub enum InputDataError {
     #[error("Face Input Error: {0}")]
     FaceInputError(#[from] face_input::FaceInputError),
+    #[error("Trick Input Error: {0}")]
+    TrickInputError(#[from] trick_input::TrickInputError),
     #[error("BitReader Error: {0}")]
     BitReaderError(#[from] bitreader::BitReaderError),
 }
@@ -21,7 +26,7 @@ pub struct InputData {
 
     face_inputs: Vec<FaceInput>,
     // direction_inputs: Vec<DirectionInput>,
-    // trick_inputs: Vec<TrickInputs>,
+    trick_inputs: Vec<TrickInput>,
 }
 
 impl InputData {
@@ -41,13 +46,23 @@ impl InputData {
             face_inputs.push(FaceInput::try_from(&mut input_reader)?);
         }
 
+        // [TEMPORARY] Skip over direction inputs because it's not yet implemented
+        for _ in 0..direction_input_count {
+            input_reader.skip(16)?;
+        }
+
+        let mut trick_inputs: Vec<TrickInput> = Vec::new();
+        for _ in 0..trick_input_count {
+            trick_inputs.push(TrickInput::try_from(&mut input_reader)?);
+        }
+
         Ok(Self {
             face_input_count,
             direction_input_count,
             trick_input_count,
             face_inputs,
             // direction_inputs,
-            // trick_inputs,
+            trick_inputs,
         })
     }
 
@@ -65,5 +80,9 @@ impl InputData {
 
     pub fn face_inputs(&self) -> &[FaceInput] {
         &self.face_inputs
+    }
+
+    pub fn trick_inputs(&self) -> &[TrickInput] {
+        &self.trick_inputs
     }
 }
