@@ -23,10 +23,6 @@ pub enum InputDataError {
 }
 
 pub struct InputData {
-    face_input_count: u16,
-    stick_input_count: u16,
-    dpad_input_count: u16,
-
     face_inputs: Vec<FaceInput>,
     stick_inputs: Vec<StickInput>,
     dpad_inputs: Vec<DPadInput>,
@@ -80,25 +76,10 @@ impl InputData {
         }
 
         Ok(Self {
-            face_input_count,
-            stick_input_count,
-            dpad_input_count,
             face_inputs,
             stick_inputs,
             dpad_inputs,
         })
-    }
-
-    pub fn face_input_count(&self) -> u16 {
-        self.face_input_count
-    }
-
-    pub fn stick_input_count(&self) -> u16 {
-        self.stick_input_count
-    }
-
-    pub fn dpad_input_count(&self) -> u16 {
-        self.dpad_input_count
     }
 
     pub fn face_inputs(&self) -> &[FaceInput] {

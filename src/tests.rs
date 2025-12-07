@@ -125,10 +125,6 @@ fn test_rkg_input_data() {
     let input_data =
         InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Couldn't read input data");
 
-    assert_eq!(input_data.face_input_count(), 0x18);
-    assert_eq!(input_data.stick_input_count(), 0x037B);
-    assert_eq!(input_data.dpad_input_count(), 0x09);
-
     for (index, face_input) in input_data.face_inputs().iter().enumerate() {
         println!("Face input {}: {:?}", index + 1, face_input);
     }
