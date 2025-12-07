@@ -1,5 +1,3 @@
-// https://wiki.tockdom.com/wiki/RKG_(File_Format)#Controller_Input_Data
-
 use bitreader::BitReader;
 
 use crate::input_data::dpad_input::DPadInput;
@@ -22,6 +20,8 @@ pub enum InputDataError {
     BitReaderError(#[from] bitreader::BitReaderError),
 }
 
+/// Handles all input data being read
+/// Tockdom wiki: https://wiki.tockdom.com/wiki/RKG_(File_Format)#Controller_Input_Data
 pub struct InputData {
     // TODO: combine these into a single Vec, define an Input struct capable of holding all pressed buttons and stick state
     face_inputs: Vec<FaceInput>,
