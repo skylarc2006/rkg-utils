@@ -11,7 +11,6 @@ pub enum FaceButton {
     Accelerator,
     Brake,
     Item,
-    BrakeWhileAcceleratorHeld,
     Unknown,
 }
 
@@ -21,14 +20,11 @@ pub fn parse_face_buttons(value: u8) -> Result<Vec<FaceButton>, FaceButtonError>
     if value & 0x01 != 0 {
         buttons.push(FaceButton::Accelerator);
     }
-    if value & 0x02 != 0 {
+    if value & 0x02 != 0 || value & 0x08 != 0 {
         buttons.push(FaceButton::Brake);
     }
     if value & 0x04 != 0 {
         buttons.push(FaceButton::Item);
-    }
-    if value & 0x08 != 0 {
-        buttons.push(FaceButton::BrakeWhileAcceleratorHeld);
     }
     if value & 0xF0 != 0 {
         buttons.push(FaceButton::Unknown);
