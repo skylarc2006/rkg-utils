@@ -34,6 +34,7 @@ impl InputData {
         let face_input_count = input_reader.read_u16(16)?;
         let direction_input_count = input_reader.read_u16(16)?;
         let trick_input_count = input_reader.read_u16(16)?;
+        input_reader.skip(16)?; // padding
 
         let mut face_inputs: Vec<FaceInput> = Vec::new();
         for _ in 0..face_input_count {

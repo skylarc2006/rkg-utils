@@ -31,7 +31,7 @@ fn test_rkg_header() {
     assert_eq!(header.combo().character(), Character::KingBoo);
     assert_eq!(header.date_set(), &Date::new(2025, 11, 12).unwrap());
     assert_eq!(header.controller(), Controller::Classic);
-    assert_eq!(header.is_compressed(), true);
+    assert_eq!(header.is_compressed(), false);
     assert_eq!(header.ghost_type(), GhostType::ExpertStaff);
     assert_eq!(header.is_automatic_drift(), true);
     assert_eq!(header.decompressed_input_data_length(), 1856);
@@ -125,5 +125,11 @@ fn test_rkg_input_data() {
     let input_data =
         InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Couldn't read input data");
 
-    // assert_eq!();
+    assert_eq!(input_data.face_input_count(), 0x18);
+    assert_eq!(input_data.direction_input_count(), 0x037B);
+    assert_eq!(input_data.trick_input_count(), 0x09);
+
+    for (index, face_input) in input_data.face_inputs().iter().enumerate() {
+        println!("Face input {}: {:?}", index + 1, face_input);
+    }
 }
