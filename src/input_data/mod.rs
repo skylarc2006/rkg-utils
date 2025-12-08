@@ -1,13 +1,13 @@
 use bitreader::BitReader;
 
-use crate::input_data::input::Input;
 use crate::input_data::dpad_input::{DPadButton, DPadInput};
 use crate::input_data::face_input::FaceInput;
+use crate::input_data::input::Input;
 use crate::input_data::stick_input::StickInput;
 
-pub mod input;
 pub mod dpad_input;
 pub mod face_input;
+pub mod input;
 pub mod stick_input;
 
 #[derive(thiserror::Error, Debug)]
@@ -121,7 +121,8 @@ impl InputData {
             // Find the minimum remaining frames (when next change occurs)
             let duration = face_remaining.min(stick_remaining).min(dpad_remaining);
 
-            if duration == u32::MAX { // if all streams exhausted
+            if duration == u32::MAX {
+                // if all streams exhausted
                 break;
             }
 
