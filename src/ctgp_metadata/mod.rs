@@ -52,7 +52,7 @@ impl CTGPMetadata {
         }
 
         let mut metadata_reader = BitReader::new(metadata);
-        let mut security_data = [0 as u8; 0x54];
+        let mut security_data = [0_u8; 0x54];
         for byte in &mut security_data {
             *byte = metadata_reader.read_u8(8)?;
         }
@@ -66,7 +66,7 @@ impl CTGPMetadata {
         let true_time_subtraction = f32::from_bits(metadata_reader.read_u32(32)?);
         let ctgp_version = metadata_reader.read_u32(32)?;
 
-        let mut unknown = [0 as u8; 0x2C];
+        let mut unknown = [0_u8; 0x2C];
         for byte in &mut unknown {
             *byte = metadata_reader.read_u8(8)?;
         }
