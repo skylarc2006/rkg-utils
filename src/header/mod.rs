@@ -6,6 +6,7 @@ use crate::{
         date::{Date, DateError},
         ghost_type::{GhostType, GhostTypeError},
         in_game_time::{InGameTime, InGameTimeError},
+        location::country::{Country, CountryError},
         mii::{Mii, MiiError},
         slot_id::{SlotId, SlotIdError},
     },
@@ -18,6 +19,7 @@ pub mod controller;
 pub mod date;
 pub mod ghost_type;
 pub mod in_game_time;
+pub mod location;
 pub mod mii;
 pub mod slot_id;
 
@@ -27,8 +29,6 @@ pub enum HeaderError {
     NotRKGD,
     #[error("Data passed is not correct size (0x88)")]
     NotCorrectSize,
-    #[error("BitReader Error: {0}")]
-    BitReaderError(#[from] bitreader::BitReaderError),
     #[error("In Game Time Error: {0}")]
     InGameTimeError(#[from] InGameTimeError),
     #[error("Slot ID Error: {0}")]
@@ -45,6 +45,8 @@ pub enum HeaderError {
     MiiError(#[from] MiiError),
     #[error("Io Error: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Country Error: {0}")]
+    CountryError(#[from] CountryError),
 }
 
 /// All the data in the Header of an RKGD
@@ -61,8 +63,8 @@ pub struct Header {
     decompressed_input_data_length: u16,
     lap_count: u8,
     lap_split_times: [InGameTime; 8],
-    country_code: u8,
-    state_code: u8,
+    country: Country,
+    subregion: u8,
     location_code: u16,
     mii_bytes: [u8; 0x4A],
     mii: Mii,
@@ -96,7 +98,7 @@ impl Header {
         let is_automatic_drift = ByteHandler::from(header_data[0x0D]).read_bool(1);
         let decompressed_input_data_length = ByteHandler::try_from(&header_data[0x0E..=0x0F])
             .unwrap()
-            .copy_words()[1];
+            .copy_word(1);
 
         let lap_count = header_data[0x10];
         let mut lap_split_times: [InGameTime; 8] = [Default::default(); 8];
@@ -107,9 +109,9 @@ impl Header {
         }
 
         let codes = ByteHandler::try_from(&header_data[0x34..=0x37]).unwrap();
-        let country_code = codes.copy_bytes()[0];
-        let state_code = codes.copy_bytes()[1];
-        let location_code = codes.copy_words()[1];
+        let country = Country::try_from(codes.copy_byte(0))?;
+        let subregion = codes.copy_byte(1);
+        let location_code = codes.copy_word(1);
 
         let mut mii_bytes = [0_u8; 0x4A];
         for (index, byte) in header_data[0x3C..0x3C + 0x4A].iter().enumerate() {
@@ -133,20 +135,20 @@ impl Header {
             decompressed_input_data_length,
             lap_count,
             lap_split_times,
-            country_code,
-            state_code,
+            country,
+            subregion,
             location_code,
             mii_bytes,
             mii,
             mii_crc16,
         })
     }
-    
+
     /// Returns true if Mii CRC16 is correct (i.e. Mii data not illegally tampered with)
     pub fn verify_mii_crc16(&self) -> bool {
         crc16(&self.mii_bytes) == self.mii_crc16()
     }
-    
+
     /// Recalculates and updates Mii CRC16
     pub fn fix_mii_crc16(&mut self) {
         self.mii_crc16 = crc16(&self.mii_bytes);
@@ -155,7 +157,7 @@ impl Header {
     pub fn finish_time(&self) -> &InGameTime {
         &self.finish_time
     }
-    
+
     pub fn set_finish_time(&mut self, finish_time: InGameTime) {
         self.finish_time = finish_time;
     }
@@ -163,7 +165,7 @@ impl Header {
     pub fn slot_id(&self) -> SlotId {
         self.slot_id
     }
-    
+
     pub fn set_slot_id(&mut self, slot_id: SlotId) {
         self.slot_id = slot_id;
     }
@@ -171,7 +173,7 @@ impl Header {
     pub fn combo(&self) -> &Combo {
         &self.combo
     }
-    
+
     pub fn set_combo(&mut self, combo: Combo) {
         self.combo = combo;
     }
@@ -183,11 +185,11 @@ impl Header {
     pub fn set_date_set(&mut self, date_set: Date) {
         self.date_set = date_set;
     }
-    
+
     pub fn controller(&self) -> Controller {
         self.controller
     }
-    
+
     pub fn set_controller(&mut self, controller: Controller) {
         self.controller = controller;
     }
@@ -199,7 +201,7 @@ impl Header {
     pub fn ghost_type(&self) -> GhostType {
         self.ghost_type
     }
-    
+
     pub fn set_ghost_type(&mut self, ghost_type: GhostType) {
         self.ghost_type = ghost_type;
     }
@@ -219,17 +221,17 @@ impl Header {
     pub fn lap_split_times(&self) -> &[InGameTime] {
         &self.lap_split_times
     }
-    
+
     pub fn set_lap_split_times(&mut self, lap_split_times: [InGameTime; 8]) {
         self.lap_split_times = lap_split_times;
     }
 
-    pub fn country_code(&self) -> u8 {
-        self.country_code
+    pub fn country(&self) -> Country {
+        self.country
     }
 
-    pub fn state_code(&self) -> u8 {
-        self.state_code
+    pub fn subregion(&self) -> u8 {
+        self.subregion
     }
 
     pub fn location_code(&self) -> u16 {

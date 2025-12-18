@@ -6,8 +6,6 @@ use crate::byte_handler::{ByteHandler, FromByteHandler};
 pub enum SlotIdError {
     #[error("Non Existent Slot ID")]
     NonExistentSlotId,
-    #[error("BitReader Error: {0}")]
-    BitReaderError(#[from] bitreader::BitReaderError),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -8,8 +8,6 @@ pub enum DateError {
     MonthInvalid,
     #[error("Day is invalid")]
     DayInvalid,
-    #[error("BitReader Error: {0}")]
-    BitReaderError(#[from] bitreader::BitReaderError),
 }
 
 #[derive(Debug)]

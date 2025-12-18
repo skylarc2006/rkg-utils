@@ -6,6 +6,7 @@ use crate::{
         controller::Controller,
         date::Date,
         ghost_type::GhostType,
+        location::country::Country,
         slot_id::SlotId,
     },
     input_data::InputData,
@@ -35,8 +36,8 @@ fn test_rkg_header() {
     assert_eq!(header.lap_split_times()[0].to_string(), "00:25.540");
     assert_eq!(header.lap_split_times()[1].to_string(), "00:19.127");
     assert_eq!(header.lap_split_times()[2].to_string(), "00:19.237");
-    assert_eq!(header.country_code(), 0xFF);
-    assert_eq!(header.state_code(), 0xFF);
+    assert_eq!(header.country(), Country::NotSet);
+    assert_eq!(header.subregion(), 0xFF);
     assert_eq!(header.location_code(), 0xFFFF);
 
     // Mii Data

@@ -4,8 +4,6 @@ use crate::byte_handler::FromByteHandler;
 pub enum GhostTypeError {
     #[error("Nonexistent Ghost Type")]
     NonexistentGhostType,
-    #[error("BitReader Error: {0}")]
-    BitReaderError(#[from] bitreader::BitReaderError),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
