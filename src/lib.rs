@@ -14,6 +14,7 @@ pub mod input_data;
  * Document and handle older CTGP footer versions
  * Be able to modify variables in ghost files
  * Implement TryFrom<_> for T where T: Into<ByteHandler>, relies on https://github.com/rust-lang/rust/issues/31844 currently
+ * Represent at a Type-system level which types can convert from T to TypeHandler to whichever Struct
  */
 
 #[cfg(test)]

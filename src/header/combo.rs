@@ -19,7 +19,7 @@ pub enum ComboError {
     #[error("Impossible Character ID")]
     ImpossibleCharacterId,
     #[error("ByteHandler Error: {0}")]
-    ByteHandlerError(#[from] ByteHandlerError)
+    ByteHandlerError(#[from] ByteHandlerError),
 }
 
 impl Combo {
@@ -44,8 +44,12 @@ impl Combo {
 impl FromByteHandler for Combo {
     type Err = ComboError;
     /// Expects Header 0x08..0x0A
-    fn from_byte_handler<T: TryInto<ByteHandler>>(handler: T) -> Result<Self, Self::Err> {
-        let mut handler = handler.try_into().map_err(|e| e)?;
+    fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
+    where
+        T: TryInto<ByteHandler>,
+        Self::Err: From<T::Error>,
+    {
+        let mut handler = handler.try_into()?;
 
         handler.shift_right(2);
         let vehicle = handler.copy_byte(2);

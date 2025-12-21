@@ -1,4 +1,3 @@
-
 #[derive(thiserror::Error, Debug)]
 pub enum ByteHandlerError {
     #[error("Couldn't convert type to ByteHandler: Too Long")]
@@ -19,18 +18,14 @@ impl ByteHandler {
     }
 
     pub fn copy_words(self) -> [u16; 2] {
-        unsafe {
-            self.words
-        }
+        unsafe { self.words }
     }
 
     pub fn copy_word(self, idx: usize) -> u16 {
         if idx > 1 {
             return 0;
         }
-        unsafe {
-            self.words[idx]
-        }
+        unsafe { self.words[idx] }
     }
 
     pub fn copy_bytes(self) -> [u8; 4] {
@@ -113,6 +108,14 @@ impl From<u16> for ByteHandler {
     }
 }
 
+macro_rules! shorten_syntax {
+    ($num:literal $value:ident $type:ty) => {
+        Ok(From::from(unsafe {
+            TryInto::<[$type; $num]>::try_into($value).unwrap_unchecked()
+        }))
+    };
+}
+
 impl TryFrom<&[u8]> for ByteHandler {
     type Error = ByteHandlerError;
 
@@ -120,15 +123,9 @@ impl TryFrom<&[u8]> for ByteHandler {
         match value.len() {
             0 => Ok(From::from(0u32)),
             1 => Ok(From::from(value[0])),
-            2 => Ok(From::from(unsafe {
-                TryInto::<[u8; 2]>::try_into(value).unwrap_unchecked()
-            })),
-            3 => Ok(From::from(unsafe {
-                TryInto::<[u8; 3]>::try_into(value).unwrap_unchecked()
-            })),
-            4 => Ok(From::from(unsafe {
-                TryInto::<[u8; 4]>::try_into(value).unwrap_unchecked()
-            })),
+            2 => shorten_syntax!(2 value u8),
+            3 => shorten_syntax!(3 value u8),
+            4 => shorten_syntax!(4 value u8),
             _ => Err(ByteHandlerError::ConversionErrorTooLong),
         }
     }
@@ -141,9 +138,7 @@ impl TryFrom<&[u16]> for ByteHandler {
         match value.len() {
             0 => Ok(From::from(0u32)),
             1 => Ok(From::from(value[0])),
-            2 => Ok(From::from(unsafe {
-                TryInto::<[u16; 2]>::try_into(value).unwrap_unchecked()
-            })),
+            2 => shorten_syntax!(2 value u16),
             _ => Err(ByteHandlerError::ConversionErrorTooLong),
         }
     }
@@ -151,5 +146,9 @@ impl TryFrom<&[u16]> for ByteHandler {
 
 pub(crate) trait FromByteHandler: Sized {
     type Err;
-    fn from_byte_handler<T: TryInto<ByteHandler>>(handler: T) -> Result<Self, Self::Err>;
+
+    fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
+    where
+        T: TryInto<ByteHandler>,
+        Self::Err: From<T::Error>;
 }

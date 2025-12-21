@@ -139,7 +139,7 @@ impl CTGPMetadata {
         }
 
         current_offset += 0x3C;
-        
+
         // True lap time difference calculation
         // TODO: this seems to work incorrectly for the 9 lap test ghost (though i don't trust atlas's viewer anymore)
         // I guess this'll have to wait until Chadsoft comes back up
@@ -154,17 +154,17 @@ impl CTGPMetadata {
             // subtract the sum of the previous laps' difference because the lap differences add up to
             // have its decimal portion be equal to the total time
             *time -= previous_subtractions;
-            
+
             while *time > 0.0 {
                 *time -= 1.0;
             }
-            
+
             previous_subtractions += *time;
             current_offset -= 0x04;
         }
-        
+
         current_offset += 0x2C;
-        
+
         let rtc_race_end = datetime_from_timestamp(u64::from_be_bytes(
             metadata[current_offset..current_offset + 0x08].try_into()?,
         ));

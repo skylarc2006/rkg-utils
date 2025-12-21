@@ -1,4 +1,4 @@
-use crate::byte_handler::FromByteHandler;
+use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 #[derive(thiserror::Error, Debug)]
 pub enum DateError {
@@ -8,6 +8,8 @@ pub enum DateError {
     MonthInvalid,
     #[error("Day is invalid")]
     DayInvalid,
+    #[error("ByteHandler Error: {0}")]
+    ByteHandlerError(#[from] ByteHandlerError),
 }
 
 #[derive(Debug)]
@@ -51,13 +53,12 @@ impl Date {
 impl FromByteHandler for Date {
     type Err = DateError;
     /// Expects Header 0x09..=0x0B
-    fn from_byte_handler<T: TryInto<crate::byte_handler::ByteHandler>>(
-        handler: T,
-    ) -> Result<Self, Self::Err> {
-        let mut handler = handler
-            .try_into()
-            .map_err(|_| ())
-            .expect("TODO: handle this");
+    fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
+    where
+        T: TryInto<crate::byte_handler::ByteHandler>,
+        Self::Err: From<T::Error>,
+    {
+        let mut handler = handler.try_into()?;
 
         handler.shift_right(4);
         let day = handler.copy_byte(3) & 0x1F;
