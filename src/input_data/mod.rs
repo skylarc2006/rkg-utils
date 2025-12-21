@@ -203,7 +203,7 @@ impl InputData {
 
 /// Decompress YAZ1-compressed input data
 /// Adapted from https://github.com/AtishaRibeiro/InputDisplay/blob/master/InputDisplay/Core/Yaz1dec.cs
-fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
+pub fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
     // YAZ1 files start with "Yaz1" magic header
     if data.len() < 16 || &data[0..4] != b"Yaz1" {
         return None;

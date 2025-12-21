@@ -116,12 +116,6 @@ fn test_rkg_input_data() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    // TODO: Handle CKGD
-    /*
-     * In vanilla ghosts, input data always ends 4 bytes before the end of the file,
-     * but with a CTGP ghost the input data would end [CTGP info footer length] bytes
-     * before the end of the file.
-     */
     let input_data =
         InputData::new(&rkg_data[0x88..rkg_data.len() - 0xE0]).expect("Couldn't read input data");
 
@@ -142,18 +136,9 @@ fn test_ctgp_metadata() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let ctgp_len_offset = rkg_data.len() - 0xC;
-    let metadata_length = u32::from_be_bytes([
-        rkg_data[ctgp_len_offset],
-        rkg_data[ctgp_len_offset + 1],
-        rkg_data[ctgp_len_offset + 2],
-        rkg_data[ctgp_len_offset + 3],
-    ]) as usize;
+    let ctgp_metadata = CTGPMetadata::new(&rkg_data[0x88..]).expect("Failed to read CTGP metadata");
 
-    let ctgp_metadata =
-        CTGPMetadata::new(&rkg_data[&rkg_data.len() - metadata_length..&rkg_data.len() - 0x04])
-            .expect("Failed to read CTGP metadata");
-
+    // Some asserts
     assert_eq!(
         ctgp_metadata.track_sha1(),
         [
@@ -165,12 +150,94 @@ fn test_ctgp_metadata() {
         ctgp_metadata.player_id().to_be_bytes(),
         [0xFD, 0x31, 0x97, 0xB0, 0x7D, 0x9D, 0x2B, 0x84]
     );
-    let shroomstrat: [u8; 8] = [3, 0, 0, 0, 0, 0, 0, 0];
+    let shroomstrat: [u8; 3] = [3, 0, 0];
     assert_eq!(ctgp_metadata.shroomstrat(), &shroomstrat);
-    println!("Date set: {}", ctgp_metadata.rtc_race_end());
+}
+
+#[test]
+fn print_ctgp_metadata() {
+    let mut rkg_data: Vec<u8> = Vec::new();
+    std::fs::File::open("./test_ghosts/skylar_pause_ghost_compressed.rkg")
+        .expect("Couldn't find `./test_ghosts/skylar_pause_ghost_compressed.rkg`")
+        .read_to_end(&mut rkg_data)
+        .expect("Couldn't read bytes in file");
+
+    let ctgp_metadata = CTGPMetadata::new(&rkg_data[0x88..]).expect("Failed to read CTGP metadata");
+
+    // Print info
+    print!("Track SHA1: ");
+    for byte in ctgp_metadata.track_sha1().iter() {
+        print!("{:02X}", *byte);
+    }
+    println!();
+
+    print!("Player ID: ");
+    for byte in ctgp_metadata.player_id().to_be_bytes().iter() {
+        print!("{:02X}", *byte);
+    }
+    println!();
+
     println!(
-        "Pause time: {}ms",
+        "True time subtraction: {}ms",
+        ctgp_metadata.true_time_subtraction()
+    );
+    println!(
+        "CTGP Version (currently hardcoded): {}\n",
+        ctgp_metadata.ctgp_version().unwrap()
+    );
+
+    for (index, time) in ctgp_metadata
+        .true_lap_time_subtractions()
+        .iter()
+        .enumerate()
+    {
+        println!("Lap {} true time subtraction: {}ms", index + 1, time);
+    }
+    println!();
+
+    println!("RTC Race Begin: {}", ctgp_metadata.rtc_race_begins());
+    println!("RTC Race End: {}", ctgp_metadata.rtc_race_end());
+    println!(
+        "RTC Time Paused: {}ms",
         ctgp_metadata.rtc_time_paused().num_milliseconds()
+    );
+    println!("List of pause frames: {:#?}", ctgp_metadata.pause_frames());
+
+    println!("\nMy Stuff enabled? {}", ctgp_metadata.my_stuff_enabled());
+    println!("My Stuff used? {}", ctgp_metadata.my_stuff_used());
+    println!(
+        "USB Gamecube enabled? {}",
+        ctgp_metadata.usb_gamecube_enabled()
+    );
+    println!(
+        "Final lap dubious intersection? {}",
+        ctgp_metadata.final_lap_dubious_intersection()
+    );
+
+    println!(
+        "\nAll lap dubious intersection bools: {:?}",
+        ctgp_metadata.lap_split_dubious_intersections().unwrap()
+    );
+
+    println!("\nShroomstrat: {:?}", ctgp_metadata.shroomstrat());
+    println!("Category: {:?}", ctgp_metadata.category());
+    println!("Cannoned? {}", ctgp_metadata.cannoned());
+    println!("Went OOB? {}", ctgp_metadata.went_oob());
+    println!("Slowdown suspected? {}", ctgp_metadata.has_slowdown());
+    println!("Rapidfire suspected? {}", ctgp_metadata.has_rapidfire());
+    println!("Suspicious ghost? {}", ctgp_metadata.dubious_ghost());
+    println!(
+        "Has Mii data replaced? {}",
+        ctgp_metadata.has_mii_data_replaced()
+    );
+    println!(
+        "Has Mii name replaced? {}",
+        ctgp_metadata.has_name_replaced()
+    );
+    println!("Respawns? {}", ctgp_metadata.respawns());
+    println!(
+        "CTGP metadata version: {}",
+        ctgp_metadata.metadata_version()
     );
 }
 
@@ -234,12 +301,12 @@ fn test_nine_laps() {
         .expect("Couldn't find `./test_ghosts/9laps_test.rkg`")
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
-    
+
     let header = Header::new(&rkg_data[..0x88]).expect("Couldn't read header");
-    
+
     for (index, lap) in header.lap_split_times().iter().enumerate() {
         println!("Lap {}: {}", index + 1, lap.to_string());
     }
-    
+
     println!("\nTotal time: {}", header.finish_time().to_string());
 }
