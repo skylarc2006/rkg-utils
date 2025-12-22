@@ -1,5 +1,5 @@
 use crate::{
-    ctgp_metadata::CTGPMetadata,
+    ctgp_metadata::{CTGPMetadata, exact_finish_time::ExactFinishTime},
     header::{
         Header,
         combo::{Character, Vehicle},
@@ -157,8 +157,8 @@ fn test_ctgp_metadata() {
 #[test]
 fn print_ctgp_metadata() {
     let mut rkg_data: Vec<u8> = Vec::new();
-    std::fs::File::open("./test_ghosts/JC_LC_Compressed.rkg")
-        .expect("Couldn't find `./test_ghosts/JC_LC_Compressed.rkg`")
+    std::fs::File::open("./test_ghosts/9laps_test.rkg")
+        .expect("Couldn't find `./test_ghosts/9laps_test.rkg`")
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
@@ -177,21 +177,14 @@ fn print_ctgp_metadata() {
     }
     println!();
 
-    println!(
-        "True time subtraction: {}ms",
-        ctgp_metadata.true_time_subtraction()
-    );
+    println!("Exact finish time: {}", ctgp_metadata.exact_finish_time());
     println!(
         "CTGP Version (currently hardcoded): {}\n",
         ctgp_metadata.ctgp_version().unwrap()
     );
 
-    for (index, time) in ctgp_metadata
-        .true_lap_time_subtractions()
-        .iter()
-        .enumerate()
-    {
-        println!("Lap {} true time subtraction: {}ms", index + 1, time);
+    for (index, time) in ctgp_metadata.exact_lap_times().iter().enumerate() {
+        println!("Lap {}: {}", index + 1, time);
     }
     println!();
 

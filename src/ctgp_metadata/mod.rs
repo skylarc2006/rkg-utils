@@ -1,38 +1,13 @@
-use crate::{
-    byte_handler::ByteHandler, ctgp_metadata::category::Category, input_data::yaz1_decompress,
-};
+use crate::byte_handler::FromByteHandler;
+use crate::ctgp_metadata::exact_finish_time::ExactFinishTime;
+use crate::ctgp_metadata::{category::Category, ctgp_version::CTGPVersion};
+use crate::header::in_game_time::InGameTime;
+use crate::{byte_handler::ByteHandler, input_data::yaz1_decompress};
 use chrono::{Duration, TimeDelta, prelude::*};
-use std::fmt::Display;
 
 pub mod category;
-
-#[derive(Clone, Copy, Debug)]
-pub struct CTGPVersion {
-    major: u8,
-    minor: u8,
-    revision: u16,
-}
-
-impl CTGPVersion {
-    pub fn new(bytes: [u8; 4]) -> Self {
-        // TODO: Figure out what the correct CTGP version is (probably through extensive testing + a lookup table)
-        let major = bytes[0];
-        let minor = bytes[1];
-        let revision = 1182;
-
-        Self {
-            major,
-            minor,
-            revision,
-        }
-    }
-}
-
-impl Display for CTGPVersion {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:02}.{:02}.{}", self.major, self.minor, self.revision)
-    }
-}
+pub mod ctgp_version;
+pub mod exact_finish_time;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CTGPMetadataError {
@@ -44,16 +19,18 @@ pub enum CTGPMetadataError {
     TryFromSliceError(#[from] std::array::TryFromSliceError),
     #[error("Category Error: {0}")]
     CategoryError(#[from] category::CategoryError),
+    #[error("In Game Time Error")]
+    InGameTimeError(#[from] crate::header::in_game_time::InGameTimeError),
 }
 
 pub struct CTGPMetadata {
     security_data: Vec<u8>,
     track_sha1: [u8; 0x14],
     player_id: u64,
-    true_time_subtraction: f32,
+    exact_finish_time: ExactFinishTime,
     ctgp_version: Option<CTGPVersion>,
     lap_split_dubious_intersections: Option<[bool; 10]>,
-    true_lap_time_subtractions: [f32; 10],
+    exact_lap_times: [ExactFinishTime; 10],
     rtc_race_end: NaiveDateTime,
     rtc_race_begins: NaiveDateTime,
     rtc_time_paused: TimeDelta,
@@ -112,8 +89,15 @@ impl CTGPMetadata {
             u64::from_be_bytes(metadata[current_offset..current_offset + 0x08].try_into()?);
         current_offset += 0x08;
 
+        let finish_time = InGameTime::from_byte_handler(&header_data[0x04..0x07])?;
         let true_time_subtraction =
-            f32::from_be_bytes(metadata[current_offset..current_offset + 0x04].try_into()?);
+            (f32::from_be_bytes(metadata[current_offset..current_offset + 0x04].try_into()?)
+                * 1e+12) as i64;
+        let exact_finish_time = ExactFinishTime::new(
+            finish_time.minutes(),
+            finish_time.seconds(),
+            (finish_time.milliseconds() as i64 * 1e+12 as i64 + true_time_subtraction) as u64,
+        );
         current_offset += 0x04;
 
         let ctgp_version;
@@ -140,29 +124,44 @@ impl CTGPMetadata {
         }
 
         current_offset += 0x3C;
-        
-        // True lap time difference calculation
+
+        // Exact lap split calculation
         // TODO: this seems to work incorrectly for the 9 lap test ghost (though i don't trust atlas's viewer anymore)
         // I guess this'll have to wait until Chadsoft comes back up
-        let mut previous_subtractions = 0.0;
-        let mut true_lap_time_subtractions = [0.0; 10];
+        let mut previous_subtractions = 0i64;
+        let mut exact_lap_times = [ExactFinishTime::default(); 10];
         let lap_count = header_data[0x10];
+        let mut in_game_time_offset = 0x11usize;
+        let mut subtraction_fs = 0i64;
+
         for index in 0..lap_count as usize {
-            let mut true_time_subtraction = f32::from_be_bytes(metadata[current_offset..current_offset + 0x04].try_into()?);
-            
+            let mut true_time_subtraction =
+                (f32::from_be_bytes(metadata[current_offset..current_offset + 0x04].try_into()?)
+                    * 1e+12) as i64;
+
+            let lap_time = InGameTime::from_byte_handler(
+                &header_data[in_game_time_offset..in_game_time_offset + 0x03],
+            )?;
+
             // subtract the sum of the previous laps' difference because the lap differences add up to
             // have its decimal portion be equal to the total time
             true_time_subtraction -= previous_subtractions;
-            while true_time_subtraction > 0.0 {
-                true_time_subtraction -= 1.0;
+            if true_time_subtraction > 1e+12 as i64 {
+                true_time_subtraction -= subtraction_fs;
+                subtraction_fs = if subtraction_fs == 0 { 1e+12 as i64 } else { 0 };
             }
             previous_subtractions += true_time_subtraction;
-            true_lap_time_subtractions[index] = true_time_subtraction;
+            exact_lap_times[index] = ExactFinishTime::new(
+                lap_time.minutes(),
+                lap_time.seconds(),
+                (lap_time.milliseconds() as i64 * 1e+12 as i64 + true_time_subtraction) as u64,
+            );
+            in_game_time_offset += 0x03;
             current_offset -= 0x04;
         }
-        
+
         current_offset += 0x04 * (lap_count as usize + 1);
-        
+
         let rtc_race_end = datetime_from_timestamp(u64::from_be_bytes(
             metadata[current_offset..current_offset + 0x08].try_into()?,
         ));
@@ -235,10 +234,10 @@ impl CTGPMetadata {
             security_data,
             track_sha1,
             player_id,
-            true_time_subtraction,
+            exact_finish_time,
             ctgp_version,
             lap_split_dubious_intersections,
-            true_lap_time_subtractions,
+            exact_lap_times,
             rtc_race_end,
             rtc_race_begins,
             rtc_time_paused,
@@ -275,8 +274,8 @@ impl CTGPMetadata {
         self.player_id
     }
 
-    pub fn true_time_subtraction(&self) -> f32 {
-        self.true_time_subtraction
+    pub fn exact_finish_time(&self) -> ExactFinishTime {
+        self.exact_finish_time
     }
 
     pub fn ctgp_version(&self) -> Option<CTGPVersion> {
@@ -290,8 +289,8 @@ impl CTGPMetadata {
         None
     }
 
-    pub fn true_lap_time_subtractions(&self) -> &[f32] {
-        &self.true_lap_time_subtractions[0..self.lap_count as usize]
+    pub fn exact_lap_times(&self) -> &[ExactFinishTime] {
+        &self.exact_lap_times[0..self.lap_count as usize]
     }
 
     pub fn rtc_race_end(&self) -> NaiveDateTime {
