@@ -28,7 +28,7 @@ pub struct CTGPMetadata {
     track_sha1: [u8; 0x14],
     player_id: u64,
     exact_finish_time: ExactFinishTime,
-    ctgp_version: Option<CTGPVersion>,
+    possible_ctgp_versions: Option<Vec<CTGPVersion>>,
     lap_split_suspicious_intersections: Option<[bool; 10]>,
     exact_lap_times: [ExactFinishTime; 10],
     rtc_race_end: NaiveDateTime,
@@ -101,13 +101,11 @@ impl CTGPMetadata {
         );
         current_offset += 0x04;
 
-        let ctgp_version;
+        let possible_ctgp_versions;
         let mut lap_split_suspicious_intersections = Some([false; 10]);
 
         if metadata_version >= 2 {
-            ctgp_version = Some(CTGPVersion::new(
-                metadata[current_offset..current_offset + 0x04].try_into()?,
-            ));
+            possible_ctgp_versions = CTGPVersion::from(&metadata[current_offset..current_offset + 0x04]);
             current_offset += 0x04;
 
             let laps_handler = ByteHandler::try_from(&metadata[current_offset..current_offset + 2])
@@ -120,7 +118,7 @@ impl CTGPMetadata {
             }
             current_offset -= 0x04;
         } else {
-            ctgp_version = None;
+            possible_ctgp_versions = None;
             lap_split_suspicious_intersections = None;
         }
 
@@ -255,7 +253,7 @@ impl CTGPMetadata {
             track_sha1,
             player_id,
             exact_finish_time,
-            ctgp_version,
+            possible_ctgp_versions,
             lap_split_suspicious_intersections,
             exact_lap_times,
             rtc_race_end,
@@ -298,8 +296,8 @@ impl CTGPMetadata {
         self.exact_finish_time
     }
 
-    pub fn ctgp_version(&self) -> Option<CTGPVersion> {
-        self.ctgp_version
+    pub fn possible_ctgp_versions(&self) -> &Option<Vec<CTGPVersion>> {
+        &self.possible_ctgp_versions
     }
 
     pub fn lap_split_suspicious_intersections(&self) -> Option<&[bool]> {

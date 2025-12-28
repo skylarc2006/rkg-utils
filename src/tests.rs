@@ -174,8 +174,8 @@ fn test_ctgp_metadata() {
 #[test]
 fn print_ctgp_metadata() {
     let mut rkg_data: Vec<u8> = Vec::new();
-    std::fs::File::open("./test_ghosts/skylar_pause_ghost_compressed.rkg")
-        .expect("Couldn't find `./test_ghosts/skylar_pause_ghost_compressed.rkg`")
+    std::fs::File::open("./test_ghosts/00m58s6479888 David .rkg")
+        .expect("Couldn't find `./test_ghosts/00m58s6479888 David .rkg`")
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
@@ -195,10 +195,17 @@ fn print_ctgp_metadata() {
     println!();
 
     println!("Exact finish time: {}", ctgp_metadata.exact_finish_time());
-    println!(
-        "CTGP Version (currently hardcoded): {}\n",
-        ctgp_metadata.ctgp_version().unwrap()
-    );
+    print!("Possible CTGP Versions: ");
+    if let Some(ctgp_versions) = ctgp_metadata.possible_ctgp_versions() {
+        for version in ctgp_versions {
+            print!("{}, ", version)
+        }
+        println!();
+    }
+    else {
+        println!("Unknown")
+    }
+    println!();
 
     for (index, time) in ctgp_metadata.exact_lap_times().iter().enumerate() {
         println!("Lap {}: {}", index + 1, time);
