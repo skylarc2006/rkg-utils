@@ -174,8 +174,8 @@ fn test_ctgp_metadata() {
 #[test]
 fn print_ctgp_metadata() {
     let mut rkg_data: Vec<u8> = Vec::new();
-    std::fs::File::open("./test_ghosts/00m58s6479888 David .rkg")
-        .expect("Couldn't find `./test_ghosts/00m58s6479888 David .rkg`")
+    std::fs::File::open("./test_ghosts/skylar_pause_ghost_compressed.rkg")
+        .expect("Couldn't find `./test_ghosts/skylar_pause_ghost_compressed.rkg`")
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
@@ -211,7 +211,11 @@ fn print_ctgp_metadata() {
         "RTC Time Paused: {}ms",
         ctgp_metadata.rtc_time_paused().num_milliseconds()
     );
-    println!("List of pause frames: {:#?}", ctgp_metadata.pause_frames());
+    println!("List of pause times: [");
+    for time in ctgp_metadata.pause_times() {
+        println!("  {},", time)
+    }
+    println!("]");
 
     println!("\nMy Stuff enabled? {}", ctgp_metadata.my_stuff_enabled());
     println!("My Stuff used? {}", ctgp_metadata.my_stuff_used());
@@ -221,21 +225,27 @@ fn print_ctgp_metadata() {
     );
     println!(
         "Final lap dubious intersection? {}",
-        ctgp_metadata.final_lap_dubious_intersection()
+        ctgp_metadata.final_lap_suspicious_intersection()
     );
 
     println!(
         "\nAll lap dubious intersection bools: {:?}",
-        ctgp_metadata.lap_split_dubious_intersections().unwrap()
+        ctgp_metadata.lap_split_suspicious_intersections().unwrap()
     );
 
     println!("\nShroomstrat: {:?}", ctgp_metadata.shroomstrat());
     println!("Category: {:?}", ctgp_metadata.category());
     println!("Cannoned? {}", ctgp_metadata.cannoned());
     println!("Went OOB? {}", ctgp_metadata.went_oob());
-    println!("Slowdown suspected? {}", ctgp_metadata.has_slowdown());
-    println!("Rapidfire suspected? {}", ctgp_metadata.has_rapidfire());
-    println!("Suspicious ghost? {}", ctgp_metadata.dubious_ghost());
+    println!("Slowdown suspected? {}", ctgp_metadata.potential_slowdown());
+    println!(
+        "Rapidfire suspected? {}",
+        ctgp_metadata.potential_rapidfire()
+    );
+    println!(
+        "Suspicious ghost? {}",
+        ctgp_metadata.potentially_cheated_ghost()
+    );
     println!(
         "Has Mii data replaced? {}",
         ctgp_metadata.has_mii_data_replaced()

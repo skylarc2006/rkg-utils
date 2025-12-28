@@ -29,22 +29,22 @@ pub struct CTGPMetadata {
     player_id: u64,
     exact_finish_time: ExactFinishTime,
     ctgp_version: Option<CTGPVersion>,
-    lap_split_dubious_intersections: Option<[bool; 10]>,
+    lap_split_suspicious_intersections: Option<[bool; 10]>,
     exact_lap_times: [ExactFinishTime; 10],
     rtc_race_end: NaiveDateTime,
     rtc_race_begins: NaiveDateTime,
     rtc_time_paused: TimeDelta,
-    pause_frames: Vec<u32>,
+    pause_times: Vec<InGameTime>,
     my_stuff_enabled: bool,
     my_stuff_used: bool,
     usb_gamecube_enabled: bool,
-    final_lap_dubious_intersection: bool,
+    final_lap_suspicious_intersection: bool,
     shroomstrat: [u8; 10],
     cannoned: bool,
     went_oob: bool,
-    has_slowdown: bool,
-    has_rapidfire: bool,
-    dubious_ghost: bool,
+    potential_slowdown: bool,
+    potential_rapidfire: bool,
+    potentially_cheated_ghost: bool,
     has_mii_data_replaced: bool,
     has_name_replaced: bool, // Hi Korben
     respawns: bool,
@@ -102,7 +102,7 @@ impl CTGPMetadata {
         current_offset += 0x04;
 
         let ctgp_version;
-        let mut lap_split_dubious_intersections = Some([false; 10]);
+        let mut lap_split_suspicious_intersections = Some([false; 10]);
 
         if metadata_version >= 2 {
             ctgp_version = Some(CTGPVersion::new(
@@ -113,7 +113,7 @@ impl CTGPMetadata {
             let laps_handler = ByteHandler::try_from(&metadata[current_offset..current_offset + 2])
                 .expect("ByteHandler try_from() failed");
 
-            if let Some(mut array) = lap_split_dubious_intersections {
+            if let Some(mut array) = lap_split_suspicious_intersections {
                 for (index, intersection) in array.iter_mut().enumerate() {
                     *intersection = laps_handler.read_bool(index as u8 + 6);
                 }
@@ -121,7 +121,7 @@ impl CTGPMetadata {
             current_offset -= 0x04;
         } else {
             ctgp_version = None;
-            lap_split_dubious_intersections = None;
+            lap_split_suspicious_intersections = None;
         }
 
         current_offset += 0x3C;
@@ -180,7 +180,7 @@ impl CTGPMetadata {
         current_offset += 0x08;
 
         // Pause frame times
-        let mut pause_frames = Vec::new();
+        let mut pause_times = Vec::new();
         let input_data = if input_data[4..8] == [0x59, 0x61, 0x7A, 0x31] {
             // YAZ1 header, decompress
             yaz1_decompress(&input_data[4..]).unwrap()
@@ -197,7 +197,25 @@ impl CTGPMetadata {
             let input = &input_data[idx..idx + 2];
 
             if contains_ctgp_pause(input[0]) {
-                pause_frames.push(elapsed_frames);
+                // Convert frame count to InGameTime
+                let mut pause_timestamp_seconds = (elapsed_frames - 240) as f64 / 59.94;
+                let mut minutes = 0;
+                let mut seconds = 0;
+                let milliseconds;
+
+                while pause_timestamp_seconds >= 60.0 {
+                    minutes += 1;
+                    pause_timestamp_seconds -= 60.0;
+                }
+
+                while pause_timestamp_seconds >= 1.0 {
+                    seconds += 1;
+                    pause_timestamp_seconds -= 1.0;
+                }
+
+                milliseconds = (pause_timestamp_seconds * 1000.0) as u16;
+
+                pause_times.push(InGameTime::new(minutes, seconds, milliseconds));
             }
 
             elapsed_frames += input[1] as u32;
@@ -208,7 +226,7 @@ impl CTGPMetadata {
         let my_stuff_enabled = bool_handler.read_bool(3);
         let my_stuff_used = bool_handler.read_bool(2);
         let usb_gamecube_enabled = bool_handler.read_bool(1);
-        let final_lap_dubious_intersection = bool_handler.read_bool(0);
+        let final_lap_suspicious_intersection = bool_handler.read_bool(0);
         current_offset += 0x01;
 
         let mut shroomstrat: [u8; 10] = [0; 10];
@@ -225,9 +243,9 @@ impl CTGPMetadata {
         let bool_handler = ByteHandler::from(metadata[current_offset]);
         let cannoned = bool_handler.read_bool(7);
         let went_oob = bool_handler.read_bool(6);
-        let has_slowdown = bool_handler.read_bool(5);
-        let has_rapidfire = bool_handler.read_bool(4);
-        let dubious_ghost = bool_handler.read_bool(3);
+        let potential_slowdown = bool_handler.read_bool(5);
+        let potential_rapidfire = bool_handler.read_bool(4);
+        let potentially_cheated_ghost = bool_handler.read_bool(3);
         let has_mii_data_replaced = bool_handler.read_bool(2);
         let has_name_replaced = bool_handler.read_bool(1);
         let respawns = bool_handler.read_bool(0);
@@ -238,22 +256,22 @@ impl CTGPMetadata {
             player_id,
             exact_finish_time,
             ctgp_version,
-            lap_split_dubious_intersections,
+            lap_split_suspicious_intersections,
             exact_lap_times,
             rtc_race_end,
             rtc_race_begins,
             rtc_time_paused,
-            pause_frames,
+            pause_times,
             my_stuff_enabled,
             my_stuff_used,
             usb_gamecube_enabled,
-            final_lap_dubious_intersection,
+            final_lap_suspicious_intersection,
             shroomstrat,
             cannoned,
             went_oob,
-            has_slowdown,
-            has_rapidfire,
-            dubious_ghost,
+            potential_slowdown,
+            potential_rapidfire,
+            potentially_cheated_ghost,
             has_mii_data_replaced,
             has_name_replaced,
             respawns,
@@ -284,8 +302,8 @@ impl CTGPMetadata {
         self.ctgp_version
     }
 
-    pub fn lap_split_dubious_intersections(&self) -> Option<&[bool]> {
-        if let Some(intersections) = &self.lap_split_dubious_intersections {
+    pub fn lap_split_suspicious_intersections(&self) -> Option<&[bool]> {
+        if let Some(intersections) = &self.lap_split_suspicious_intersections {
             return Some(&intersections[0..self.lap_count as usize]);
         }
         None
@@ -307,8 +325,8 @@ impl CTGPMetadata {
         self.rtc_time_paused
     }
 
-    pub fn pause_frames(&self) -> &Vec<u32> {
-        &self.pause_frames
+    pub fn pause_times(&self) -> &Vec<InGameTime> {
+        &self.pause_times
     }
 
     pub fn my_stuff_enabled(&self) -> bool {
@@ -323,8 +341,8 @@ impl CTGPMetadata {
         self.usb_gamecube_enabled
     }
 
-    pub fn final_lap_dubious_intersection(&self) -> bool {
-        self.final_lap_dubious_intersection
+    pub fn final_lap_suspicious_intersection(&self) -> bool {
+        self.final_lap_suspicious_intersection
     }
 
     pub fn shroomstrat(&self) -> &[u8] {
@@ -339,16 +357,16 @@ impl CTGPMetadata {
         self.went_oob
     }
 
-    pub fn has_slowdown(&self) -> bool {
-        self.has_slowdown
+    pub fn potential_slowdown(&self) -> bool {
+        self.potential_slowdown
     }
 
-    pub fn has_rapidfire(&self) -> bool {
-        self.has_rapidfire
+    pub fn potential_rapidfire(&self) -> bool {
+        self.potential_rapidfire
     }
 
-    pub fn dubious_ghost(&self) -> bool {
-        self.dubious_ghost
+    pub fn potentially_cheated_ghost(&self) -> bool {
+        self.potentially_cheated_ghost
     }
 
     pub fn has_mii_data_replaced(&self) -> bool {
