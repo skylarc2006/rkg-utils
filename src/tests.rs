@@ -1,5 +1,5 @@
 use crate::{
-    ctgp_metadata::{self, CTGPMetadata},
+    ctgp_metadata::CTGPMetadata,
     header::{
         Header,
         combo::{Character, Vehicle},
@@ -20,7 +20,7 @@ use crate::{
         },
         slot_id::SlotId,
     },
-    input_data::InputData,
+    input_data::{InputData, yaz1_compress, yaz1_decompress},
 };
 use std::io::Read;
 
@@ -174,8 +174,8 @@ fn test_ctgp_metadata() {
 #[test]
 fn print_ctgp_metadata() {
     let mut rkg_data: Vec<u8> = Vec::new();
-    std::fs::File::open("./test_ghosts/00m58s6479888 David .rkg")
-        .expect("Couldn't find `./test_ghosts/00m58s6479888 David .rkg`")
+    std::fs::File::open("./test_ghosts/skylar_pause_ghost_compressed.rkg")
+        .expect("Couldn't find `./test_ghosts/skylar_pause_ghost_compressed.rkg`")
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
@@ -363,4 +363,44 @@ fn test_exact_finish_time() {
         ctgp_metadata.exact_lap_times()[2].to_string(),
         "00:19.417404176835"
     );
+}
+
+#[test]
+fn test_recompressed_input_data() {
+    let mut rkg_data: Vec<u8> = Vec::new();
+    std::fs::File::open("./test_ghosts/JC_LC_Compressed.rkg")
+        .expect("Couldn't find `./test_ghosts/JC_LC_Compressed.rkg`")
+        .read_to_end(&mut rkg_data)
+        .expect("Couldn't read bytes in file");
+
+    let original_data = &rkg_data[0x88..rkg_data.len() - 0xE0];
+    let decompressed_data = yaz1_decompress(&original_data[0x04..]).unwrap();
+    let recompressed_data = yaz1_compress(&decompressed_data);
+
+    let original_input_data = InputData::new(&original_data).unwrap();
+    let recompressed_input_data = InputData::new(&recompressed_data).unwrap();
+
+    assert_eq!(
+        (&original_data.len() - 12) as u32,
+        u32::from_be_bytes([
+            original_data[0],
+            original_data[1],
+            original_data[2],
+            original_data[3]
+        ])
+    );
+    assert_eq!(
+        (recompressed_data.len() - 12) as u32,
+        u32::from_be_bytes([
+            recompressed_data[0],
+            recompressed_data[1],
+            recompressed_data[2],
+            recompressed_data[3]
+        ])
+    );
+    assert_eq!(
+        original_input_data.inputs(),
+        recompressed_input_data.inputs()
+    );
+    assert!(original_input_data.inputs().len() > 100);
 }

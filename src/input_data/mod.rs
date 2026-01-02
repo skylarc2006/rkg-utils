@@ -297,3 +297,154 @@ fn decompress_block(src: &[u8], offset: usize, uncompressed_size: usize) -> Opti
 
     Some(dst)
 }
+
+/// Compress input data with Yaz1 compression
+/// Adapted from https://github.com/AtishaRibeiro/TT-Rec-Tools/blob/dev/ghostmanager/Scripts/YAZ1_comp.js
+pub fn yaz1_compress(src: &[u8]) -> Vec<u8> {
+    let mut dst = Vec::new();
+    let src_size = src.len();
+    let mut src_pos = 0;
+    let mut prev_flag = false;
+    let mut prev_num_bytes = 0;
+    let mut prev_match_pos = 0;
+
+    let mut code_byte = 0u8;
+    let mut valid_bit_count = 0;
+    let mut chunk = Vec::with_capacity(24); // 8 codes * 3 bytes maximum
+
+    while src_pos < src_size {
+        let (num_bytes, match_pos) = nintendo_encode(
+            src,
+            src_size,
+            src_pos,
+            &mut prev_flag,
+            &mut prev_num_bytes,
+            &mut prev_match_pos,
+        );
+
+        if num_bytes < 3 {
+            // Straight copy
+            chunk.push(src[src_pos]);
+            src_pos += 1;
+            // Set flag for straight copy
+            code_byte |= 0x80 >> valid_bit_count;
+        } else {
+            // RLE part
+            let dist = src_pos - match_pos - 1;
+
+            if num_bytes >= 0x12 {
+                // 3 byte encoding
+                let byte1 = (dist >> 8) as u8;
+                let byte2 = (dist & 0xff) as u8;
+                chunk.push(byte1);
+                chunk.push(byte2);
+
+                // Maximum runlength for 3 byte encoding
+                let num_bytes = num_bytes.min(0xff + 0x12);
+                let byte3 = (num_bytes - 0x12) as u8;
+                chunk.push(byte3);
+            } else {
+                // 2 byte encoding
+                let byte1 = (((num_bytes - 2) << 4) | (dist >> 8)) as u8;
+                let byte2 = (dist & 0xff) as u8;
+                chunk.push(byte1);
+                chunk.push(byte2);
+            }
+            src_pos += num_bytes;
+        }
+
+        valid_bit_count += 1;
+
+        // Write eight codes
+        if valid_bit_count == 8 {
+            dst.push(code_byte);
+            dst.extend_from_slice(&chunk);
+
+            code_byte = 0;
+            valid_bit_count = 0;
+            chunk.clear();
+        }
+    }
+
+    // Write remaining codes
+    if valid_bit_count > 0 {
+        dst.push(code_byte);
+        dst.extend_from_slice(&chunk);
+    }
+
+    let mut compressed_data = Vec::new();
+
+    // Write Yaz1 header
+    compressed_data.extend_from_slice(&((dst.len() + 8) as u32).to_be_bytes()); // size of compressed data
+    compressed_data.extend_from_slice(b"Yaz1");
+    compressed_data.extend_from_slice(&(src_size as u32).to_be_bytes());
+    compressed_data.extend_from_slice(&[0u8; 8]); // padding
+    compressed_data.extend_from_slice(&dst);
+    compressed_data
+}
+
+fn nintendo_encode(
+    src: &[u8],
+    size: usize,
+    pos: usize,
+    prev_flag: &mut bool,
+    prev_num_bytes: &mut usize,
+    prev_match_pos: &mut usize,
+) -> (usize, usize) {
+    // If prevFlag is set, use the previously calculated values
+    if *prev_flag {
+        *prev_flag = false;
+        return (*prev_num_bytes, *prev_match_pos);
+    }
+
+    *prev_flag = false;
+    let (num_bytes, match_pos) = simple_encode(src, size, pos);
+
+    // If this position is RLE encoded, compare to copying 1 byte and next position encoding
+    if num_bytes >= 3 {
+        let (num_bytes1, match_pos1) = simple_encode(src, size, pos + 1);
+        *prev_num_bytes = num_bytes1;
+        *prev_match_pos = match_pos1;
+
+        // If the next position encoding is +2 longer, choose it
+        if num_bytes1 >= num_bytes + 2 {
+            *prev_flag = true;
+            return (1, match_pos);
+        }
+    }
+
+    (num_bytes, match_pos)
+}
+
+fn simple_encode(src: &[u8], size: usize, pos: usize) -> (usize, usize) {
+    let mut start_pos = pos as i32 - 0x1000;
+    let mut num_bytes = 1;
+    let mut match_pos = 0;
+
+    if start_pos < 0 {
+        start_pos = 0;
+    }
+    let start_pos = start_pos as usize;
+
+    for i in start_pos..pos {
+        let mut j = 0;
+        // Match the JavaScript loop condition exactly: j < size-pos
+        while j < size - pos {
+            if src[i + j] != src[j + pos] {
+                break;
+            }
+            j += 1;
+        }
+
+        if j > num_bytes {
+            num_bytes = j;
+            match_pos = i;
+        }
+    }
+
+    if num_bytes == 2 {
+        num_bytes = 1;
+    }
+
+    (num_bytes, match_pos)
+}
