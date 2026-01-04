@@ -25,7 +25,7 @@ struct Ghost {
     header: header::Header,
     input_data: input_data::InputData,
     ctgp_metadata: Option<ctgp_metadata::CTGPMetadata>,
-    crc32: u32
+    crc32: u32,
 }
 
 impl Ghost {

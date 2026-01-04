@@ -143,6 +143,8 @@ fn test_rkg_input_data() {
     assert_eq!(input_data.face_inputs().len(), 12);
     assert_eq!(input_data.stick_inputs().len(), 891);
     assert_eq!(input_data.dpad_inputs().len(), 9);
+    
+    assert!(!input_data.contains_illegal_inputs());
 }
 
 #[test]
@@ -295,20 +297,18 @@ fn test_ctgp_pause_vs_vanilla_input_timing() {
 }
 
 #[test]
-#[should_panic(expected = "FaceInputError(InvalidButton(IllegalDriftInput))")]
 fn illegal_drift_input_test() {
     let mut rkg_data: Vec<u8> = Vec::new();
-    std::fs::File::open("./test_ghosts/illegal_drift_inputs.rkg")
-        .expect("Couldn't find `./test_ghosts/illegal_drift_inputs.rkg`")
+    std::fs::File::open("./test_ghosts/illegal_drift_input.rkg")
+        .expect("Couldn't find `./test_ghosts/illegal_drift_input.rkg`")
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    // This line should always fail
-    let _input_data = InputData::new(&rkg_data).expect("Failed to read input data");
+    let input_data = InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
+    assert!(input_data.contains_illegal_inputs());
 }
 
 #[test]
-#[should_panic(expected = "FaceInputError(InvalidButton(IllegalDriftInput))")]
 fn illegal_brake_input_test() {
     let mut rkg_data: Vec<u8> = Vec::new();
     std::fs::File::open("./test_ghosts/illegal_brake_input.rkg")
@@ -316,8 +316,8 @@ fn illegal_brake_input_test() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    // This line should always fail
-    let _input_data = InputData::new(&rkg_data).expect("Failed to read input data");
+    let input_data = InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
+    assert!(input_data.contains_illegal_inputs());
 }
 
 #[test]

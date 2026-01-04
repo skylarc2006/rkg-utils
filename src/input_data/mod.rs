@@ -1,5 +1,5 @@
 use crate::input_data::dpad_input::{DPadButton, DPadInput};
-use crate::input_data::face_input::FaceInput;
+use crate::input_data::face_input::{FaceButton, FaceInput};
 use crate::input_data::input::Input;
 use crate::input_data::stick_input::StickInput;
 
@@ -163,17 +163,48 @@ impl InputData {
                 face_idx += 1;
                 face_offset = 0;
             }
-            if stick.is_some() && stick_offset >= stick.unwrap().frame_duration() as u32 {
+            if let Some(stick) = stick
+                && stick_offset >= stick.frame_duration()
+            {
                 stick_idx += 1;
                 stick_offset = 0;
             }
-            if dpad.is_some() && dpad_offset >= dpad.unwrap().frame_duration() {
+            if let Some(dpad) = dpad
+                && dpad_offset >= dpad.frame_duration()
+            {
                 dpad_idx += 1;
                 dpad_offset = 0;
             }
         }
 
         result
+    }
+
+    /// Returns true if the inputs contain an illegal drift or brake input.
+    pub fn contains_illegal_inputs(&self) -> bool {
+        for (idx, input) in self.face_inputs().iter().enumerate() {
+            let current_buttons = input.buttons();
+            if current_buttons.contains(&FaceButton::Drift)
+                && !current_buttons.contains(&FaceButton::Brake)
+            {
+                // Illegal drift input
+                return true;
+            }
+            
+            else if idx > 0 {
+                let previous_buttons = self.face_inputs()[idx - 1].buttons();
+                if current_buttons.contains(&FaceButton::Brake)
+                    && current_buttons.contains(&FaceButton::Accelerator)
+                    && !current_buttons.contains(&FaceButton::Drift)
+                    && previous_buttons.contains(&FaceButton::Accelerator)
+                    && !previous_buttons.contains(&FaceButton::Brake)
+                {
+                    // Illegal brake input (drift flag isn't 1 when it should be)
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub fn face_inputs(&self) -> &[FaceInput] {
