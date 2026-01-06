@@ -7,6 +7,7 @@ use crate::{
         date::Date,
         ghost_type::GhostType,
         location::country::Country,
+        location::subregion::Subregion,
         mii::{
             eyebrows::EyebrowType,
             eyes::{EyeColor, EyeType},
@@ -48,7 +49,7 @@ fn test_rkg_header() {
     assert_eq!(header.lap_split_times()[1].to_string(), "00:19.127");
     assert_eq!(header.lap_split_times()[2].to_string(), "00:19.237");
     assert_eq!(header.country(), Country::NotSet);
-    assert_eq!(header.subregion(), 0xFF);
+    assert_eq!(header.subregion(), Subregion::NotSet);
     assert_eq!(header.location_code(), 0xFFFF);
 
     // Mii Data
@@ -123,6 +124,29 @@ fn test_rkg_header() {
 
     assert_eq!(header.mii_crc16(), 0x06F4);
     assert!(header.verify_mii_crc16());
+}
+
+#[test]
+fn print_rkg_header() {
+    let header =
+        Header::new_from_path("./test_ghosts/00m58s6479888 David .rkg").expect("Couldn't read header");
+
+    println!("Track: {:?}", header.slot_id());
+    println!("Time: {}", header.finish_time());
+    println!("Date set: {:?}", header.date_set());
+    println!("Player: {}", header.mii().name());
+    println!("Country: {}", header.country());
+    println!("Subregion: {}", header.subregion());
+    println!("Controller: {:?}", header.controller());
+    println!("Combo: {:?} on {:?} ({} Drift)", header.combo().character(), header.combo().vehicle(), if header.is_automatic_drift() { "Automatic" } else { "Manual" });
+    println!("Input data compressed? {}", header.is_compressed());
+    println!("Decompressed input data length: {}", header.decompressed_input_data_length());
+    println!("Total lap count: {}\n", header.lap_count());
+    
+    for (index, lap_time) in header.lap_split_times().iter().enumerate() {
+        println!("Lap {}: {}", index + 1, lap_time);
+    }
+    
 }
 
 #[test]

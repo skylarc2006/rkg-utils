@@ -7,6 +7,7 @@ use crate::{
         ghost_type::{GhostType, GhostTypeError},
         in_game_time::{InGameTime, InGameTimeError},
         location::country::{Country, CountryError},
+        location::subregion::{Subregion, SubregionError},
         mii::{Mii, MiiError},
         slot_id::{SlotId, SlotIdError},
     },
@@ -47,6 +48,8 @@ pub enum HeaderError {
     IoError(#[from] std::io::Error),
     #[error("Country Error: {0}")]
     CountryError(#[from] CountryError),
+    #[error("Subregion Error: {0}")]
+    SubregionError(#[from] SubregionError),
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
 }
@@ -66,7 +69,7 @@ pub struct Header {
     lap_count: u8,
     lap_split_times: [InGameTime; 10],
     country: Country,
-    subregion: u8,
+    subregion: Subregion,
     location_code: u16,
     mii_bytes: [u8; 0x4A],
     mii: Mii,
@@ -111,7 +114,7 @@ impl Header {
 
         let codes = ByteHandler::try_from(&header_data[0x34..=0x37]).unwrap();
         let country = Country::try_from(codes.copy_byte(0))?;
-        let subregion = codes.copy_byte(1);
+        let subregion = Subregion::new(country, codes.copy_byte(1))?;
         let location_code = codes.copy_word(1);
 
         let mut mii_bytes = [0_u8; 0x4A];
@@ -229,7 +232,7 @@ impl Header {
         self.country
     }
 
-    pub fn subregion(&self) -> u8 {
+    pub fn subregion(&self) -> Subregion {
         self.subregion
     }
 

@@ -4,7 +4,7 @@ pub mod country;
 pub mod subregion;
 
 /// Represents the country and subregion of the player. https://docs.google.com/spreadsheets/d/1mSAomO_msfNllNsPeXbgU6UbJaGV5t6NvbZi6ebPFx4/edit?usp=sharing
-/// Note: uses v1.3 Extended Regions
+/// Note: uses v1.2 Extended Regions
 pub struct Location {
     country: Country,
     subregion: Subregion,
@@ -13,6 +13,5 @@ pub struct Location {
 impl Location {
     pub fn new(country_id: u8, subregion_id: u8) {
         let country = Country::try_from(country_id);
-        todo!()
     }
 }
