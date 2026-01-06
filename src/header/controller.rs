@@ -1,4 +1,5 @@
 use std::convert::Infallible;
+use std::fmt::Display;
 
 use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
@@ -18,6 +19,17 @@ pub enum Controller {
     Nunchuk,
     Classic,
     Gamecube,
+}
+
+impl Display for Controller {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WiiWheel => write!(f, "Wii Wheel"),
+            Self::Nunchuk => write!(f, "Nunchuk"),
+            Self::Classic => write!(f, "Classic"),
+            Self::Gamecube => write!(f, "Gamecube"),
+        }
+    }
 }
 
 impl FromByteHandler for Controller {

@@ -1,4 +1,5 @@
 use crate::byte_handler::{ByteHandlerError, FromByteHandler};
+use std::fmt::Display;
 
 #[derive(thiserror::Error, Debug)]
 pub enum GhostTypeError {
@@ -19,6 +20,22 @@ pub enum GhostType {
     Friend,
     NormalStaff,
     ExpertStaff,
+}
+
+impl Display for GhostType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GhostType::PlayerBest => write!(f, "Player's best time"),
+            GhostType::WorldRecord => write!(f, "World record ghost"),
+            GhostType::ContinentalRecord => write!(f, "Continental record ghost"),
+            GhostType::Rival => write!(f, "Rival ghost"),
+            GhostType::Special => write!(f, "Special ghost"),
+            GhostType::GhostRace => write!(f, "Ghost Race ghost"),
+            GhostType::Friend => write!(f, "Friend ghost"),
+            GhostType::NormalStaff => write!(f, "Normal staff ghost"),
+            GhostType::ExpertStaff => write!(f, "Expert staff ghost"),
+        }
+    }
 }
 
 impl TryFrom<u8> for GhostType {

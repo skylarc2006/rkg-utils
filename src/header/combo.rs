@@ -1,9 +1,16 @@
 use crate::byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler};
+use std::fmt::Display;
 
 /// Struct that handles the validity of the Character/Vehicle combo used in the RKG file
 pub struct Combo {
     character: Character,
     vehicle: Vehicle,
+}
+
+impl Display for Combo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} on {}", self.character(), self.vehicle())
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -135,6 +142,67 @@ pub enum Character {
     MenuPeach,
     MenuDaisy,
     MenuRosalina,
+}
+
+impl Display for Character {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Character::Mario => "Mario",
+            Character::BabyPeach => "Baby Peach",
+            Character::Waluigi => "Waluigi",
+            Character::Bowser => "Bowser",
+            Character::BabyDaisy => "Baby Daisy",
+            Character::DryBones => "Dry Bones",
+            Character::BabyMario => "Baby Mario",
+            Character::Luigi => "Luigi",
+            Character::Toad => "Toad",
+            Character::DonkeyKong => "Donkey Kong",
+            Character::Yoshi => "Yoshi",
+            Character::Wario => "Wario",
+            Character::BabyLuigi => "Baby Luigi",
+            Character::Toadette => "Toadette",
+            Character::KoopaTroopa => "Koopa Troopa",
+            Character::Daisy => "Daisy",
+            Character::Peach => "Peach",
+            Character::Birdo => "Birdo",
+            Character::DiddyKong => "Diddy Kong",
+            Character::KingBoo => "King Boo",
+            Character::BowserJr => "Bowser Jr.",
+            Character::DryBowser => "Dry Bowser",
+            Character::FunkyKong => "Funky Kong",
+            Character::Rosalina => "Rosalina",
+
+            Character::SmallMiiOutfitAMale => "Small Mii Outfit A (Male)",
+            Character::SmallMiiOutfitAFemale => "Small Mii Outfit A (Female)",
+            Character::SmallMiiOutfitBMale => "Small Mii Outfit B (Male)",
+            Character::SmallMiiOutfitBFemale => "Small Mii Outfit B (Female)",
+            Character::SmallMiiOutfitCMale => "Small Mii Outfit C (Male)",
+            Character::SmallMiiOutfitCFemale => "Small Mii Outfit C (Female)",
+
+            Character::MediumMiiOutfitAMale => "Medium Mii Outfit A (Male)",
+            Character::MediumMiiOutfitAFemale => "Medium Mii Outfit A (Female)",
+            Character::MediumMiiOutfitBMale => "Medium Mii Outfit B (Male)",
+            Character::MediumMiiOutfitBFemale => "Medium Mii Outfit B (Female)",
+            Character::MediumMiiOutfitCMale => "Medium Mii Outfit C (Male)",
+            Character::MediumMiiOutfitCFemale => "Medium Mii Outfit C (Female)",
+
+            Character::LargeMiiOutfitAMale => "Large Mii Outfit A (Male)",
+            Character::LargeMiiOutfitAFemale => "Large Mii Outfit A (Female)",
+            Character::LargeMiiOutfitBMale => "Large Mii Outfit B (Male)",
+            Character::LargeMiiOutfitBFemale => "Large Mii Outfit B (Female)",
+            Character::LargeMiiOutfitCMale => "Large Mii Outfit C (Male)",
+            Character::LargeMiiOutfitCFemale => "Large Mii Outfit C (Female)",
+
+            Character::MediumMii => "Medium Mii",
+            Character::SmallMii => "Small Mii",
+            Character::LargeMii => "Large Mii",
+
+            Character::MenuPeach => "Peach (Menu)",
+            Character::MenuDaisy => "Daisy (Menu)",
+            Character::MenuRosalina => "Rosalina (Menu)",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 impl Character {
@@ -398,6 +466,51 @@ pub enum Vehicle {
     JetBubble,
     DolphinDasher,
     Phantom,
+}
+
+impl Display for Vehicle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Vehicle::StandardKartS => "Standard Kart S",
+            Vehicle::StandardKartM => "Standard Kart M",
+            Vehicle::StandardKartL => "Standard Kart L",
+            Vehicle::BoosterSeat => "Booster Seat",
+            Vehicle::ClassicDragster => "Classic Dragster",
+            Vehicle::Offroader => "Offroader",
+            Vehicle::MiniBeast => "Mini Beast",
+            Vehicle::WildWing => "Wild Wing",
+            Vehicle::FlameFlyer => "Flame Flyer",
+            Vehicle::CheepCharger => "Cheep Charger",
+            Vehicle::SuperBlooper => "Super Blooper",
+            Vehicle::PiranhaProwler => "Piranha Prowler",
+            Vehicle::TinyTitan => "Tiny Titan",
+            Vehicle::Daytripper => "Daytripper",
+            Vehicle::Jetsetter => "Jetsetter",
+            Vehicle::BlueFalcon => "Blue Falcon",
+            Vehicle::Sprinter => "Sprinter",
+            Vehicle::Honeycoupe => "Honeycoupe",
+            Vehicle::StandardBikeS => "Standard Bike S",
+            Vehicle::StandardBikeM => "Standard Bike M",
+            Vehicle::StandardBikeL => "Standard Bike L",
+            Vehicle::BulletBike => "Bullet Bike",
+            Vehicle::MachBike => "Mach Bike",
+            Vehicle::FlameRunner => "Flame Runner",
+            Vehicle::BitBike => "Bit Bike",
+            Vehicle::Sugarscoot => "Sugarscoot",
+            Vehicle::WarioBike => "Wario Bike",
+            Vehicle::Quacker => "Quacker",
+            Vehicle::ZipZip => "Zip Zip",
+            Vehicle::ShootingStar => "Shooting Star",
+            Vehicle::Magikruiser => "Magikruiser",
+            Vehicle::Sneakster => "Sneakster",
+            Vehicle::Spear => "Spear",
+            Vehicle::JetBubble => "Jet Bubble",
+            Vehicle::DolphinDasher => "Dolphin Dasher",
+            Vehicle::Phantom => "Phantom",
+        };
+
+        write!(f, "{}", s)
+    }
 }
 
 impl TryFrom<u8> for Vehicle {

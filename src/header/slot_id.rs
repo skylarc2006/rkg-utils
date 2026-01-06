@@ -1,6 +1,7 @@
 // https://wiki.tockdom.com/wiki/Slot
 
 use std::convert::Infallible;
+use std::fmt::Display;
 
 use crate::byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler};
 
@@ -67,6 +68,67 @@ pub enum SlotId {
     WinningScene,
     LosingScene,
     Credits,
+}
+
+impl Display for SlotId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            // Normal Tracks
+            SlotId::LuigiCircuit => "Luigi Circuit",
+            SlotId::MooMooMeadows => "Moo Moo Meadows",
+            SlotId::MushroomGorge => "Mushroom Gorge",
+            SlotId::ToadsFactory => "Toad's Factory",
+            SlotId::MarioCircuit => "Mario Circuit",
+            SlotId::CoconutMall => "Coconut Mall",
+            SlotId::DKSnowboardCross => "DK Summit",
+            SlotId::WariosGoldMine => "Wario's Gold Mine",
+            SlotId::DaisyCircuit => "Daisy Circuit",
+            SlotId::KoopaCape => "Koopa Cape",
+            SlotId::MapleTreeway => "Maple Treeway",
+            SlotId::GrumbleVolcano => "Grumble Volcano",
+            SlotId::DryDryRuins => "Dry Dry Ruins",
+            SlotId::MoonviewHighway => "Moonview Highway",
+            SlotId::BowsersCastle => "Bowser's Castle",
+            SlotId::RainbowRoad => "Rainbow Road",
+
+            SlotId::GCNPeachBeach => "GCN Peach Beach",
+            SlotId::DSYoshiFalls => "DS Yoshi Falls",
+            SlotId::SNESGhostValley2 => "SNES Ghost Valley 2",
+            SlotId::N64MarioRaceway => "N64 Mario Raceway",
+            SlotId::N64SherbetLand => "N64 Sherbet Land",
+            SlotId::GBAShyGuyBeach => "GBA Shy Guy Beach",
+            SlotId::DSDelfinoSquare => "DS Delfino Square",
+            SlotId::GCNWaluigiStadium => "GCN Waluigi Stadium",
+            SlotId::DSDesertHills => "DS Desert Hills",
+            SlotId::GBABowserCastle3 => "GBA Bowser Castle 3",
+            SlotId::N64DKJungleParkway => "N64 DK Jungle Parkway",
+            SlotId::GCNMarioCircuit => "GCN Mario Circuit",
+            SlotId::SNESMarioCircuit3 => "SNES Mario Circuit 3",
+            SlotId::DSPeachGardens => "DS Peach Gardens",
+            SlotId::GCNDKMountain => "GCN DK Mountain",
+            SlotId::N64BowsersCastle => "N64 Bowser's Castle",
+
+            // Battle Arenas
+            SlotId::BlockPlaza => "Block Plaza",
+            SlotId::DelfinoPier => "Delfino Pier",
+            SlotId::FunkyStadium => "Funky Stadium",
+            SlotId::ChainChompWheel => "Chain Chomp Wheel",
+            SlotId::ThwompDesert => "Thwomp Desert",
+            SlotId::SNESBattleCourse4 => "SNES Battle Course 4",
+            SlotId::GBABattleCourse3 => "GBA Battle Course 3",
+            SlotId::N64Skscraper => "N64 Skyscraper",
+            SlotId::GCNCookieLand => "GCN Cookie Land",
+            SlotId::DSTwilightHouse => "DS Twilight House",
+
+            // Other Slots
+            SlotId::GalaxyColosseum => "Galaxy Colosseum",
+            SlotId::WinningScene => "Winning Scene",
+            SlotId::LosingScene => "Losing Scene",
+            SlotId::Credits => "Credits",
+        };
+
+        write!(f, "{}", s)
+    }
 }
 
 impl From<SlotId> for u8 {

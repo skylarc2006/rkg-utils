@@ -131,23 +131,23 @@ fn print_rkg_header() {
     let header = Header::new_from_path("./test_ghosts/00m58s6479888 David .rkg")
         .expect("Couldn't read header");
 
-    println!("Track: {:?}", header.slot_id());
+    println!("Track: {}", header.slot_id());
     println!("Time: {}", header.finish_time());
     println!("Date set: {:?}", header.date_set());
     println!("Player: {}", header.mii().name());
     println!("Country: {}", header.country());
     println!("Subregion: {}", header.subregion());
-    println!("Controller: {:?}", header.controller());
+    println!("Controller: {}", header.controller());
     println!(
-        "Combo: {:?} on {:?} ({} Drift)",
-        header.combo().character(),
-        header.combo().vehicle(),
+        "Combo: {} ({} Drift)",
+        header.combo(),
         if header.is_automatic_drift() {
             "Automatic"
         } else {
             "Manual"
         }
     );
+    println!("Ghost type: {}", header.ghost_type());
     println!("Input data compressed? {}", header.is_compressed());
     println!(
         "Decompressed input data length: {}",
@@ -211,8 +211,8 @@ fn test_ctgp_metadata() {
 #[test]
 fn print_ctgp_metadata() {
     let mut rkg_data: Vec<u8> = Vec::new();
-    std::fs::File::open("./test_ghosts/skylar_pause_ghost_compressed.rkg")
-        .expect("Couldn't find `./test_ghosts/skylar_pause_ghost_compressed.rkg`")
+    std::fs::File::open("./test_ghosts/00m58s6479888 David .rkg")
+        .expect("Couldn't find `./test_ghosts/00m58s6479888 David .rkg`")
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
