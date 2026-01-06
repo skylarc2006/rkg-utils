@@ -143,7 +143,7 @@ fn test_rkg_input_data() {
     assert_eq!(input_data.face_inputs().len(), 12);
     assert_eq!(input_data.stick_inputs().len(), 891);
     assert_eq!(input_data.dpad_inputs().len(), 9);
-    
+
     assert!(!input_data.contains_illegal_inputs());
 }
 
@@ -304,7 +304,8 @@ fn illegal_drift_input_test() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let input_data = InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
+    let input_data =
+        InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
     assert!(input_data.contains_illegal_inputs());
 }
 
@@ -316,7 +317,8 @@ fn illegal_brake_input_test() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let input_data = InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
+    let input_data =
+        InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
     assert!(input_data.contains_illegal_inputs());
 }
 

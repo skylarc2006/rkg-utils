@@ -189,9 +189,7 @@ impl InputData {
             {
                 // Illegal drift input
                 return true;
-            }
-            
-            else if idx > 0 {
+            } else if idx > 0 {
                 let previous_buttons = self.face_inputs()[idx - 1].buttons();
                 if current_buttons.contains(&FaceButton::Brake)
                     && current_buttons.contains(&FaceButton::Accelerator)

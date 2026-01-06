@@ -265,7 +265,7 @@ pub enum Country {
 
 impl TryFrom<u8> for Country {
     type Error = CountryError;
-    
+
     fn try_from(id: u8) -> Result<Self, Self::Error> {
         match id {
             0x01 => Ok(Country::Japan),
@@ -998,7 +998,9 @@ impl std::fmt::Display for Country {
             Country::Senegal => "Senegal",
             Country::TheGambia => "The Gambia",
             Country::CapeVerde => "Cape Verde",
-            Country::SaintHelenaAscensionAndTristanDaCunha => "Saint Helena, Ascension and Tristan da Cunha",
+            Country::SaintHelenaAscensionAndTristanDaCunha => {
+                "Saint Helena, Ascension and Tristan da Cunha"
+            }
             Country::Moldova => "Moldova",
             Country::Ukraine => "Ukraine",
             Country::Cameroon => "Cameroon",
@@ -1029,7 +1031,9 @@ impl std::fmt::Display for Country {
             Country::FrenchSouthernAndAntarcticLands => "French Southern and Antarctic Lands",
             Country::PitcairnIslands => "Pitcairn Islands",
             Country::BritishAntarcticTerritory => "British Antarctic Territory",
-            Country::SouthGeorgiaAndTheSouthSandwichIslands => "South Georgia and the South Sandwich Islands",
+            Country::SouthGeorgiaAndTheSouthSandwichIslands => {
+                "South Georgia and the South Sandwich Islands"
+            }
             Country::FederatedStatesOfMicronesia => "Federated States of Micronesia",
             Country::Fiji => "Fiji",
             Country::Kiribati => "Kiribati",
