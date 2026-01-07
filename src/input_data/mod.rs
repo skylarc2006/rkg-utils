@@ -30,6 +30,9 @@ pub struct InputData {
 }
 
 impl InputData {
+    /// Expects RKG data 0x88..(end of input data).
+    /// End of input data is either 0x04 from the end of the file of vanilla ghosts,
+    /// or if it's a CTGP ghost the input data end is whatever the CTGP metadata size is.
     pub fn new(input_data: &[u8]) -> Result<Self, InputDataError> {
         let input_data = if input_data[4..8] == [0x59, 0x61, 0x7A, 0x31] {
             // YAZ1 header, decompress

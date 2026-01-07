@@ -50,7 +50,7 @@ pub struct CTGPMetadata {
     respawns: bool,
     category: Category,
     metadata_version: u8,
-    metadata_size: u32,
+    len: usize,
     lap_count: u8,
 }
 
@@ -61,8 +61,8 @@ impl CTGPMetadata {
             return Err(CTGPMetadataError::NotCKGD);
         }
 
-        let metadata_size =
-            u32::from_be_bytes(data[data.len() - 0x0C..data.len() - 0x08].try_into()?);
+        let len =
+            u32::from_be_bytes(data[data.len() - 0x0C..data.len() - 0x08].try_into()?) as usize;
 
         let metadata_version = data[data.len() - 0x0D];
 
@@ -76,8 +76,8 @@ impl CTGPMetadata {
         let security_data_size = if metadata_version < 7 { 0x44 } else { 0x54 };
 
         let header_data = &data[..0x88];
-        let input_data = &data[0x88..data.len() - metadata_size as usize];
-        let metadata = &data[data.len() - metadata_size as usize..];
+        let input_data = &data[0x88..data.len() - len as usize];
+        let metadata = &data[data.len() - len as usize..];
         let mut current_offset = 0usize;
 
         let security_data = Vec::from(&metadata[..security_data_size]);
@@ -286,7 +286,7 @@ impl CTGPMetadata {
             respawns,
             category,
             metadata_version,
-            metadata_size,
+            len,
             lap_count,
         })
     }
@@ -398,8 +398,8 @@ impl CTGPMetadata {
         self.metadata_version
     }
 
-    pub fn metadata_size(&self) -> u32 {
-        self.metadata_size
+    pub fn len(&self) -> usize {
+        self.len
     }
 }
 

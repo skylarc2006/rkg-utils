@@ -1,13 +1,11 @@
 use crate::{
-    ctgp_metadata::CTGPMetadata,
-    header::{
+    Ghost, ctgp_metadata::CTGPMetadata, header::{
         Header,
         combo::{Character, Vehicle},
         controller::Controller,
         date::Date,
         ghost_type::GhostType,
-        location::country::Country,
-        location::subregion::Subregion,
+        location::{country::Country, subregion::Subregion},
         mii::{
             eyebrows::EyebrowType,
             eyes::{EyeColor, EyeType},
@@ -20,8 +18,7 @@ use crate::{
             nose::NoseType,
         },
         slot_id::SlotId,
-    },
-    input_data::{InputData, yaz1_compress, yaz1_decompress},
+    }, input_data::{InputData, yaz1_compress, yaz1_decompress}
 };
 use std::io::Read;
 
@@ -440,4 +437,120 @@ fn test_recompressed_input_data() {
         recompressed_input_data.inputs()
     );
     assert!(original_input_data.inputs().len() > 100);
+}
+
+#[test]
+fn test_full_ghost() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
+    
+    // General ghost info
+    assert_eq!(ghost.header().finish_time().minutes(), 1);
+    assert_eq!(ghost.header().finish_time().seconds(), 3);
+    assert_eq!(ghost.header().finish_time().milliseconds(), 904);
+    assert_eq!(ghost.header().finish_time().to_string(), "01:03.904");
+    assert_eq!(ghost.header().slot_id(), SlotId::LuigiCircuit);
+    assert_eq!(ghost.header().combo().vehicle(), Vehicle::WarioBike);
+    assert_eq!(ghost.header().combo().character(), Character::KingBoo);
+    assert_eq!(ghost.header().date_set(), &Date::new(2025, 11, 12).unwrap());
+    assert_eq!(ghost.header().controller(), Controller::Classic);
+    assert!(ghost.header().is_compressed());
+    assert_eq!(ghost.header().ghost_type(), GhostType::ExpertStaff);
+    assert!(ghost.header().is_automatic_drift());
+    assert_eq!(ghost.header().decompressed_input_data_length(), 1856);
+    assert_eq!(ghost.header().lap_count(), 3);
+    assert_eq!(ghost.header().lap_split_times()[0].to_string(), "00:25.540");
+    assert_eq!(ghost.header().lap_split_times()[1].to_string(), "00:19.127");
+    assert_eq!(ghost.header().lap_split_times()[2].to_string(), "00:19.237");
+    assert_eq!(ghost.header().country(), Country::NotSet);
+    assert_eq!(ghost.header().subregion(), Subregion::NotSet);
+    assert_eq!(ghost.header().location_code(), 0xFFFF);
+
+    // Mii Data
+    assert!(!ghost.header().mii().is_girl());
+    assert_eq!(ghost.header().mii().birthday().month(), Some(1));
+    assert_eq!(ghost.header().mii().birthday().day(), Some(1));
+    assert_eq!(ghost.header().mii().favorite_color(), FavColor::ForestGreen);
+    assert_eq!(ghost.header().mii().name(), "JC");
+    assert_eq!(ghost.header().mii().build().height(), 127);
+    assert_eq!(ghost.header().mii().build().weight(), 127);
+
+    assert_eq!(ghost.header().mii().mii_id(), 0x893EF2FB);
+    assert_eq!(ghost.header().mii().system_id(), 0x689EC992);
+
+    assert_eq!(ghost.header().mii().head().shape(), HeadShape::Large);
+    assert_eq!(ghost.header().mii().head().skin_tone(), SkinTone::Natural);
+    assert_eq!(ghost.header().mii().head().face_features(), FaceFeatures::None);
+
+    assert!(ghost.header().mii().mingle_off());
+    assert!(!ghost.header().mii().downloaded());
+
+    assert_eq!(ghost.header().mii().hair().hair_type(), HairType::NormalLong);
+    assert_eq!(ghost.header().mii().hair().hair_color(), HairColor::PhilippineBrown);
+    assert!(!ghost.header().mii().hair().is_flipped());
+
+    assert_eq!(ghost.header().mii().eyebrows().eyebrow_type(), EyebrowType::None);
+    assert_eq!(ghost.header().mii().eyebrows().rotation(), 5);
+    assert_eq!(
+        ghost.header().mii().eyebrows().eyebrow_color(),
+        HairColor::Chocolate
+    );
+    assert_eq!(ghost.header().mii().eyebrows().size(), 4);
+    assert_eq!(ghost.header().mii().eyebrows().y(), 10);
+    assert_eq!(ghost.header().mii().eyebrows().x(), 2);
+
+    assert_eq!(ghost.header().mii().eyes().eye_type(), EyeType::DotAngry);
+    assert_eq!(ghost.header().mii().eyes().rotation(), 4);
+    assert_eq!(ghost.header().mii().eyes().y(), 9);
+    assert_eq!(ghost.header().mii().eyes().eye_color(), EyeColor::Black);
+    assert_eq!(ghost.header().mii().eyes().size(), 6);
+    assert_eq!(ghost.header().mii().eyes().x(), 1);
+
+    assert_eq!(ghost.header().mii().nose().nose_type(), NoseType::Dot);
+    assert_eq!(ghost.header().mii().nose().size(), 0);
+    assert_eq!(ghost.header().mii().nose().y(), 8);
+
+    assert_eq!(ghost.header().mii().lips().lips_type(), LipsType::WaveAngry);
+    assert_eq!(ghost.header().mii().lips().lips_color(), LipsColor::Orange);
+    assert_eq!(ghost.header().mii().lips().size(), 7);
+    assert_eq!(ghost.header().mii().lips().y(), 6);
+
+    assert_eq!(ghost.header().mii().glasses().glasses_type(), GlassesType::None);
+    assert_eq!(ghost.header().mii().glasses().glasses_color(), GlassesColor::Black);
+    assert_eq!(ghost.header().mii().glasses().size(), 4);
+    assert_eq!(ghost.header().mii().glasses().y(), 10);
+
+    assert_eq!(
+        ghost.header().mii().facial_hair().mustache_type(),
+        MustacheType::None
+    );
+    assert_eq!(ghost.header().mii().facial_hair().beard_type(), BeardType::None);
+    assert_eq!(ghost.header().mii().facial_hair().color(), HairColor::Black);
+    assert_eq!(ghost.header().mii().facial_hair().mustache_size(), 4);
+    assert_eq!(ghost.header().mii().facial_hair().mustache_y(), 10);
+
+    assert!(!ghost.header().mii().mole().has_mole());
+    assert_eq!(ghost.header().mii().mole().size(), 4);
+    assert_eq!(ghost.header().mii().mole().y(), 20);
+    assert_eq!(ghost.header().mii().mole().x(), 2);
+
+    assert_eq!(ghost.header().mii().creator_name(), "JC");
+
+    assert_eq!(ghost.header().mii_crc16(), 0x06F4);
+    assert!(ghost.header().verify_mii_crc16());
+    
+    // Input data
+    assert_eq!(ghost.input_data().face_input_count(), 0x18);
+    assert_eq!(ghost.input_data().stick_input_count(), 0x037B);
+    assert_eq!(ghost.input_data().dpad_input_count(), 0x09);
+    assert_eq!(ghost.input_data().inputs().len(), 907);
+    assert_eq!(ghost.input_data().face_inputs().len(), 12);
+    assert_eq!(ghost.input_data().stick_inputs().len(), 891);
+    assert_eq!(ghost.input_data().dpad_inputs().len(), 9);
+
+    assert!(!ghost.input_data().contains_illegal_inputs());
+    
+    // CTGP Metadata
+    assert!(ghost.ctgp_metadata().is_some());
+    
+    // TODO: write specific CTGP metadata asserts
 }
