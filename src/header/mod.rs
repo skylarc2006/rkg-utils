@@ -6,8 +6,7 @@ use crate::{
         date::{Date, DateError},
         ghost_type::{GhostType, GhostTypeError},
         in_game_time::{InGameTime, InGameTimeError},
-        location::country::{Country, CountryError},
-        location::subregion::{Subregion, SubregionError},
+        location::Location,
         mii::{Mii, MiiError},
         slot_id::{SlotId, SlotIdError},
     },
@@ -46,10 +45,6 @@ pub enum HeaderError {
     MiiError(#[from] MiiError),
     #[error("Io Error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Country Error: {0}")]
-    CountryError(#[from] CountryError),
-    #[error("Subregion Error: {0}")]
-    SubregionError(#[from] SubregionError),
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
 }
@@ -68,9 +63,7 @@ pub struct Header {
     decompressed_input_data_length: u16,
     lap_count: u8,
     lap_split_times: [InGameTime; 10],
-    country: Country,
-    subregion: Subregion,
-    location_code: u16,
+    location: Location,
     mii_bytes: [u8; 0x4A],
     mii: Mii,
     mii_crc16: u16,
@@ -113,9 +106,8 @@ impl Header {
         }
 
         let codes = ByteHandler::try_from(&header_data[0x34..=0x37]).unwrap();
-        let country = Country::try_from(codes.copy_byte(0))?;
-        let subregion = Subregion::new(country, codes.copy_byte(1))?;
-        let location_code = codes.copy_word(1);
+        let location =
+            Location::find(codes.copy_byte(0), codes.copy_byte(1), None).unwrap_or_default();
 
         let mut mii_bytes = [0_u8; 0x4A];
         for (index, byte) in header_data[0x3C..0x3C + 0x4A].iter().enumerate() {
@@ -137,9 +129,7 @@ impl Header {
             decompressed_input_data_length,
             lap_count,
             lap_split_times,
-            country,
-            subregion,
-            location_code,
+            location,
             mii_bytes,
             mii,
             mii_crc16,
@@ -228,16 +218,8 @@ impl Header {
         self.lap_split_times = lap_split_times;
     }
 
-    pub fn country(&self) -> Country {
-        self.country
-    }
-
-    pub fn subregion(&self) -> Subregion {
-        self.subregion
-    }
-
-    pub fn location_code(&self) -> u16 {
-        self.location_code
+    pub fn location(&self) -> &Location {
+        &self.location
     }
 
     pub fn mii(&self) -> &Mii {
