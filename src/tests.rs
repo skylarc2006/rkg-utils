@@ -1,11 +1,13 @@
 use crate::{
-    Ghost, ctgp_metadata::CTGPMetadata, header::{
+    Ghost,
+    ctgp_metadata::CTGPMetadata,
+    header::{
         Header,
         combo::{Character, Vehicle},
         controller::Controller,
         date::Date,
         ghost_type::GhostType,
-        location::{country::Country, subregion::Subregion},
+        location::constants::{Country, Subregion},
         mii::{
             eyebrows::EyebrowType,
             eyes::{EyeColor, EyeType},
@@ -18,7 +20,8 @@ use crate::{
             nose::NoseType,
         },
         slot_id::SlotId,
-    }, input_data::{InputData, yaz1_compress, yaz1_decompress}
+    },
+    input_data::{InputData, yaz1_compress, yaz1_decompress},
 };
 use std::io::Read;
 
@@ -45,9 +48,8 @@ fn test_rkg_header() {
     assert_eq!(header.lap_split_times()[0].to_string(), "00:25.540");
     assert_eq!(header.lap_split_times()[1].to_string(), "00:19.127");
     assert_eq!(header.lap_split_times()[2].to_string(), "00:19.237");
-    assert_eq!(header.country(), Country::NotSet);
-    assert_eq!(header.subregion(), Subregion::NotSet);
-    assert_eq!(header.location_code(), 0xFFFF);
+    assert_eq!(header.location().country(), Country::NotSet);
+    assert_eq!(header.location().subregion(), Subregion::NotSet);
 
     // Mii Data
     assert!(!header.mii().is_girl());
@@ -132,8 +134,8 @@ fn print_rkg_header() {
     println!("Time: {}", header.finish_time());
     println!("Date set: {:?}", header.date_set());
     println!("Player: {}", header.mii().name());
-    println!("Country: {}", header.country());
-    println!("Subregion: {}", header.subregion());
+    println!("Country: {}", header.location().country());
+    println!("Subregion: {}", header.location().subregion());
     println!("Controller: {}", header.controller());
     println!(
         "Combo: {} ({} Drift)",
@@ -441,8 +443,9 @@ fn test_recompressed_input_data() {
 
 #[test]
 fn test_full_ghost() {
-    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
-    
+    let ghost =
+        Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
+
     // General ghost info
     assert_eq!(ghost.header().finish_time().minutes(), 1);
     assert_eq!(ghost.header().finish_time().seconds(), 3);
@@ -461,9 +464,8 @@ fn test_full_ghost() {
     assert_eq!(ghost.header().lap_split_times()[0].to_string(), "00:25.540");
     assert_eq!(ghost.header().lap_split_times()[1].to_string(), "00:19.127");
     assert_eq!(ghost.header().lap_split_times()[2].to_string(), "00:19.237");
-    assert_eq!(ghost.header().country(), Country::NotSet);
-    assert_eq!(ghost.header().subregion(), Subregion::NotSet);
-    assert_eq!(ghost.header().location_code(), 0xFFFF);
+    assert_eq!(ghost.header().location().country(), Country::NotSet);
+    assert_eq!(ghost.header().location().subregion(), Subregion::NotSet);
 
     // Mii Data
     assert!(!ghost.header().mii().is_girl());
@@ -479,16 +481,28 @@ fn test_full_ghost() {
 
     assert_eq!(ghost.header().mii().head().shape(), HeadShape::Large);
     assert_eq!(ghost.header().mii().head().skin_tone(), SkinTone::Natural);
-    assert_eq!(ghost.header().mii().head().face_features(), FaceFeatures::None);
+    assert_eq!(
+        ghost.header().mii().head().face_features(),
+        FaceFeatures::None
+    );
 
     assert!(ghost.header().mii().mingle_off());
     assert!(!ghost.header().mii().downloaded());
 
-    assert_eq!(ghost.header().mii().hair().hair_type(), HairType::NormalLong);
-    assert_eq!(ghost.header().mii().hair().hair_color(), HairColor::PhilippineBrown);
+    assert_eq!(
+        ghost.header().mii().hair().hair_type(),
+        HairType::NormalLong
+    );
+    assert_eq!(
+        ghost.header().mii().hair().hair_color(),
+        HairColor::PhilippineBrown
+    );
     assert!(!ghost.header().mii().hair().is_flipped());
 
-    assert_eq!(ghost.header().mii().eyebrows().eyebrow_type(), EyebrowType::None);
+    assert_eq!(
+        ghost.header().mii().eyebrows().eyebrow_type(),
+        EyebrowType::None
+    );
     assert_eq!(ghost.header().mii().eyebrows().rotation(), 5);
     assert_eq!(
         ghost.header().mii().eyebrows().eyebrow_color(),
@@ -514,8 +528,14 @@ fn test_full_ghost() {
     assert_eq!(ghost.header().mii().lips().size(), 7);
     assert_eq!(ghost.header().mii().lips().y(), 6);
 
-    assert_eq!(ghost.header().mii().glasses().glasses_type(), GlassesType::None);
-    assert_eq!(ghost.header().mii().glasses().glasses_color(), GlassesColor::Black);
+    assert_eq!(
+        ghost.header().mii().glasses().glasses_type(),
+        GlassesType::None
+    );
+    assert_eq!(
+        ghost.header().mii().glasses().glasses_color(),
+        GlassesColor::Black
+    );
     assert_eq!(ghost.header().mii().glasses().size(), 4);
     assert_eq!(ghost.header().mii().glasses().y(), 10);
 
@@ -523,7 +543,10 @@ fn test_full_ghost() {
         ghost.header().mii().facial_hair().mustache_type(),
         MustacheType::None
     );
-    assert_eq!(ghost.header().mii().facial_hair().beard_type(), BeardType::None);
+    assert_eq!(
+        ghost.header().mii().facial_hair().beard_type(),
+        BeardType::None
+    );
     assert_eq!(ghost.header().mii().facial_hair().color(), HairColor::Black);
     assert_eq!(ghost.header().mii().facial_hair().mustache_size(), 4);
     assert_eq!(ghost.header().mii().facial_hair().mustache_y(), 10);
@@ -537,7 +560,7 @@ fn test_full_ghost() {
 
     assert_eq!(ghost.header().mii_crc16(), 0x06F4);
     assert!(ghost.header().verify_mii_crc16());
-    
+
     // Input data
     assert_eq!(ghost.input_data().face_input_count(), 0x18);
     assert_eq!(ghost.input_data().stick_input_count(), 0x037B);
@@ -548,9 +571,9 @@ fn test_full_ghost() {
     assert_eq!(ghost.input_data().dpad_inputs().len(), 9);
 
     assert!(!ghost.input_data().contains_illegal_inputs());
-    
+
     // CTGP Metadata
     assert!(ghost.ctgp_metadata().is_some());
-    
+
     // TODO: write specific CTGP metadata asserts
 }

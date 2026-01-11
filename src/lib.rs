@@ -76,19 +76,19 @@ impl Ghost {
             crc32,
         })
     }
-    
+
     pub fn header(&self) -> &Header {
         &self.header
     }
-    
+
     pub fn header_mut(&mut self) -> &mut Header {
         &mut self.header
     }
-    
+
     pub fn input_data(&self) -> &InputData {
         &self.input_data
     }
-    
+
     pub fn ctgp_metadata(&self) -> &Option<CTGPMetadata> {
         &self.ctgp_metadata
     }
