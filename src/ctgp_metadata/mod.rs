@@ -210,7 +210,6 @@ impl CTGPMetadata {
                 let mut pause_timestamp_seconds = (elapsed_frames - 242) as f64 / 59.94;
                 let mut minutes = 0;
                 let mut seconds = 0;
-                
 
                 while pause_timestamp_seconds >= 60.0 {
                     minutes += 1;

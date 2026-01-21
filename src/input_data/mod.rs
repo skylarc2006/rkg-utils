@@ -1,3 +1,4 @@
+use crate::header::controller::Controller;
 use crate::input_data::dpad_input::{DPadButton, DPadInput};
 use crate::input_data::face_input::{FaceButton, FaceInput};
 use crate::input_data::input::Input;
@@ -184,7 +185,7 @@ impl InputData {
     }
 
     /// Returns true if the inputs contain an illegal drift or brake input.
-    pub fn contains_illegal_inputs(&self) -> bool {
+    pub fn contains_illegal_brake_or_drift_inputs(&self) -> bool {
         for (idx, input) in self.face_inputs().iter().enumerate() {
             let current_buttons = input.buttons();
             if current_buttons.contains(&FaceButton::Drift)
@@ -205,6 +206,78 @@ impl InputData {
                 }
             }
         }
+        false
+    }
+
+    /// Returns true if the inputs contain illegal stick inputs.
+    pub fn contains_illegal_stick_inputs(&self, controller: Controller) -> bool {
+        // Definition of illegal stick inputs [x, y]
+        const ILLEGAL_STICK_INPUTS: [[i8; 2]; 44] = [
+            // These inputs are illegal for GCN, CCP, and Nunchuk (24 total)
+            [-7, 7],
+            [-7, 6],
+            [-7, 5],
+            [-7, -7],
+            [-7, -6],
+            [-7, -5],
+            [-6, 7],
+            [-6, 6],
+            [-6, -7],
+            [-6, -6],
+            [-5, 7],
+            [-5, -7],
+            [7, 7],
+            [7, 6],
+            [7, 5],
+            [7, -7],
+            [7, -6],
+            [7, -5],
+            [6, 7],
+            [6, 6],
+            [6, -7],
+            [6, -6],
+            [5, 7],
+            [5, -7],
+            
+            // Illegal stick inputs for specifically GCN/CCP (additional 20)
+            [-7, 4],
+            [-6, 5],
+            [-5, 6],
+            [-4, 7],
+            [-3, 7],
+            [3, 7],
+            [4, 7],
+            [4, 6],
+            [4, -7],
+            [5, 6],
+            [5, 5],
+            [5, -6],
+            [6, 5],
+            [6, 4],
+            [6, -5],
+            [7, 4],
+            [7, 3],
+            [7, 2],
+            [7, -3],
+            [7, -4]
+        ];
+        
+        let illegal_stick_inputs;
+        
+        match controller {
+            Controller::Nunchuk => { illegal_stick_inputs = &ILLEGAL_STICK_INPUTS[..24] },
+            Controller::Classic | Controller::Gamecube => { illegal_stick_inputs = &ILLEGAL_STICK_INPUTS },
+            Controller::WiiWheel => { return false; }
+        }
+        
+        for current_stick_input in self.stick_inputs().iter() {
+            for illegal_stick_input in illegal_stick_inputs.iter() {
+                if current_stick_input == illegal_stick_input {
+                    return true;
+                }
+            }
+        }
+
         false
     }
 

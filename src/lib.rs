@@ -1,8 +1,6 @@
 use std::{array::TryFromSliceError, io::Read};
 
-use crate::{
-    ctgp_metadata::CTGPMetadata, header::Header, input_data::InputData,
-};
+use crate::{ctgp_metadata::CTGPMetadata, header::Header, input_data::InputData};
 
 pub mod byte_handler;
 pub mod ctgp_metadata;
@@ -13,6 +11,7 @@ pub mod input_data;
  * TODO:
  * Unfinished/unimplemented functionality
  * ----------------------------------------------
+ * Implement illegal stick position check
  * Write/save to new file, recalculate crc32
  * Be able to modify variables in ghost files
  * Implement TryFrom<_> for T where T: Into<ByteHandler>, relies on https://github.com/rust-lang/rust/issues/31844 currently
@@ -93,5 +92,7 @@ impl Ghost {
         &self.ctgp_metadata
     }
 
-    pub fn crc32(&self) -> u32 {self.crc32}
+    pub fn crc32(&self) -> u32 {
+        self.crc32
+    }
 }

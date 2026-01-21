@@ -178,7 +178,7 @@ fn test_rkg_input_data() {
     assert_eq!(input_data.stick_inputs().len(), 891);
     assert_eq!(input_data.dpad_inputs().len(), 9);
 
-    assert!(!input_data.contains_illegal_inputs());
+    assert!(!input_data.contains_illegal_brake_or_drift_inputs());
 }
 
 #[test]
@@ -340,7 +340,7 @@ fn illegal_drift_input_test() {
 
     let input_data =
         InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
-    assert!(input_data.contains_illegal_inputs());
+    assert!(input_data.contains_illegal_brake_or_drift_inputs());
 }
 
 #[test]
@@ -353,7 +353,7 @@ fn illegal_brake_input_test() {
 
     let input_data =
         InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
-    assert!(input_data.contains_illegal_inputs());
+    assert!(input_data.contains_illegal_brake_or_drift_inputs());
 }
 
 #[test]
@@ -570,7 +570,8 @@ fn test_full_ghost() {
     assert_eq!(ghost.input_data().stick_inputs().len(), 891);
     assert_eq!(ghost.input_data().dpad_inputs().len(), 9);
 
-    assert!(!ghost.input_data().contains_illegal_inputs());
+    assert!(!ghost.input_data().contains_illegal_brake_or_drift_inputs());
+    assert!(!ghost.input_data().contains_illegal_stick_inputs(ghost.header().controller()));
 
     // CTGP Metadata
     assert!(ghost.ctgp_metadata().is_some());
