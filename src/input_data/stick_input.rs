@@ -35,6 +35,12 @@ impl PartialEq for StickInput {
     }
 }
 
+impl PartialEq<[i8; 2]> for StickInput {
+    fn eq(&self, other: &[i8; 2]) -> bool {
+        self.x == other[0] && self.y == other[1]
+    }
+}
+
 impl TryFrom<&[u8]> for StickInput {
     type Error = StickInputError;
 

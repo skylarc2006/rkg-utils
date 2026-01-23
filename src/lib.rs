@@ -1,8 +1,12 @@
 use std::{array::TryFromSliceError, io::{Read, Write}};
 
+<<<<<<< HEAD
 use crate::{
     crc::crc32, ctgp_metadata::CTGPMetadata, header::Header, input_data::InputData,
 };
+=======
+use crate::{ctgp_metadata::CTGPMetadata, header::Header, input_data::InputData};
+>>>>>>> 870701a2f0d80967579f8ae9ef2f9917c8dd68c0
 
 pub mod byte_handler;
 pub mod crc;
@@ -14,6 +18,12 @@ pub mod input_data;
  * TODO:
  * Unfinished/unimplemented functionality
  * ----------------------------------------------
+<<<<<<< HEAD
+=======
+ * Implement illegal stick position check
+ * Write/save to new file, recalculate crc32
+ * Be able to modify variables in ghost files
+>>>>>>> 870701a2f0d80967579f8ae9ef2f9917c8dd68c0
  * Implement TryFrom<_> for T where T: Into<ByteHandler>, relies on https://github.com/rust-lang/rust/issues/31844 currently
  * Represent at a Type-system level which types can convert from T to TypeHandler to whichever Struct
  * Optimize Little-Endian calculations
@@ -123,7 +133,9 @@ impl Ghost {
         &self.ctgp_metadata
     }
 
-    pub fn crc32(&self) -> u32 {self.crc32}
+    pub fn crc32(&self) -> u32 {
+        self.crc32
+    }
 }
 
 
