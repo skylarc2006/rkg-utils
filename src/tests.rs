@@ -709,7 +709,8 @@ fn test_write_to_ghost() {
     assert_eq!(ghost.input_data().stick_inputs().len(), 891);
     assert_eq!(ghost.input_data().dpad_inputs().len(), 9);
 
-    assert!(!ghost.input_data().contains_illegal_inputs());
+    assert!(!ghost.input_data().contains_illegal_brake_or_drift_inputs());
+    assert!(!ghost.input_data().contains_illegal_stick_inputs(Controller::Classic));
 
     // CTGP Metadata
     assert!(ghost.ctgp_metadata().is_some());

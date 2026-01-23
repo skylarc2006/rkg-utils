@@ -213,7 +213,6 @@ impl InputData {
         false
     }
 
-<<<<<<< HEAD
     pub fn is_compressed(&self) -> bool {
         self.raw_data[4..8] == [0x59, 0x61, 0x7A, 0x31]
     }
@@ -232,7 +231,8 @@ impl InputData {
 
     pub fn raw_data(&self) -> &[u8] {
         &self.raw_data
-=======
+    }
+    
     /// Returns true if the inputs contain illegal stick inputs.
     pub fn contains_illegal_stick_inputs(&self, controller: Controller) -> bool {
         // Definition of illegal stick inputs [x, y]
@@ -303,7 +303,6 @@ impl InputData {
         }
 
         false
->>>>>>> 870701a2f0d80967579f8ae9ef2f9917c8dd68c0
     }
 
     pub fn face_inputs(&self) -> &[FaceInput] {

@@ -1,12 +1,8 @@
 use std::{array::TryFromSliceError, io::{Read, Write}};
 
-<<<<<<< HEAD
 use crate::{
     crc::crc32, ctgp_metadata::CTGPMetadata, header::Header, input_data::InputData,
 };
-=======
-use crate::{ctgp_metadata::CTGPMetadata, header::Header, input_data::InputData};
->>>>>>> 870701a2f0d80967579f8ae9ef2f9917c8dd68c0
 
 pub mod byte_handler;
 pub mod crc;
