@@ -21,6 +21,7 @@ pub enum InputDataError {
 /// Handles all input data being read
 /// Tockdom wiki: https://wiki.tockdom.com/wiki/RKG_(File_Format)#Controller_Input_Data
 pub struct InputData {
+    raw_data: Vec<u8>,
     face_input_count: u16,
     stick_input_count: u16,
     dpad_input_count: u16,
@@ -34,6 +35,8 @@ impl InputData {
     /// End of input data is either 0x04 from the end of the file of vanilla ghosts,
     /// or if it's a CTGP ghost the input data end is whatever the CTGP metadata size is.
     pub fn new(input_data: &[u8]) -> Result<Self, InputDataError> {
+        let raw_data = Vec::from(input_data);
+        
         let input_data = if input_data[4..8] == [0x59, 0x61, 0x7A, 0x31] {
             // YAZ1 header, decompress
             yaz1_decompress(&input_data[4..]).unwrap()
@@ -94,6 +97,7 @@ impl InputData {
         }
 
         Ok(Self {
+            raw_data,
             face_input_count,
             stick_input_count,
             dpad_input_count,
@@ -206,6 +210,26 @@ impl InputData {
             }
         }
         false
+    }
+
+    pub fn is_compressed(&self) -> bool {
+        self.raw_data[4..8] == [0x59, 0x61, 0x7A, 0x31]
+    }
+
+    pub fn compress(&mut self) {
+        if !self.is_compressed() {
+            self.raw_data = yaz1_compress(&self.raw_data);
+        }
+    }
+
+    pub fn decompress(&mut self) {
+        if self.is_compressed() {
+            self.raw_data = yaz1_decompress(&self.raw_data).unwrap();
+        }
+    }
+
+    pub fn raw_data(&self) -> &[u8] {
+        &self.raw_data
     }
 
     pub fn face_inputs(&self) -> &[FaceInput] {

@@ -1,10 +1,11 @@
-use std::{array::TryFromSliceError, io::Read};
+use std::{array::TryFromSliceError, io::{Read, Write}};
 
 use crate::{
-    ctgp_metadata::CTGPMetadata, header::Header, input_data::InputData,
+    crc::crc32, ctgp_metadata::CTGPMetadata, header::Header, input_data::InputData,
 };
 
 pub mod byte_handler;
+pub mod crc;
 pub mod ctgp_metadata;
 pub mod header;
 pub mod input_data;
@@ -13,8 +14,6 @@ pub mod input_data;
  * TODO:
  * Unfinished/unimplemented functionality
  * ----------------------------------------------
- * Write/save to new file, recalculate crc32
- * Be able to modify variables in ghost files
  * Implement TryFrom<_> for T where T: Into<ByteHandler>, relies on https://github.com/rust-lang/rust/issues/31844 currently
  * Represent at a Type-system level which types can convert from T to TypeHandler to whichever Struct
  * Optimize Little-Endian calculations
@@ -39,9 +38,9 @@ pub enum GhostError {
 }
 
 pub struct Ghost {
-    header: header::Header,
-    input_data: input_data::InputData,
-    ctgp_metadata: Option<ctgp_metadata::CTGPMetadata>,
+    header: Header,
+    input_data: InputData,
+    ctgp_metadata: Option<CTGPMetadata>,
     crc32: u32,
 }
 
@@ -77,6 +76,37 @@ impl Ghost {
         })
     }
 
+    pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
+        self.header.set_compressed(self.input_data.is_compressed());
+
+        let mii_data: Vec<u8> = self.header.mii().raw_data().to_vec();
+
+        self.header_mut().raw_data_mut()[0x3C..0x3C + 0x4A]
+            .copy_from_slice(&mii_data);
+
+        self.header.fix_mii_crc16();
+
+        let mut file = std::fs::File::create(path)?;
+        file.write_all(self.header.raw_data())?;
+        file.write_all(self.input_data.raw_data())?;
+
+
+        if let Some(ctgp_metadata) = &self.ctgp_metadata {
+            file.write_all(ctgp_metadata.raw_data())?;
+        }
+
+        // Calculate CRC32 over all data (excluding the CRC32 itself)
+        let mut data_for_crc = Vec::new();
+        data_for_crc.extend_from_slice(self.header.raw_data());
+        data_for_crc.extend_from_slice(self.input_data.raw_data());
+        if let Some(ctgp_metadata) = &self.ctgp_metadata {
+            data_for_crc.extend_from_slice(ctgp_metadata.raw_data());
+        }
+        self.crc32 = crc32(&data_for_crc);
+        file.write_all(&self.crc32.to_be_bytes())?;
+        Ok(())
+    }
+
     pub fn header(&self) -> &Header {
         &self.header
     }
@@ -94,4 +124,30 @@ impl Ghost {
     }
 
     pub fn crc32(&self) -> u32 {self.crc32}
+}
+
+
+pub(crate) fn write_bits(
+    buf: &mut [u8],
+    byte_offset: usize,
+    bit_offset: usize,
+    bit_width: usize,
+    value: u64,
+) {
+    let bytes_needed = (bit_offset + bit_width + 7) / 8;
+    let mut chunk: u64 = 0;
+
+    for i in 0..bytes_needed {
+        chunk = (chunk << 8) | buf[byte_offset + i] as u64;
+    }
+
+    let shift = bytes_needed * 8 - bit_offset - bit_width;
+    let mask = ((1u64 << bit_width) - 1) << shift;
+
+    chunk = (chunk & !mask) | ((value << shift) & mask);
+
+    for i in (0..bytes_needed).rev() {
+        buf[byte_offset + i] = (chunk & 0xFF) as u8;
+        chunk >>= 8;
+    }
 }

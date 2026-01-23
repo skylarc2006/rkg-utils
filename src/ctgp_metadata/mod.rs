@@ -24,6 +24,7 @@ pub enum CTGPMetadataError {
 }
 
 pub struct CTGPMetadata {
+    raw_data: Vec<u8>,
     security_data: Vec<u8>,
     track_sha1: [u8; 0x14],
     player_id: u64,
@@ -63,6 +64,8 @@ impl CTGPMetadata {
 
         let len =
             u32::from_be_bytes(data[data.len() - 0x0C..data.len() - 0x08].try_into()?) as usize;
+
+        let raw_data = Vec::from(&data[data.len() - len..data.len() - 0x04]);
 
         let metadata_version = data[data.len() - 0x0D];
 
@@ -260,6 +263,7 @@ impl CTGPMetadata {
         let respawns = bool_handler.read_bool(0);
 
         Ok(Self {
+            raw_data,
             security_data,
             track_sha1,
             player_id,
@@ -289,6 +293,10 @@ impl CTGPMetadata {
             len,
             lap_count,
         })
+    }
+
+    pub fn raw_data(&self) -> &[u8] {
+        &self.raw_data
     }
 
     pub fn security_data(&self) -> &[u8] {
@@ -400,10 +408,6 @@ impl CTGPMetadata {
 
     pub fn len(&self) -> usize {
         self.len
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
     }
 }
 

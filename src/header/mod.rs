@@ -1,4 +1,5 @@
 use crate::{
+    write_bits,
     byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
     header::{
         combo::{Combo, ComboError},
@@ -52,6 +53,7 @@ pub enum HeaderError {
 /// All the data in the Header of an RKGD
 /// https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header
 pub struct Header {
+    raw_data: [u8; 0x88],
     finish_time: InGameTime,
     slot_id: SlotId,
     combo: Combo,
@@ -64,7 +66,6 @@ pub struct Header {
     lap_count: u8,
     lap_split_times: [InGameTime; 10],
     location: Location,
-    mii_bytes: [u8; 0x4A],
     mii: Mii,
     mii_crc16: u16,
 }
@@ -109,15 +110,13 @@ impl Header {
         let location =
             Location::find(codes.copy_byte(0), codes.copy_byte(1), None).unwrap_or_default();
 
-        let mut mii_bytes = [0_u8; 0x4A];
-        for (index, byte) in header_data[0x3C..0x3C + 0x4A].iter().enumerate() {
-            mii_bytes[index] = *byte;
-        }
-        let mii = Mii::new(mii_bytes)?;
+        
+        let mii = Mii::new(&header_data[0x3C..0x3C + 0x4A])?;
 
         let mii_crc16 = ByteHandler::try_from(&header_data[0x86..=0x87])?.copy_word(0);
 
         Ok(Self {
+            raw_data: header_data.try_into().unwrap(),
             finish_time,
             slot_id,
             combo,
@@ -130,7 +129,6 @@ impl Header {
             lap_count,
             lap_split_times,
             location,
-            mii_bytes,
             mii,
             mii_crc16,
         })
@@ -138,12 +136,24 @@ impl Header {
 
     /// Returns true if Mii CRC16 is correct (i.e. Mii data not illegally tampered with)
     pub fn verify_mii_crc16(&self) -> bool {
-        crc16(&self.mii_bytes) == self.mii_crc16()
+        // Verify CRC16 based on the actual bytes in the header buffer (0x3C to 0x86)
+        crc16(&self.raw_data[0x3C..0x86]) == self.mii_crc16()
     }
 
     /// Recalculates and updates Mii CRC16
     pub fn fix_mii_crc16(&mut self) {
-        self.mii_crc16 = crc16(&self.mii_bytes);
+        // Calculate CRC16 based on the actual bytes in the header buffer (0x3C to 0x86)
+        // This ensures the CRC matches what's actually written to the file
+        self.mii_crc16 = crc16(&self.raw_data[0x3C..0x86]);
+        self.raw_data[0x86..0x88].copy_from_slice(&self.mii_crc16.to_be_bytes());
+    }
+
+    pub fn raw_data(&self) -> &[u8; 0x88] {
+        &self.raw_data
+    }
+
+    pub fn raw_data_mut(&mut self) -> &mut [u8; 0x88] {
+        &mut self.raw_data
     }
 
     pub fn finish_time(&self) -> &InGameTime {
@@ -152,6 +162,9 @@ impl Header {
 
     pub fn set_finish_time(&mut self, finish_time: InGameTime) {
         self.finish_time = finish_time;
+        write_bits(&mut self.raw_data, 0x04, 0, 7, finish_time.minutes() as u64);
+        write_bits(&mut self.raw_data, 0x04, 7, 7, finish_time.seconds() as u64);
+        write_bits(&mut self.raw_data, 0x05, 6, 10, finish_time.milliseconds() as u64);
     }
 
     pub fn slot_id(&self) -> SlotId {
@@ -160,6 +173,7 @@ impl Header {
 
     pub fn set_slot_id(&mut self, slot_id: SlotId) {
         self.slot_id = slot_id;
+        write_bits(&mut self.raw_data, 0x07, 0, 6, slot_id as u64);
     }
 
     pub fn combo(&self) -> &Combo {
@@ -168,6 +182,8 @@ impl Header {
 
     pub fn set_combo(&mut self, combo: Combo) {
         self.combo = combo;
+        write_bits(&mut self.raw_data, 0x08, 0, 5, self.combo.vehicle() as u64);
+        write_bits(&mut self.raw_data, 0x08, 5, 6, self.combo.character() as u64);
     }
 
     pub fn date_set(&self) -> &Date {
@@ -176,6 +192,9 @@ impl Header {
 
     pub fn set_date_set(&mut self, date_set: Date) {
         self.date_set = date_set;
+        write_bits(&mut self.raw_data, 0x09, 4, 7, (self.date_set.year() - 2000) as u64);
+        write_bits(&mut self.raw_data, 0x0A, 3, 4, self.date_set.month() as u64);
+        write_bits(&mut self.raw_data, 0x0A, 7, 5, self.date_set.day() as u64);
     }
 
     pub fn controller(&self) -> Controller {
@@ -184,10 +203,16 @@ impl Header {
 
     pub fn set_controller(&mut self, controller: Controller) {
         self.controller = controller;
+        write_bits(&mut self.raw_data, 0x0B, 4, 4, self.controller as u64);
     }
 
     pub fn is_compressed(&self) -> bool {
         self.is_compressed
+    }
+
+    pub(crate) fn set_compressed(&mut self, is_compressed: bool) {
+        self.is_compressed = is_compressed;
+        write_bits(&mut self.raw_data, 0x0C, 4, 1, is_compressed as u64);
     }
 
     pub fn ghost_type(&self) -> GhostType {
@@ -196,6 +221,7 @@ impl Header {
 
     pub fn set_ghost_type(&mut self, ghost_type: GhostType) {
         self.ghost_type = ghost_type;
+        write_bits(&mut self.raw_data, 0x0C, 7, 7, u8::from(self.ghost_type) as u64);
     }
 
     pub fn is_automatic_drift(&self) -> bool {
@@ -214,16 +240,33 @@ impl Header {
         &self.lap_split_times[0..self.lap_count as usize]
     }
 
-    pub fn set_lap_split_times(&mut self, lap_split_times: [InGameTime; 10]) {
-        self.lap_split_times = lap_split_times;
+    pub fn set_lap_split_time(&mut self, index: usize, lap_split_time: InGameTime) {
+        if index >= self.lap_count as usize {
+            return;
+        }
+
+        self.lap_split_times[index] = lap_split_time;
+        write_bits(&mut self.raw_data, 0x11 + index * 3, 0, 7, lap_split_time.minutes() as u64);
+        write_bits(&mut self.raw_data, 0x11 + index * 3, 7, 7, lap_split_time.seconds() as u64);
+        write_bits(&mut self.raw_data, 0x12 + index * 3, 6, 10, lap_split_time.milliseconds() as u64);
     }
 
     pub fn location(&self) -> &Location {
         &self.location
     }
 
+    pub fn set_location(&mut self, location: Location) {
+        self.location = location;
+        write_bits(&mut self.raw_data, 0x34, 0, 8, u8::from(self.location.country()) as u64);
+        write_bits(&mut self.raw_data, 0x35, 0, 8, u8::from(self.location.subregion()) as u64);
+    }
+
     pub fn mii(&self) -> &Mii {
         &self.mii
+    }
+
+    pub fn mii_mut(&mut self) -> &mut Mii {
+        &mut self.mii
     }
 
     pub fn mii_crc16(&self) -> u16 {
