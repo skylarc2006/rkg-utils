@@ -36,7 +36,8 @@ impl Date {
             _ => Err(DateError::MonthInvalid),
         }
     }
-
+    
+    /// Returns the actual year by adding 2000 to `year`. Stored internally is the year relative to the year 2000.
     pub fn year(&self) -> u16 {
         (self.year as u16) + 2000
     }

@@ -37,7 +37,7 @@ impl InputData {
     /// or if it's a CTGP ghost the input data end is whatever the CTGP metadata size is.
     pub fn new(input_data: &[u8]) -> Result<Self, InputDataError> {
         let raw_data = Vec::from(input_data);
-        
+
         let input_data = if input_data[4..8] == [0x59, 0x61, 0x7A, 0x31] {
             // YAZ1 header, decompress
             yaz1_decompress(&input_data[4..]).unwrap()
@@ -232,7 +232,7 @@ impl InputData {
     pub fn raw_data(&self) -> &[u8] {
         &self.raw_data
     }
-    
+
     /// Returns true if the inputs contain illegal stick inputs.
     pub fn contains_illegal_stick_inputs(&self, controller: Controller) -> bool {
         // Definition of illegal stick inputs [x, y]
@@ -262,7 +262,6 @@ impl InputData {
             [6, -6],
             [5, 7],
             [5, -7],
-            
             // Illegal stick inputs for specifically GCN/CCP (additional 20)
             [-7, 4],
             [-6, 5],
@@ -283,17 +282,21 @@ impl InputData {
             [7, 3],
             [7, 2],
             [7, -3],
-            [7, -4]
+            [7, -4],
         ];
-        
+
         let illegal_stick_inputs;
-        
+
         match controller {
-            Controller::Nunchuk => { illegal_stick_inputs = &ILLEGAL_STICK_INPUTS[..24] },
-            Controller::Classic | Controller::Gamecube => { illegal_stick_inputs = &ILLEGAL_STICK_INPUTS },
-            Controller::WiiWheel => { return false; }
+            Controller::Nunchuk => illegal_stick_inputs = &ILLEGAL_STICK_INPUTS[..24],
+            Controller::Classic | Controller::Gamecube => {
+                illegal_stick_inputs = &ILLEGAL_STICK_INPUTS
+            }
+            Controller::WiiWheel => {
+                return false;
+            }
         }
-        
+
         for current_stick_input in self.stick_inputs().iter() {
             for illegal_stick_input in illegal_stick_inputs.iter() {
                 if current_stick_input == illegal_stick_input {

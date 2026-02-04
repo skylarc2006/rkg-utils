@@ -3,13 +3,12 @@ use crate::{
     ctgp_metadata::CTGPMetadata,
     header::{
         Header,
-        in_game_time::InGameTime,
-        combo::{Character, Vehicle},
+        combo::{Character, Combo, Vehicle},
         controller::Controller,
         date::Date,
         ghost_type::GhostType,
-        location::constants::*,
-        location::Location,
+        in_game_time::InGameTime,
+        location::{Location, constants::*},
         mii::{
             eyebrows::EyebrowType,
             eyes::{EyeColor, EyeType},
@@ -573,11 +572,14 @@ fn test_full_ghost() {
     assert_eq!(ghost.input_data().dpad_inputs().len(), 9);
 
     assert!(!ghost.input_data().contains_illegal_brake_or_drift_inputs());
-    assert!(!ghost.input_data().contains_illegal_stick_inputs(ghost.header().controller()));
+    assert!(
+        !ghost
+            .input_data()
+            .contains_illegal_stick_inputs(ghost.header().controller())
+    );
 
     // CTGP Metadata
     assert!(ghost.ctgp_metadata().is_some());
-
 }
 
 #[test]
@@ -585,299 +587,71 @@ fn test_write_to_ghost() {
     let mut ghost =
         Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
 
-    // General ghost info
-    assert_eq!(ghost.header().finish_time().minutes(), 1);
-    assert_eq!(ghost.header().finish_time().seconds(), 3);
-    assert_eq!(ghost.header().finish_time().milliseconds(), 904);
-    assert_eq!(ghost.header().finish_time().to_string(), "01:03.904");
-    assert_eq!(ghost.header().slot_id(), SlotId::LuigiCircuit);
-    assert_eq!(ghost.header().combo().vehicle(), Vehicle::WarioBike);
-    assert_eq!(ghost.header().combo().character(), Character::KingBoo);
-    assert_eq!(ghost.header().date_set(), &Date::new(2025, 11, 12).unwrap());
-    assert_eq!(ghost.header().controller(), Controller::Classic);
-    assert!(ghost.header().is_compressed());
-    assert_eq!(ghost.header().ghost_type(), GhostType::ExpertStaff);
-    assert!(ghost.header().is_automatic_drift());
-    assert_eq!(ghost.header().decompressed_input_data_length(), 1856);
-    assert_eq!(ghost.header().lap_count(), 3);
-    assert_eq!(ghost.header().lap_split_times()[0].to_string(), "00:25.540");
-    assert_eq!(ghost.header().lap_split_times()[1].to_string(), "00:19.127");
-    assert_eq!(ghost.header().lap_split_times()[2].to_string(), "00:19.237");
-    assert_eq!(ghost.header().location().country(), Country::NotSet);
-    assert_eq!(ghost.header().location().subregion(), Subregion::NotSet);
-
-    // Mii Data
-    assert!(!ghost.header().mii().is_girl());
-    assert_eq!(ghost.header().mii().birthday().month(), Some(1));
-    assert_eq!(ghost.header().mii().birthday().day(), Some(1));
-    assert_eq!(ghost.header().mii().favorite_color(), FavColor::ForestGreen);
-    assert_eq!(ghost.header().mii().name(), "JC");
-    assert_eq!(ghost.header().mii().build().height(), 127);
-    assert_eq!(ghost.header().mii().build().weight(), 127);
-
-    assert_eq!(ghost.header().mii().mii_id(), 0x893EF2FB);
-    assert_eq!(ghost.header().mii().system_id(), 0x689EC992);
-
-    assert_eq!(ghost.header().mii().head().shape(), HeadShape::Large);
-    assert_eq!(ghost.header().mii().head().skin_tone(), SkinTone::Natural);
-    assert_eq!(
-        ghost.header().mii().head().face_features(),
-        FaceFeatures::None
-    );
-
-    assert!(ghost.header().mii().mingle_off());
-    assert!(!ghost.header().mii().downloaded());
-
-    assert_eq!(
-        ghost.header().mii().hair().hair_type(),
-        HairType::NormalLong
-    );
-    assert_eq!(
-        ghost.header().mii().hair().hair_color(),
-        HairColor::PhilippineBrown
-    );
-    assert!(!ghost.header().mii().hair().is_flipped());
-
-    assert_eq!(
-        ghost.header().mii().eyebrows().eyebrow_type(),
-        EyebrowType::None
-    );
-    assert_eq!(ghost.header().mii().eyebrows().rotation(), 5);
-    assert_eq!(
-        ghost.header().mii().eyebrows().eyebrow_color(),
-        HairColor::Chocolate
-    );
-    assert_eq!(ghost.header().mii().eyebrows().size(), 4);
-    assert_eq!(ghost.header().mii().eyebrows().y(), 10);
-    assert_eq!(ghost.header().mii().eyebrows().x(), 2);
-
-    assert_eq!(ghost.header().mii().eyes().eye_type(), EyeType::DotAngry);
-    assert_eq!(ghost.header().mii().eyes().rotation(), 4);
-    assert_eq!(ghost.header().mii().eyes().y(), 9);
-    assert_eq!(ghost.header().mii().eyes().eye_color(), EyeColor::Black);
-    assert_eq!(ghost.header().mii().eyes().size(), 6);
-    assert_eq!(ghost.header().mii().eyes().x(), 1);
-
-    assert_eq!(ghost.header().mii().nose().nose_type(), NoseType::Dot);
-    assert_eq!(ghost.header().mii().nose().size(), 0);
-    assert_eq!(ghost.header().mii().nose().y(), 8);
-
-    assert_eq!(ghost.header().mii().lips().lips_type(), LipsType::WaveAngry);
-    assert_eq!(ghost.header().mii().lips().lips_color(), LipsColor::Orange);
-    assert_eq!(ghost.header().mii().lips().size(), 7);
-    assert_eq!(ghost.header().mii().lips().y(), 6);
-
-    assert_eq!(
-        ghost.header().mii().glasses().glasses_type(),
-        GlassesType::None
-    );
-    assert_eq!(
-        ghost.header().mii().glasses().glasses_color(),
-        GlassesColor::Black
-    );
-    assert_eq!(ghost.header().mii().glasses().size(), 4);
-    assert_eq!(ghost.header().mii().glasses().y(), 10);
-
-    assert_eq!(
-        ghost.header().mii().facial_hair().mustache_type(),
-        MustacheType::None
-    );
-    assert_eq!(
-        ghost.header().mii().facial_hair().beard_type(),
-        BeardType::None
-    );
-    assert_eq!(ghost.header().mii().facial_hair().color(), HairColor::Black);
-    assert_eq!(ghost.header().mii().facial_hair().mustache_size(), 4);
-    assert_eq!(ghost.header().mii().facial_hair().mustache_y(), 10);
-
-    assert!(!ghost.header().mii().mole().has_mole());
-    assert_eq!(ghost.header().mii().mole().size(), 4);
-    assert_eq!(ghost.header().mii().mole().y(), 20);
-    assert_eq!(ghost.header().mii().mole().x(), 2);
-
-    assert_eq!(ghost.header().mii().creator_name(), "JC");
-
-    assert_eq!(ghost.header().mii_crc16(), 0x06F4);
-    assert!(ghost.header().verify_mii_crc16());
-
-    // Input data
-    assert_eq!(ghost.input_data().face_input_count(), 0x18);
-    assert_eq!(ghost.input_data().stick_input_count(), 0x037B);
-    assert_eq!(ghost.input_data().dpad_input_count(), 0x09);
-    assert_eq!(ghost.input_data().inputs().len(), 907);
-    assert_eq!(ghost.input_data().face_inputs().len(), 12);
-    assert_eq!(ghost.input_data().stick_inputs().len(), 891);
-    assert_eq!(ghost.input_data().dpad_inputs().len(), 9);
-
-    assert!(!ghost.input_data().contains_illegal_brake_or_drift_inputs());
-    assert!(!ghost.input_data().contains_illegal_stick_inputs(Controller::Classic));
-
-    // CTGP Metadata
-    assert!(ghost.ctgp_metadata().is_some());
-
-
     // Modify some variables and save to file
-    ghost.header_mut().set_finish_time(InGameTime::new(1, 37, 999));
-    ghost.header_mut().set_location(Location::find(
-        u8::from(Country::UnitedStates),
-        u8::from(UnitedStatesSubregion::California),
-        None).unwrap());
-    ghost.header_mut().set_date_set(Date::new(2026, 1, 1).unwrap());
+    ghost
+        .header_mut()
+        .set_finish_time(InGameTime::new(1, 37, 999));
+    ghost.header_mut().set_slot_id(SlotId::DryDryRuins);
+    ghost
+        .header_mut()
+        .set_combo(Combo::new(Vehicle::Phantom, Character::Wario).unwrap());
+    ghost
+        .header_mut()
+        .set_date_set(Date::new(2024, 1, 25).unwrap());
     ghost.header_mut().set_controller(Controller::Gamecube);
-    ghost.header_mut().set_ghost_type(GhostType::ExpertStaff);
-    ghost.header_mut().set_lap_split_time(2, InGameTime::new(0, 53, 332));
-    ghost.header_mut().mii_mut().set_name("DUMBASS");
+    ghost.header_mut().set_ghost_type(GhostType::NormalStaff);
+    ghost
+        .header_mut()
+        .set_lap_split_time(0, InGameTime::new(0, 0, 067));
+    ghost.header_mut().set_location(
+        Location::find(
+            u8::from(Country::UnitedStates),
+            u8::from(UnitedStatesSubregion::California),
+            None,
+        )
+        .unwrap(),
+    );
 
     let _ = ghost.save_to_file("./test_ghosts/JC_LC_Compressed_Copy.rkg");
 
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed_Copy.rkg")
+        .expect("Failed to read ghost");
 
-
-    /*
-    let ghost =
-        Ghost::new_from_file("./test_ghosts/JC_LC_Compressed_Copy.rkg").expect("Failed to read ghost");
-
-    // General ghost info
-    assert_eq!(ghost.header().finish_time().minutes(), 1);
-    assert_eq!(ghost.header().finish_time().seconds(), 37);
-    assert_eq!(ghost.header().finish_time().milliseconds(), 999);
     assert_eq!(ghost.header().finish_time().to_string(), "01:37.999");
-    assert_eq!(ghost.header().slot_id(), SlotId::LuigiCircuit);
-    assert_eq!(ghost.header().combo().vehicle(), Vehicle::WarioBike);
-    assert_eq!(ghost.header().combo().character(), Character::KingBoo);
-    assert_eq!(ghost.header().date_set(), &Date::new(2026, 1, 1).unwrap());
+    assert_eq!(ghost.header().slot_id(), SlotId::DryDryRuins);
+    assert_eq!(ghost.header().combo().vehicle(), Vehicle::Phantom);
+    assert_eq!(ghost.header().combo().character(), Character::Wario);
+    assert_eq!(ghost.header().date_set(), &Date::new(2024, 1, 25).unwrap());
     assert_eq!(ghost.header().controller(), Controller::Gamecube);
-    assert!(ghost.header().is_compressed());
-    assert_eq!(ghost.header().ghost_type(), GhostType::ExpertStaff);
-    assert!(ghost.header().is_automatic_drift());
-    assert_eq!(ghost.header().decompressed_input_data_length(), 1856);
-    assert_eq!(ghost.header().lap_count(), 3);
-    assert_eq!(ghost.header().lap_split_times()[0].to_string(), "00:25.540");
-    assert_eq!(ghost.header().lap_split_times()[1].to_string(), "00:19.127");
-    assert_eq!(ghost.header().lap_split_times()[2].to_string(), "00:53.332");
+    assert_eq!(ghost.header().ghost_type(), GhostType::NormalStaff);
+    assert_eq!(ghost.header().lap_split_time(0).to_string(), "00:00.067");
     assert_eq!(ghost.header().location().country(), Country::UnitedStates);
-    assert_eq!(ghost.header().location().subregion(), Subregion::UnitedStates(UnitedStatesSubregion::California));
-
-    // Mii Data
-    assert!(!ghost.header().mii().is_girl());
-    assert_eq!(ghost.header().mii().birthday().month(), Some(1));
-    assert_eq!(ghost.header().mii().birthday().day(), Some(1));
-    assert_eq!(ghost.header().mii().favorite_color(), FavColor::ForestGreen);
-    assert_eq!(ghost.header().mii().name(), "DUMBASS");
-    assert_eq!(ghost.header().mii().build().height(), 127);
-    assert_eq!(ghost.header().mii().build().weight(), 127);
-
-    assert_eq!(ghost.header().mii().mii_id(), 0x893EF2FB);
-    assert_eq!(ghost.header().mii().system_id(), 0x689EC992);
-
-    assert_eq!(ghost.header().mii().head().shape(), HeadShape::Large);
-    assert_eq!(ghost.header().mii().head().skin_tone(), SkinTone::Natural);
     assert_eq!(
-        ghost.header().mii().head().face_features(),
-        FaceFeatures::None
+        ghost.header().location().subregion(),
+        Subregion::UnitedStates(UnitedStatesSubregion::California)
     );
-
-    assert!(ghost.header().mii().mingle_off());
-    assert!(!ghost.header().mii().downloaded());
-
-    assert_eq!(
-        ghost.header().mii().hair().hair_type(),
-        HairType::NormalLong
-    );
-    assert_eq!(
-        ghost.header().mii().hair().hair_color(),
-        HairColor::PhilippineBrown
-    );
-    assert!(!ghost.header().mii().hair().is_flipped());
-
-    assert_eq!(
-        ghost.header().mii().eyebrows().eyebrow_type(),
-        EyebrowType::None
-    );
-    assert_eq!(ghost.header().mii().eyebrows().rotation(), 5);
-    assert_eq!(
-        ghost.header().mii().eyebrows().eyebrow_color(),
-        HairColor::Chocolate
-    );
-    assert_eq!(ghost.header().mii().eyebrows().size(), 4);
-    assert_eq!(ghost.header().mii().eyebrows().y(), 10);
-    assert_eq!(ghost.header().mii().eyebrows().x(), 2);
-
-    assert_eq!(ghost.header().mii().eyes().eye_type(), EyeType::DotAngry);
-    assert_eq!(ghost.header().mii().eyes().rotation(), 4);
-    assert_eq!(ghost.header().mii().eyes().y(), 9);
-    assert_eq!(ghost.header().mii().eyes().eye_color(), EyeColor::Black);
-    assert_eq!(ghost.header().mii().eyes().size(), 6);
-    assert_eq!(ghost.header().mii().eyes().x(), 1);
-
-    assert_eq!(ghost.header().mii().nose().nose_type(), NoseType::Dot);
-    assert_eq!(ghost.header().mii().nose().size(), 0);
-    assert_eq!(ghost.header().mii().nose().y(), 8);
-
-    assert_eq!(ghost.header().mii().lips().lips_type(), LipsType::WaveAngry);
-    assert_eq!(ghost.header().mii().lips().lips_color(), LipsColor::Orange);
-    assert_eq!(ghost.header().mii().lips().size(), 7);
-    assert_eq!(ghost.header().mii().lips().y(), 6);
-
-    assert_eq!(
-        ghost.header().mii().glasses().glasses_type(),
-        GlassesType::None
-    );
-    assert_eq!(
-        ghost.header().mii().glasses().glasses_color(),
-        GlassesColor::Black
-    );
-    assert_eq!(ghost.header().mii().glasses().size(), 4);
-    assert_eq!(ghost.header().mii().glasses().y(), 10);
-
-    assert_eq!(
-        ghost.header().mii().facial_hair().mustache_type(),
-        MustacheType::None
-    );
-    assert_eq!(
-        ghost.header().mii().facial_hair().beard_type(),
-        BeardType::None
-    );
-    assert_eq!(ghost.header().mii().facial_hair().color(), HairColor::Black);
-    assert_eq!(ghost.header().mii().facial_hair().mustache_size(), 4);
-    assert_eq!(ghost.header().mii().facial_hair().mustache_y(), 10);
-
-    assert!(!ghost.header().mii().mole().has_mole());
-    assert_eq!(ghost.header().mii().mole().size(), 4);
-    assert_eq!(ghost.header().mii().mole().y(), 20);
-    assert_eq!(ghost.header().mii().mole().x(), 2);
-
-    assert_eq!(ghost.header().mii().creator_name(), "JC");
-    assert!(ghost.header().verify_mii_crc16());
-
-    // Input data
-    assert_eq!(ghost.input_data().face_input_count(), 0x18);
-    assert_eq!(ghost.input_data().stick_input_count(), 0x037B);
-    assert_eq!(ghost.input_data().dpad_input_count(), 0x09);
-    assert_eq!(ghost.input_data().inputs().len(), 907);
-    assert_eq!(ghost.input_data().face_inputs().len(), 12);
-    assert_eq!(ghost.input_data().stick_inputs().len(), 891);
-    assert_eq!(ghost.input_data().dpad_inputs().len(), 9);
-
-    assert!(!ghost.input_data().contains_illegal_inputs());
-
-    // CTGP Metadata
-    assert!(ghost.ctgp_metadata().is_some());
-    */
 }
-
 
 #[test]
 fn test_compare_saved_ghost() {
     let mut ghost1 =
         Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
 
-    ghost1.save_to_file("./test_ghosts/JC_LC_Compressed_Resave.rkg").expect("Failed to save ghost");
+    ghost1
+        .save_to_file("./test_ghosts/JC_LC_Compressed_Resave.rkg")
+        .expect("Failed to save ghost");
 
-    let ghost2 =
-        Ghost::new_from_file("./test_ghosts/JC_LC_Compressed_Resave.rkg").expect("Failed to read ghost");
+    let ghost2 = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed_Resave.rkg")
+        .expect("Failed to read ghost");
 
     assert_eq!(ghost1.header().raw_data(), ghost2.header().raw_data());
-    assert_eq!(ghost1.input_data().raw_data(), ghost2.input_data().raw_data());
+    assert_eq!(
+        ghost1.input_data().raw_data(),
+        ghost2.input_data().raw_data()
+    );
     assert_eq!(ghost1.crc32(), ghost2.crc32());
-    assert_eq!(ghost1.ctgp_metadata().as_ref().unwrap().raw_data(), ghost2.ctgp_metadata().as_ref().unwrap().raw_data());
+    assert_eq!(
+        ghost1.ctgp_metadata().as_ref().unwrap().raw_data(),
+        ghost2.ctgp_metadata().as_ref().unwrap().raw_data()
+    );
 }

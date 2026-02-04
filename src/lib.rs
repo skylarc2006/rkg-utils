@@ -1,7 +1,12 @@
-use std::{array::TryFromSliceError, io::{Read, Write}};
+use std::{
+    array::TryFromSliceError,
+    io::{Read, Write},
+};
 
 use crate::{
-    crc::crc32, ctgp_metadata::CTGPMetadata, header::Header, input_data::InputData,
+    ctgp_metadata::CTGPMetadata,
+    header::{Header, in_game_time::InGameTime},
+    input_data::InputData,
 };
 
 pub mod byte_handler;
@@ -14,6 +19,8 @@ pub mod input_data;
  * TODO:
  * Unfinished/unimplemented functionality
  * ----------------------------------------------
+ * Implement modifying all Mii data
+ * Finish writing modified header data to file
  * Implement TryFrom<_> for T where T: Into<ByteHandler>, relies on https://github.com/rust-lang/rust/issues/31844 currently
  * Represent at a Type-system level which types can convert from T to TypeHandler to whichever Struct
  * Optimize Little-Endian calculations
@@ -77,34 +84,104 @@ impl Ghost {
     }
 
     pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
-        self.header.set_compressed(self.input_data.is_compressed());
+        let mut buf = Vec::from(self.header().raw_data());
 
-        let mii_data: Vec<u8> = self.header.mii().raw_data().to_vec();
+        self.write_header_data(&mut buf);
+        buf.extend_from_slice(self.input_data().raw_data());
 
-        self.header_mut().raw_data_mut()[0x3C..0x3C + 0x4A]
-            .copy_from_slice(&mii_data);
-
-        self.header.fix_mii_crc16();
+        if let Some(ctgp_metadata) = self.ctgp_metadata()
+            && !self.header().is_modified()
+        {
+            buf.extend_from_slice(ctgp_metadata.raw_data());
+        }
 
         let mut file = std::fs::File::create(path)?;
-        file.write_all(self.header.raw_data())?;
-        file.write_all(self.input_data.raw_data())?;
+        file.write_all(&buf)?;
 
-
-        if let Some(ctgp_metadata) = &self.ctgp_metadata {
-            file.write_all(ctgp_metadata.raw_data())?;
-        }
-
-        // Calculate CRC32 over all data (excluding the CRC32 itself)
-        let mut data_for_crc = Vec::new();
-        data_for_crc.extend_from_slice(self.header.raw_data());
-        data_for_crc.extend_from_slice(self.input_data.raw_data());
-        if let Some(ctgp_metadata) = &self.ctgp_metadata {
-            data_for_crc.extend_from_slice(ctgp_metadata.raw_data());
-        }
-        self.crc32 = crc32(&data_for_crc);
-        file.write_all(&self.crc32.to_be_bytes())?;
         Ok(())
+    }
+
+    fn write_header_data(&self, buf: &mut [u8]) {
+        if !self.header().is_modified() {
+            return;
+        }
+
+        Ghost::write_in_game_time(buf, 0x04, 0, self.header().finish_time());
+        write_bits(buf, 0x07, 0, 6, u8::from(self.header().slot_id()) as u64);
+        write_bits(
+            buf,
+            0x08,
+            0,
+            6,
+            u8::from(self.header().combo().vehicle()) as u64,
+        );
+        write_bits(
+            buf,
+            0x08,
+            6,
+            6,
+            u8::from(self.header().combo().character()) as u64,
+        );
+        write_bits(
+            buf,
+            0x09,
+            4,
+            7,
+            (self.header().date_set().year() - 2000) as u64,
+        );
+        write_bits(buf, 0x0A, 3, 4, self.header().date_set().month() as u64);
+        write_bits(buf, 0x0A, 7, 5, self.header().date_set().day() as u64);
+        write_bits(buf, 0x0B, 4, 4, u8::from(self.header().controller()) as u64);
+        write_bits(buf, 0x0C, 7, 7, u8::from(self.header().ghost_type()) as u64);
+        write_bits(buf, 0x0D, 6, 1, self.header().is_automatic_drift() as u64);
+
+        for (index, lap_split) in self.header().lap_split_times().iter().enumerate() {
+            write_bits(buf, 0x11 + index * 0x03, 0, 7, lap_split.minutes() as u64);
+            write_bits(buf, 0x11 + index * 0x03, 7, 7, lap_split.seconds() as u64);
+            write_bits(buf, 0x12 + index * 0x03, 6, 10, lap_split.milliseconds() as u64);
+        }
+        
+        write_bits(buf, 0x34, 0, 8, u8::from(self.header().location().country()) as u64);
+        write_bits(buf, 0x35, 0, 8, u8::from(self.header().location().subregion()) as u64);
+        
+        // TODO: write mii data changes
+    }
+
+    fn write_in_game_time(
+        buf: &mut [u8],
+        byte_offset: usize,
+        bit_offset: usize,
+        in_game_time: &InGameTime,
+    ) {
+        let mut bit_offset = bit_offset + byte_offset * 8;
+
+        write_bits(
+            buf,
+            bit_offset / 8,
+            bit_offset % 8,
+            7,
+            in_game_time.minutes() as u64,
+        );
+
+        bit_offset += 7;
+
+        write_bits(
+            buf,
+            bit_offset / 8,
+            bit_offset % 8,
+            7,
+            in_game_time.seconds() as u64,
+        );
+
+        bit_offset += 7;
+
+        write_bits(
+            buf,
+            bit_offset / 8,
+            bit_offset % 8,
+            10,
+            in_game_time.milliseconds() as u64,
+        );
     }
 
     pub fn header(&self) -> &Header {
@@ -127,7 +204,6 @@ impl Ghost {
         self.crc32
     }
 }
-
 
 pub(crate) fn write_bits(
     buf: &mut [u8],

@@ -66,7 +66,6 @@ pub enum MiiError {
 }
 
 pub struct Mii {
-    raw_data: [u8; 0x4A],
     is_girl: bool,
     birthday: Birthday,
     favorite_color: FavColor,
@@ -123,7 +122,6 @@ impl Mii {
         let creator_name = utf16be_to_string(&mii_data[0x36..=0x49])?;
 
         Ok(Self {
-            raw_data: mii_data,
             is_girl,
             birthday,
             favorite_color,
@@ -145,10 +143,6 @@ impl Mii {
             mole,
             creator_name,
         })
-    }
-
-    pub fn raw_data(&self) -> &[u8; 0x4A] {
-        &self.raw_data
     }
 
     pub fn is_girl(&self) -> bool {
@@ -173,15 +167,6 @@ impl Mii {
 
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_string();
-
-        // Convert the string to UTF-16BE and pad/truncate to 20 bytes
-        let mut buf = [0u8; 20]; // 0x02..=0x15 is 20 bytes (0x15-0x02+1)
-        let utf16be_bytes = string_to_utf16be(name);
-        // Copy as much as fits
-        for (i, b) in utf16be_bytes.iter().take(20).enumerate() {
-            buf[i] = *b;
-        }
-        self.raw_data[0x02..=0x15].copy_from_slice(&buf);
     }
 
     pub fn build(&self) -> Build {
@@ -243,6 +228,10 @@ impl Mii {
     pub fn creator_name(&self) -> &str {
         &self.creator_name
     }
+
+    pub fn set_creator_name(&mut self, s: &str) {
+        self.creator_name = s.to_string();
+    }
 }
 
 fn utf16be_to_string(bytes: &[u8]) -> Result<String, std::string::FromUtf16Error> {
@@ -256,5 +245,10 @@ fn utf16be_to_string(bytes: &[u8]) -> Result<String, std::string::FromUtf16Error
 }
 
 fn string_to_utf16be(string: &str) -> Vec<u8> {
-    string.encode_utf16().collect::<Vec<u16>>().iter().flat_map(|&u| u.to_be_bytes()).collect()
+    string
+        .encode_utf16()
+        .collect::<Vec<u16>>()
+        .iter()
+        .flat_map(|&u| u.to_be_bytes())
+        .collect()
 }

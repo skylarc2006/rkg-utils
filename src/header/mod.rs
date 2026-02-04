@@ -1,5 +1,4 @@
 use crate::{
-    write_bits,
     byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
     header::{
         combo::{Combo, ComboError},
@@ -53,6 +52,7 @@ pub enum HeaderError {
 /// All the data in the Header of an RKGD
 /// https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header
 pub struct Header {
+    is_modified: bool,
     raw_data: [u8; 0x88],
     finish_time: InGameTime,
     slot_id: SlotId,
@@ -110,12 +110,12 @@ impl Header {
         let location =
             Location::find(codes.copy_byte(0), codes.copy_byte(1), None).unwrap_or_default();
 
-        
         let mii = Mii::new(&header_data[0x3C..0x3C + 0x4A])?;
 
         let mii_crc16 = ByteHandler::try_from(&header_data[0x86..=0x87])?.copy_word(0);
 
         Ok(Self {
+            is_modified: false,
             raw_data: header_data.try_into().unwrap(),
             finish_time,
             slot_id,
@@ -146,6 +146,11 @@ impl Header {
         // This ensures the CRC matches what's actually written to the file
         self.mii_crc16 = crc16(&self.raw_data[0x3C..0x86]);
         self.raw_data[0x86..0x88].copy_from_slice(&self.mii_crc16.to_be_bytes());
+        self.is_modified = true;
+    }
+
+    pub fn is_modified(&self) -> bool {
+        self.is_modified
     }
 
     pub fn raw_data(&self) -> &[u8; 0x88] {
@@ -162,9 +167,7 @@ impl Header {
 
     pub fn set_finish_time(&mut self, finish_time: InGameTime) {
         self.finish_time = finish_time;
-        write_bits(&mut self.raw_data, 0x04, 0, 7, finish_time.minutes() as u64);
-        write_bits(&mut self.raw_data, 0x04, 7, 7, finish_time.seconds() as u64);
-        write_bits(&mut self.raw_data, 0x05, 6, 10, finish_time.milliseconds() as u64);
+        self.is_modified = true;
     }
 
     pub fn slot_id(&self) -> SlotId {
@@ -173,7 +176,7 @@ impl Header {
 
     pub fn set_slot_id(&mut self, slot_id: SlotId) {
         self.slot_id = slot_id;
-        write_bits(&mut self.raw_data, 0x07, 0, 6, slot_id as u64);
+        self.is_modified = true;
     }
 
     pub fn combo(&self) -> &Combo {
@@ -182,8 +185,7 @@ impl Header {
 
     pub fn set_combo(&mut self, combo: Combo) {
         self.combo = combo;
-        write_bits(&mut self.raw_data, 0x08, 0, 5, self.combo.vehicle() as u64);
-        write_bits(&mut self.raw_data, 0x08, 5, 6, self.combo.character() as u64);
+        self.is_modified = true;
     }
 
     pub fn date_set(&self) -> &Date {
@@ -192,9 +194,7 @@ impl Header {
 
     pub fn set_date_set(&mut self, date_set: Date) {
         self.date_set = date_set;
-        write_bits(&mut self.raw_data, 0x09, 4, 7, (self.date_set.year() - 2000) as u64);
-        write_bits(&mut self.raw_data, 0x0A, 3, 4, self.date_set.month() as u64);
-        write_bits(&mut self.raw_data, 0x0A, 7, 5, self.date_set.day() as u64);
+        self.is_modified = true;
     }
 
     pub fn controller(&self) -> Controller {
@@ -203,7 +203,7 @@ impl Header {
 
     pub fn set_controller(&mut self, controller: Controller) {
         self.controller = controller;
-        write_bits(&mut self.raw_data, 0x0B, 4, 4, self.controller as u64);
+        self.is_modified = true;
     }
 
     pub fn is_compressed(&self) -> bool {
@@ -212,7 +212,7 @@ impl Header {
 
     pub(crate) fn set_compressed(&mut self, is_compressed: bool) {
         self.is_compressed = is_compressed;
-        write_bits(&mut self.raw_data, 0x0C, 4, 1, is_compressed as u64);
+        self.is_modified = true;
     }
 
     pub fn ghost_type(&self) -> GhostType {
@@ -221,11 +221,16 @@ impl Header {
 
     pub fn set_ghost_type(&mut self, ghost_type: GhostType) {
         self.ghost_type = ghost_type;
-        write_bits(&mut self.raw_data, 0x0C, 7, 7, u8::from(self.ghost_type) as u64);
+        self.is_modified = true;
     }
 
     pub fn is_automatic_drift(&self) -> bool {
         self.is_automatic_drift
+    }
+    
+    pub fn set_automatic_drift(&mut self, b: bool) {
+        self.is_automatic_drift = b;
+        self.is_modified = true;
     }
 
     pub fn decompressed_input_data_length(&self) -> u16 {
@@ -240,15 +245,17 @@ impl Header {
         &self.lap_split_times[0..self.lap_count as usize]
     }
 
+    pub fn lap_split_time(&self, idx: usize) -> InGameTime {
+        self.lap_split_times[idx]
+    }
+
     pub fn set_lap_split_time(&mut self, index: usize, lap_split_time: InGameTime) {
         if index >= self.lap_count as usize {
             return;
         }
 
         self.lap_split_times[index] = lap_split_time;
-        write_bits(&mut self.raw_data, 0x11 + index * 3, 0, 7, lap_split_time.minutes() as u64);
-        write_bits(&mut self.raw_data, 0x11 + index * 3, 7, 7, lap_split_time.seconds() as u64);
-        write_bits(&mut self.raw_data, 0x12 + index * 3, 6, 10, lap_split_time.milliseconds() as u64);
+        self.is_modified = true;
     }
 
     pub fn location(&self) -> &Location {
@@ -257,8 +264,7 @@ impl Header {
 
     pub fn set_location(&mut self, location: Location) {
         self.location = location;
-        write_bits(&mut self.raw_data, 0x34, 0, 8, u8::from(self.location.country()) as u64);
-        write_bits(&mut self.raw_data, 0x35, 0, 8, u8::from(self.location.subregion()) as u64);
+        self.is_modified = true;
     }
 
     pub fn mii(&self) -> &Mii {
