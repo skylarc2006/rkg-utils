@@ -62,11 +62,6 @@ impl CTGPMetadata {
             return Err(CTGPMetadataError::NotCKGD);
         }
 
-        let len =
-            u32::from_be_bytes(data[data.len() - 0x0C..data.len() - 0x08].try_into()?) as usize;
-
-        let raw_data = Vec::from(&data[data.len() - len..data.len() - 0x04]);
-
         let metadata_version = data[data.len() - 0x0D];
 
         match metadata_version {
@@ -76,7 +71,11 @@ impl CTGPMetadata {
             }
         }
 
-        let security_data_size = if metadata_version < 7 { 0x44 } else { 0x54 };
+        let len = if metadata_version < 7 { 0xD0 } else { 0xE4 };
+
+        let security_data_size = if metadata_version < 7 { 0x44 } else { 0x58 };
+
+        let raw_data = Vec::from(&data[data.len() - len..data.len() - 0x04]);
 
         let header_data = &data[..0x88];
         let input_data = &data[0x88..data.len() - len];
@@ -405,6 +404,7 @@ impl CTGPMetadata {
         self.metadata_version
     }
 
+    /// Returns length of CTGP Metadata including the CRC-32 checksum at the end of the file
     pub fn len(&self) -> usize {
         self.len
     }

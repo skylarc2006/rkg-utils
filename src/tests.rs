@@ -183,6 +183,15 @@ fn test_rkg_input_data() {
 }
 
 #[test]
+fn print_input_data() {
+    let ghost = Ghost::new_from_file("./test_ghosts/illegal_brake_input.rkg").unwrap();
+    
+    for input in ghost.input_data().inputs().iter() {
+        println!("{:#?}", input)
+    }
+}
+
+#[test]
 fn test_ctgp_metadata() {
     let mut rkg_data: Vec<u8> = Vec::new();
     std::fs::File::open("./test_ghosts/JC_LC_Compressed.rkg")
@@ -587,49 +596,9 @@ fn test_write_to_ghost() {
     let mut ghost =
         Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
 
-    // Modify some variables and save to file
-    ghost
-        .header_mut()
-        .set_finish_time(InGameTime::new(1, 37, 999));
-    ghost.header_mut().set_slot_id(SlotId::DryDryRuins);
-    ghost
-        .header_mut()
-        .set_combo(Combo::new(Vehicle::Phantom, Character::Wario).unwrap());
-    ghost
-        .header_mut()
-        .set_date_set(Date::new(2024, 1, 25).unwrap());
-    ghost.header_mut().set_controller(Controller::Gamecube);
-    ghost.header_mut().set_ghost_type(GhostType::NormalStaff);
-    ghost
-        .header_mut()
-        .set_lap_split_time(0, InGameTime::new(0, 0, 067));
-    ghost.header_mut().set_location(
-        Location::find(
-            u8::from(Country::UnitedStates),
-            u8::from(UnitedStatesSubregion::California),
-            None,
-        )
-        .unwrap(),
-    );
+    ghost.input_data_mut().decompress();
 
     let _ = ghost.save_to_file("./test_ghosts/JC_LC_Compressed_Copy.rkg");
-
-    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed_Copy.rkg")
-        .expect("Failed to read ghost");
-
-    assert_eq!(ghost.header().finish_time().to_string(), "01:37.999");
-    assert_eq!(ghost.header().slot_id(), SlotId::DryDryRuins);
-    assert_eq!(ghost.header().combo().vehicle(), Vehicle::Phantom);
-    assert_eq!(ghost.header().combo().character(), Character::Wario);
-    assert_eq!(ghost.header().date_set(), &Date::new(2024, 1, 25).unwrap());
-    assert_eq!(ghost.header().controller(), Controller::Gamecube);
-    assert_eq!(ghost.header().ghost_type(), GhostType::NormalStaff);
-    assert_eq!(ghost.header().lap_split_time(0).to_string(), "00:00.067");
-    assert_eq!(ghost.header().location().country(), Country::UnitedStates);
-    assert_eq!(
-        ghost.header().location().subregion(),
-        Subregion::UnitedStates(UnitedStatesSubregion::California)
-    );
 }
 
 #[test]

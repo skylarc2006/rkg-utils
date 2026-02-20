@@ -225,7 +225,7 @@ impl InputData {
 
     pub fn decompress(&mut self) {
         if self.is_compressed() {
-            self.raw_data = yaz1_decompress(&self.raw_data).unwrap();
+            self.raw_data = yaz1_decompress(&self.raw_data[4..]).unwrap();
         }
     }
 
@@ -356,6 +356,7 @@ pub fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
     }
 
     if result.len() == uncompressed_size {
+        result.resize(0x2774, 0);
         Some(result)
     } else {
         None

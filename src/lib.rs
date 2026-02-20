@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    crc::crc32,
     ctgp_metadata::CTGPMetadata,
     header::{Header, in_game_time::InGameTime},
     input_data::InputData,
@@ -85,6 +86,11 @@ impl Ghost {
 
     pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
         let mut buf = Vec::from(self.header().raw_data());
+        
+        if self.header().is_compressed() != self.input_data().is_compressed() {
+            let compressed = self.input_data().is_compressed();
+            self.header_mut().set_compressed(compressed);
+        }
 
         self.write_header_data(&mut buf);
         buf.extend_from_slice(self.input_data().raw_data());
@@ -94,6 +100,9 @@ impl Ghost {
         {
             buf.extend_from_slice(ctgp_metadata.raw_data());
         }
+
+        let crc32 = crc32(&buf);
+        buf.extend_from_slice(&crc32.to_be_bytes());
 
         let mut file = std::fs::File::create(path)?;
         file.write_all(&buf)?;
@@ -138,12 +147,30 @@ impl Ghost {
         for (index, lap_split) in self.header().lap_split_times().iter().enumerate() {
             write_bits(buf, 0x11 + index * 0x03, 0, 7, lap_split.minutes() as u64);
             write_bits(buf, 0x11 + index * 0x03, 7, 7, lap_split.seconds() as u64);
-            write_bits(buf, 0x12 + index * 0x03, 6, 10, lap_split.milliseconds() as u64);
+            write_bits(
+                buf,
+                0x12 + index * 0x03,
+                6,
+                10,
+                lap_split.milliseconds() as u64,
+            );
         }
-        
-        write_bits(buf, 0x34, 0, 8, u8::from(self.header().location().country()) as u64);
-        write_bits(buf, 0x35, 0, 8, u8::from(self.header().location().subregion()) as u64);
-        
+
+        write_bits(
+            buf,
+            0x34,
+            0,
+            8,
+            u8::from(self.header().location().country()) as u64,
+        );
+        write_bits(
+            buf,
+            0x35,
+            0,
+            8,
+            u8::from(self.header().location().subregion()) as u64,
+        );
+
         // TODO: write mii data changes
     }
 
@@ -194,6 +221,10 @@ impl Ghost {
 
     pub fn input_data(&self) -> &InputData {
         &self.input_data
+    }
+    
+    pub fn input_data_mut(&mut self) -> &mut InputData {
+        &mut self.input_data
     }
 
     pub fn ctgp_metadata(&self) -> &Option<CTGPMetadata> {
