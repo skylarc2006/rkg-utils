@@ -227,7 +227,7 @@ impl Header {
     pub fn is_automatic_drift(&self) -> bool {
         self.is_automatic_drift
     }
-    
+
     pub fn set_automatic_drift(&mut self, b: bool) {
         self.is_automatic_drift = b;
         self.is_modified = true;

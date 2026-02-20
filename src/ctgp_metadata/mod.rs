@@ -71,9 +71,9 @@ impl CTGPMetadata {
             }
         }
 
-        let len = if metadata_version < 7 { 0xD0 } else { 0xE4 };
+        let len = if metadata_version < 7 { 0xD4 } else { 0xE4 };
 
-        let security_data_size = if metadata_version < 7 { 0x44 } else { 0x58 };
+        let security_data_size = if metadata_version < 7 { 0x48 } else { 0x58 };
 
         let raw_data = Vec::from(&data[data.len() - len..data.len() - 0x04]);
 

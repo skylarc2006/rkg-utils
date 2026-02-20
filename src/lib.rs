@@ -6,7 +6,7 @@ use std::{
 use crate::{
     crc::crc32,
     ctgp_metadata::CTGPMetadata,
-    header::{Header, in_game_time::InGameTime},
+    header::{Header, in_game_time::InGameTime, location::constants::Country},
     input_data::InputData,
 };
 
@@ -48,8 +48,9 @@ pub enum GhostError {
 pub struct Ghost {
     header: Header,
     input_data: InputData,
+    base_crc32: u32,
     ctgp_metadata: Option<CTGPMetadata>,
-    crc32: u32,
+    file_crc32: u32,
 }
 
 impl Ghost {
@@ -64,53 +65,64 @@ impl Ghost {
 
         let header = Header::new(&bytes[..0x88])?;
 
+        let file_crc32 = u32::from_be_bytes(bytes[bytes.len() - 0x04..].try_into()?);
+        let base_crc32;
+
         let ctgp_metadata = if let Ok(ctgp_metadata) = CTGPMetadata::new(bytes) {
-            input_data_end_offset = bytes.len() - ctgp_metadata.len();
+            input_data_end_offset = bytes.len() - ctgp_metadata.len() - 0x04;
+            base_crc32 = u32::from_be_bytes(bytes[input_data_end_offset..input_data_end_offset + 0x04].try_into()?);
             Some(ctgp_metadata)
         } else {
             input_data_end_offset = bytes.len() - 0x04;
+            base_crc32 = file_crc32;
             None
         };
 
         let input_data = InputData::new(&bytes[0x88..input_data_end_offset])?;
 
-        let crc32 = u32::from_be_bytes(bytes[bytes.len() - 0x04..].try_into()?);
-
         Ok(Self {
             header,
             input_data,
+            base_crc32,
             ctgp_metadata,
-            crc32,
+            file_crc32,
         })
     }
 
-    pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
-        let mut buf = Vec::from(self.header().raw_data());
-        
+    pub fn save_to_bytes(&mut self) -> Result<Vec<u8>, GhostError> {
         if self.header().is_compressed() != self.input_data().is_compressed() {
             let compressed = self.input_data().is_compressed();
             self.header_mut().set_compressed(compressed);
         }
 
-        self.write_header_data(&mut buf);
+        let mut buf = Vec::from(self.header().raw_data());
+
+        if self.header().is_modified() {
+            self.write_header_data(&mut buf);
+        }
+
         buf.extend_from_slice(self.input_data().raw_data());
 
-        if let Some(ctgp_metadata) = self.ctgp_metadata()
-            && !self.header().is_modified()
-        {
+        if let Some(ctgp_metadata) = self.ctgp_metadata() {
+            let base_crc32 = crc32(&buf);
+            buf.extend_from_slice(&base_crc32.to_be_bytes());
             buf.extend_from_slice(ctgp_metadata.raw_data());
         }
 
         let crc32 = crc32(&buf);
         buf.extend_from_slice(&crc32.to_be_bytes());
+        Ok(buf)
+    }
 
+    pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
+        let buf = self.save_to_bytes()?;
         let mut file = std::fs::File::create(path)?;
         file.write_all(&buf)?;
 
         Ok(())
     }
 
-    fn write_header_data(&self, buf: &mut [u8]) {
+    fn write_header_data(&mut self, buf: &mut [u8]) {
         if !self.header().is_modified() {
             return;
         }
@@ -163,15 +175,23 @@ impl Ghost {
             8,
             u8::from(self.header().location().country()) as u64,
         );
+
+        let subregion_id = if self.header().location().country() != Country::NotSet {
+            u8::from(self.header().location().subregion()) as u64
+        } else {
+            0xFF
+        };
+
         write_bits(
             buf,
             0x35,
             0,
             8,
-            u8::from(self.header().location().subregion()) as u64,
+            subregion_id,
         );
 
         // TODO: write mii data changes
+
     }
 
     fn write_in_game_time(
@@ -222,7 +242,7 @@ impl Ghost {
     pub fn input_data(&self) -> &InputData {
         &self.input_data
     }
-    
+
     pub fn input_data_mut(&mut self) -> &mut InputData {
         &mut self.input_data
     }
@@ -231,8 +251,12 @@ impl Ghost {
         &self.ctgp_metadata
     }
 
-    pub fn crc32(&self) -> u32 {
-        self.crc32
+    pub fn base_crc32(&self) -> u32 {
+        self.base_crc32
+    }
+
+    pub fn file_crc32(&self) -> u32 {
+        self.file_crc32
     }
 }
 

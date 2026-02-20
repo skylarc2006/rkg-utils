@@ -3,12 +3,11 @@ use crate::{
     ctgp_metadata::CTGPMetadata,
     header::{
         Header,
-        combo::{Character, Combo, Vehicle},
+        combo::{Character, Vehicle},
         controller::Controller,
         date::Date,
         ghost_type::GhostType,
-        in_game_time::InGameTime,
-        location::{Location, constants::*},
+        location::constants::*,
         mii::{
             eyebrows::EyebrowType,
             eyes::{EyeColor, EyeType},
@@ -185,7 +184,7 @@ fn test_rkg_input_data() {
 #[test]
 fn print_input_data() {
     let ghost = Ghost::new_from_file("./test_ghosts/illegal_brake_input.rkg").unwrap();
-    
+
     for input in ghost.input_data().inputs().iter() {
         println!("{:#?}", input)
     }
@@ -596,7 +595,9 @@ fn test_write_to_ghost() {
     let mut ghost =
         Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
 
-    ghost.input_data_mut().decompress();
+    ghost
+        .header_mut()
+        .set_automatic_drift(false);
 
     let _ = ghost.save_to_file("./test_ghosts/JC_LC_Compressed_Copy.rkg");
 }
@@ -618,7 +619,7 @@ fn test_compare_saved_ghost() {
         ghost1.input_data().raw_data(),
         ghost2.input_data().raw_data()
     );
-    assert_eq!(ghost1.crc32(), ghost2.crc32());
+    assert_eq!(ghost1.file_crc32(), ghost2.file_crc32());
     assert_eq!(
         ghost1.ctgp_metadata().as_ref().unwrap().raw_data(),
         ghost2.ctgp_metadata().as_ref().unwrap().raw_data()
