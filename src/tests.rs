@@ -233,6 +233,12 @@ fn print_ctgp_metadata() {
     }
     println!();
 
+    print!("Ghost SHA1: ");
+    for byte in ctgp_metadata.ghost_sha1().iter() {
+        print!("{:02X}", *byte);
+    }
+    println!();
+
     print!("Player ID: ");
     for byte in ctgp_metadata.player_id().to_be_bytes().iter() {
         print!("{:02X}", *byte);

@@ -22,7 +22,6 @@ pub mod input_data;
  * ----------------------------------------------
  * Implement modifying all Mii data
  * Finish writing modified header data to file
- * Read ghost SHA1 from CTGP data
  * Handle pause times that happen during the countdown (and thus have a negative pause time)
  * Handle brake drift inputs in 200cc ghosts (bit mask 0x10)
  * Implement MKW-SP footer support

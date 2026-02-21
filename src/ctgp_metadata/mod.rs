@@ -4,6 +4,7 @@ use crate::ctgp_metadata::{category::Category, ctgp_version::CTGPVersion};
 use crate::header::in_game_time::InGameTime;
 use crate::{byte_handler::ByteHandler, input_data::yaz1_decompress};
 use chrono::{Duration, TimeDelta, prelude::*};
+use sha1::{Sha1, Digest};
 
 pub mod category;
 pub mod ctgp_version;
@@ -27,6 +28,7 @@ pub struct CTGPMetadata {
     raw_data: Vec<u8>,
     security_data: Vec<u8>,
     track_sha1: [u8; 0x14],
+    ghost_sha1: [u8; 0x14],
     player_id: u64,
     exact_finish_time: ExactFinishTime,
     possible_ctgp_versions: Option<Vec<CTGPVersion>>,
@@ -94,6 +96,8 @@ impl CTGPMetadata {
             track_sha1[index] = *byte;
             current_offset += 0x01;
         }
+
+        let ghost_sha1 = compute_sha1_hex(data);
 
         let player_id =
             u64::from_be_bytes(metadata[current_offset..current_offset + 0x08].try_into()?);
@@ -264,6 +268,7 @@ impl CTGPMetadata {
             raw_data,
             security_data,
             track_sha1,
+            ghost_sha1,
             player_id,
             exact_finish_time,
             possible_ctgp_versions,
@@ -303,6 +308,10 @@ impl CTGPMetadata {
 
     pub fn track_sha1(&self) -> &[u8] {
         &self.track_sha1
+    }
+
+    pub fn ghost_sha1(&self) -> &[u8] {
+        &self.ghost_sha1
     }
 
     pub fn player_id(&self) -> u64 {
@@ -433,4 +442,10 @@ fn duration_from_ticks(tick_count: u64) -> TimeDelta {
 /// Used with a face button byte
 fn contains_ctgp_pause(buttons: u8) -> bool {
     buttons & 0x40 != 0
+}
+
+fn compute_sha1_hex(input: &[u8]) -> [u8; 0x14] {
+    let mut hasher = Sha1::new();
+    hasher.update(input);
+    hasher.finalize().into()
 }
