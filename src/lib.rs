@@ -22,6 +22,11 @@ pub mod input_data;
  * ----------------------------------------------
  * Implement modifying all Mii data
  * Finish writing modified header data to file
+ * Handle pause times that happen during the countdown (and thus have a negative pause time)
+ * Handle brake drift inputs in 200cc ghosts (bit mask 0x10)
+ * Implement MKW-SP footer support
+ * Implement Retro Rewind footer support
+ * Implement Pulsar footer support
  * Implement TryFrom<_> for T where T: Into<ByteHandler>, relies on https://github.com/rust-lang/rust/issues/31844 currently
  * Represent at a Type-system level which types can convert from T to TypeHandler to whichever Struct
  * Optimize Little-Endian calculations
