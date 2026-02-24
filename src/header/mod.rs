@@ -318,8 +318,8 @@ impl Header {
     }
 
     pub fn set_mii(&mut self, mii: Mii) {
-        self.mii_crc16 = crc16(&mii.raw_data());
-        self.raw_data_mut()[0x3C..0x86].copy_from_slice(&mii.raw_data());
+        self.mii_crc16 = crc16(mii.raw_data());
+        self.raw_data_mut()[0x3C..0x86].copy_from_slice(mii.raw_data());
         self.mii = mii;
     }
 

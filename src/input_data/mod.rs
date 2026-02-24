@@ -285,17 +285,16 @@ impl InputData {
             [7, -4],
         ];
 
-        let illegal_stick_inputs;
 
-        match controller {
-            Controller::Nunchuk => illegal_stick_inputs = &ILLEGAL_STICK_INPUTS[..24],
+        let illegal_stick_inputs = match controller {
+            Controller::Nunchuk => &ILLEGAL_STICK_INPUTS[..24],
             Controller::Classic | Controller::Gamecube => {
-                illegal_stick_inputs = &ILLEGAL_STICK_INPUTS
+                &ILLEGAL_STICK_INPUTS
             }
             Controller::WiiWheel => {
                 return false;
             }
-        }
+        };
 
         for current_stick_input in self.stick_inputs().iter() {
             for illegal_stick_input in illegal_stick_inputs.iter() {

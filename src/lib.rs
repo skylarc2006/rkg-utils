@@ -180,7 +180,7 @@ pub(crate) fn write_bits(
     bit_width: usize,
     value: u64,
 ) {
-    let bytes_needed = (bit_offset + bit_width + 7) / 8;
+    let bytes_needed = (bit_offset + bit_width).div_ceil(8);
     let mut chunk: u64 = 0;
 
     for i in 0..bytes_needed {
