@@ -75,7 +75,23 @@ impl TryFrom<u8> for HairColor {
             0x04 => Ok(Self::Gray),
             0x05 => Ok(Self::Pineapple),
             0x06 => Ok(Self::Grizzly),
+            0x07 => Ok(Self::Blond),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<HairColor> for u8 {
+    fn from(value: HairColor) -> Self {
+        match value {
+            HairColor::Black => 0x00,
+            HairColor::Chocolate => 0x01,
+            HairColor::PhilippineBrown => 0x02,
+            HairColor::Walnut => 0x03,
+            HairColor::Gray => 0x04,
+            HairColor::Pineapple => 0x05,
+            HairColor::Grizzly => 0x06,
+            HairColor::Blond => 0x07,
         }
     }
 }
@@ -233,6 +249,85 @@ impl TryFrom<u8> for HairType {
             0x0f => Ok(Self::LongUnknown53),
             0x1d => Ok(Self::LongUnknown51),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<HairType> for u8 {
+    fn from(value: HairType) -> Self {
+        match value {
+            HairType::NormalLong => 0x21,
+            HairType::NormalMedium => 0x28,
+            HairType::FrontLock => 0x33,
+            HairType::PartingExtraLong => 0x2c,
+            HairType::MilitaryParting => 0x27,
+            HairType::PartingExtraLongCurved => 0x46,
+            HairType::ShortUnknown3 => 0x2d,
+            HairType::PeaksSquared => 0x31,
+            HairType::ShortUnknown5 => 0x3b,
+            HairType::Peaks => 0x38,
+            HairType::PeaksRounded => 0x44,
+            HairType::PeaksLongBottom => 0x1f,
+            HairType::NormalLongBottom => 0x20,
+            HairType::NormalShort => 0x2f,
+            HairType::NormalExtraLong => 0x25,
+            HairType::PartingLong => 0x30,
+            HairType::PartingMiddleLong => 0x42,
+            HairType::PartingSquared => 0x34,
+            HairType::LongRounded => 0x3a,
+            HairType::PartingLongBottom => 0x32,
+            HairType::PartingShort => 0x37,
+            HairType::PartingFrontPeaks => 0x40,
+            HairType::NormalUnknown1 => 0x3c,
+            HairType::PeaksSide => 0x3e,
+            HairType::PartingPeaks => 0x2b,
+            HairType::PeaksTop => 0x26,
+            HairType::DreadLocks => 0x2a,
+            HairType::Short => 0x17,
+            HairType::ShortUnknown4 => 0x43,
+            HairType::Afro => 0x36,
+            HairType::Military => 0x24,
+            HairType::NoneTop => 0x29,
+            HairType::ShortUnknown6 => 0x41,
+            HairType::None => 0x1e,
+            HairType::Caps => 0x39,
+            HairType::Beanie => 0x22,
+            HairType::LongUnknown1 => 0x0c,
+            HairType::LongUnknown40 => 0x0d,
+            HairType::LongUnknown38 => 0x45,
+            HairType::LongUnknown60 => 0x1a,
+            HairType::LongUnknown16 => 0x04,
+            HairType::LongUnknown36 => 0x19,
+            HairType::LongUnknown56 => 0x01,
+            HairType::PartingFrontTwoLongBackPonyTails => 0x13,
+            HairType::LongUnknown31 => 0x05,
+            HairType::LongUnknown20 => 0x08,
+            HairType::LongUnknown15 => 0x1b,
+            HairType::LongUnknown52 => 0x07,
+            HairType::LongUnknown7 => 0x0e,
+            HairType::LongUnknown23 => 0x03,
+            HairType::PartingExtraLongRounded => 0x16,
+            HairType::LongUnknown3 => 0x0a,
+            HairType::LongUnknown11 => 0x06,
+            HairType::LongUnknown12 => 0x14,
+            HairType::LongUnknown29 => 0x0b,
+            HairType::LongUnknown27 => 0x3f,
+            HairType::LongUnknown17 => 0x11,
+            HairType::LongUnknown39 => 0x23,
+            HairType::LongUnknown24 => 0x15,
+            HairType::LongUnknown25 => 0x00,
+            HairType::LongUnknown61 => 0x3d,
+            HairType::LongUnknown2 => 0x10,
+            HairType::StrandsTwoShortSidedPonyTails => 0x2e,
+            HairType::TwoFrontStrandsLongBackPonyTail => 0x09,
+            HairType::LongUnknown65 => 0x12,
+            HairType::LongUnknown63 => 0x02,
+            HairType::ShortFrontTwoBackPonyTails => 0x1c,
+            HairType::LongUnknown43 => 0x35,
+            HairType::LongUnknown47 => 0x47,
+            HairType::LongUnknown44 => 0x18,
+            HairType::LongUnknown53 => 0x0f,
+            HairType::LongUnknown51 => 0x1d,
         }
     }
 }

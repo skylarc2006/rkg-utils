@@ -5,6 +5,7 @@ use crate::{
     header::mii::hair::HairColor,
 };
 
+#[derive(Clone, Copy)]
 pub struct Eyebrows {
     rotation: u8,
     size: u8,
@@ -111,7 +112,7 @@ impl TryFrom<u8> for EyebrowType {
         match value {
             0x06 => Ok(Self::FlatAngledLarge),
             0x00 => Ok(Self::LowArchRoundedThin),
-            0x0c => Ok(Self::SoftAngledLarge),
+            0x0C => Ok(Self::SoftAngledLarge),
             0x01 => Ok(Self::MediumArchRoundedThin),
             0x09 => Ok(Self::RoundedMedium),
             0x13 => Ok(Self::LowArchMedium),
@@ -134,6 +135,37 @@ impl TryFrom<u8> for EyebrowType {
             0x10 => Ok(Self::Dotted),
             0x17 => Ok(Self::None),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<EyebrowType> for u8 {
+    fn from(value: EyebrowType) -> Self {
+        match value {
+            EyebrowType::FlatAngledLarge => 0x06,
+            EyebrowType::LowArchRoundedThin => 0x00,
+            EyebrowType::SoftAngledLarge => 0x0C,
+            EyebrowType::MediumArchRoundedThin => 0x01,
+            EyebrowType::RoundedMedium => 0x09,
+            EyebrowType::LowArchMedium => 0x13,
+            EyebrowType::RoundedThin => 0x07,
+            EyebrowType::UpThin => 0x15,
+            EyebrowType::MediumArchRoundedMedium => 0x08,
+            EyebrowType::RoundedLarge => 0x11,
+            EyebrowType::UpLarge => 0x05,
+            EyebrowType::FlatAngledLargeInverted => 0x04,
+            EyebrowType::MediumArchFlat => 0x0B,
+            EyebrowType::AngledThin => 0x0A,
+            EyebrowType::HorizontalLarge => 0x02,
+            EyebrowType::HighArchFlat => 0x03,
+            EyebrowType::Flat => 0x0E,
+            EyebrowType::MediumArchLarge => 0x14,
+            EyebrowType::LowArchThin => 0x0F,
+            EyebrowType::RoundedThinInverted => 0x0D,
+            EyebrowType::HighArchLarge => 0x16,
+            EyebrowType::Hairy => 0x12,
+            EyebrowType::Dotted => 0x10,
+            EyebrowType::None => 0x17,
         }
     }
 }

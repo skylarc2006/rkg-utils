@@ -4,7 +4,7 @@ use crate::ctgp_metadata::{category::Category, ctgp_version::CTGPVersion};
 use crate::header::in_game_time::InGameTime;
 use crate::{byte_handler::ByteHandler, input_data::yaz1_decompress};
 use chrono::{Duration, TimeDelta, prelude::*};
-use sha1::{Sha1, Digest};
+use sha1::{Digest, Sha1};
 
 pub mod category;
 pub mod ctgp_version;

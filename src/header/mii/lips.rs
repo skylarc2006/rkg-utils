@@ -69,6 +69,7 @@ pub enum LipsColor {
     Red,
     Pink,
 }
+
 impl TryFrom<u8> for LipsColor {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -77,6 +78,16 @@ impl TryFrom<u8> for LipsColor {
             1 => Ok(Self::Red),
             2 => Ok(Self::Pink),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<LipsColor> for u8 {
+    fn from(value: LipsColor) -> Self {
+        match value {
+            LipsColor::Orange => 0,
+            LipsColor::Red => 1,
+            LipsColor::Pink => 2,
         }
     }
 }
@@ -138,6 +149,37 @@ impl TryFrom<u8> for LipsType {
             0x0E => Ok(Self::TeethLarge),
             0x0C => Ok(Self::WaveAngry),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<LipsType> for u8 {
+    fn from(value: LipsType) -> Self {
+        match value {
+            LipsType::Neutral => 0x17,
+            LipsType::NeutralLips => 0x01,
+            LipsType::Smile => 0x13,
+            LipsType::SmileStroke => 0x15,
+            LipsType::SmileTeeth => 0x16,
+            LipsType::LipsSmall => 0x05,
+            LipsType::LipsLarge => 0x00,
+            LipsType::Wave => 0x08,
+            LipsType::WaveAngrySmall => 0x0A,
+            LipsType::NeutralStrokeLarge => 0x10,
+            LipsType::TeethSurprised => 0x06,
+            LipsType::LipsExtraLarge => 0x0D,
+            LipsType::LipsUp => 0x07,
+            LipsType::NeutralDown => 0x09,
+            LipsType::Surprised => 0x02,
+            LipsType::TeethMiddle => 0x11,
+            LipsType::NeutralStroke => 0x03,
+            LipsType::LipsExtraSmall => 0x04,
+            LipsType::Malicious => 0x0F,
+            LipsType::LipsDual => 0x0B,
+            LipsType::NeutralComma => 0x14,
+            LipsType::NeutralUp => 0x12,
+            LipsType::TeethLarge => 0x0E,
+            LipsType::WaveAngry => 0x0C,
         }
     }
 }

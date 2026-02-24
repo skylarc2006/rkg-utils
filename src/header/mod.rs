@@ -6,10 +6,11 @@ use crate::{
         date::{Date, DateError},
         ghost_type::{GhostType, GhostTypeError},
         in_game_time::{InGameTime, InGameTimeError},
-        location::Location,
+        location::{Location, constants::Country},
         mii::{Mii, MiiError},
         slot_id::{SlotId, SlotIdError},
     },
+    write_bits,
 };
 
 use std::io::Read;
@@ -29,6 +30,8 @@ pub enum HeaderError {
     NotRKGD,
     #[error("Data passed is not correct size (0x88)")]
     NotCorrectSize,
+    #[error("Friend ghost number out of range (1-30)")]
+    FriendNumberOutOfRange,
     #[error("In Game Time Error: {0}")]
     InGameTimeError(#[from] InGameTimeError),
     #[error("Slot ID Error: {0}")]
@@ -52,7 +55,6 @@ pub enum HeaderError {
 /// All the data in the Header of an RKGD
 /// https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header
 pub struct Header {
-    is_modified: bool,
     raw_data: [u8; 0x88],
     finish_time: InGameTime,
     slot_id: SlotId,
@@ -115,7 +117,6 @@ impl Header {
         let mii_crc16 = ByteHandler::try_from(&header_data[0x86..=0x87])?.copy_word(0);
 
         Ok(Self {
-            is_modified: false,
             raw_data: header_data.try_into().unwrap(),
             finish_time,
             slot_id,
@@ -146,11 +147,6 @@ impl Header {
         // This ensures the CRC matches what's actually written to the file
         self.mii_crc16 = crc16(&self.raw_data[0x3C..0x86]);
         self.raw_data[0x86..0x88].copy_from_slice(&self.mii_crc16.to_be_bytes());
-        self.is_modified = true;
-    }
-
-    pub fn is_modified(&self) -> bool {
-        self.is_modified
     }
 
     pub fn raw_data(&self) -> &[u8; 0x88] {
@@ -167,7 +163,7 @@ impl Header {
 
     pub fn set_finish_time(&mut self, finish_time: InGameTime) {
         self.finish_time = finish_time;
-        self.is_modified = true;
+        write_in_game_time(self.raw_data_mut(), 0x04, 0, &finish_time);
     }
 
     pub fn slot_id(&self) -> SlotId {
@@ -176,7 +172,7 @@ impl Header {
 
     pub fn set_slot_id(&mut self, slot_id: SlotId) {
         self.slot_id = slot_id;
-        self.is_modified = true;
+        write_bits(self.raw_data_mut(), 0x07, 0, 6, u8::from(slot_id) as u64);
     }
 
     pub fn combo(&self) -> &Combo {
@@ -184,8 +180,22 @@ impl Header {
     }
 
     pub fn set_combo(&mut self, combo: Combo) {
+        write_bits(
+            self.raw_data_mut(),
+            0x08,
+            0,
+            6,
+            u8::from(combo.vehicle()) as u64,
+        );
+        write_bits(
+            self.raw_data_mut(),
+            0x08,
+            6,
+            6,
+            u8::from(combo.character()) as u64,
+        );
+
         self.combo = combo;
-        self.is_modified = true;
     }
 
     pub fn date_set(&self) -> &Date {
@@ -193,8 +203,17 @@ impl Header {
     }
 
     pub fn set_date_set(&mut self, date_set: Date) {
+        write_bits(
+            self.raw_data_mut(),
+            0x09,
+            4,
+            7,
+            (date_set.year() - 2000) as u64,
+        );
+        write_bits(self.raw_data_mut(), 0x0A, 3, 4, date_set.month() as u64);
+        write_bits(self.raw_data_mut(), 0x0A, 7, 5, date_set.day() as u64);
+
         self.date_set = date_set;
-        self.is_modified = true;
     }
 
     pub fn controller(&self) -> Controller {
@@ -203,7 +222,7 @@ impl Header {
 
     pub fn set_controller(&mut self, controller: Controller) {
         self.controller = controller;
-        self.is_modified = true;
+        write_bits(self.raw_data_mut(), 0x0B, 4, 4, u8::from(controller) as u64);
     }
 
     pub fn is_compressed(&self) -> bool {
@@ -212,7 +231,7 @@ impl Header {
 
     pub(crate) fn set_compressed(&mut self, is_compressed: bool) {
         self.is_compressed = is_compressed;
-        self.is_modified = true;
+        write_bits(self.raw_data_mut(), 0x0C, 4, 1, is_compressed as u64);
     }
 
     pub fn ghost_type(&self) -> GhostType {
@@ -221,16 +240,16 @@ impl Header {
 
     pub fn set_ghost_type(&mut self, ghost_type: GhostType) {
         self.ghost_type = ghost_type;
-        self.is_modified = true;
+        write_bits(self.raw_data_mut(), 0x0C, 7, 7, u8::from(ghost_type) as u64);
     }
 
     pub fn is_automatic_drift(&self) -> bool {
         self.is_automatic_drift
     }
 
-    pub fn set_automatic_drift(&mut self, b: bool) {
-        self.is_automatic_drift = b;
-        self.is_modified = true;
+    pub fn set_automatic_drift(&mut self, is_automatic_drift: bool) {
+        self.is_automatic_drift = is_automatic_drift;
+        write_bits(self.raw_data_mut(), 0x0D, 6, 1, is_automatic_drift as u64);
     }
 
     pub fn decompressed_input_data_length(&self) -> u16 {
@@ -253,9 +272,17 @@ impl Header {
         if index >= self.lap_count as usize {
             return;
         }
-
         self.lap_split_times[index] = lap_split_time;
-        self.is_modified = true;
+
+        write_bits(self.raw_data_mut(), 0x11 + index * 0x03, 0, 7, lap_split_time.minutes() as u64);
+        write_bits(self.raw_data_mut(), 0x11 + index * 0x03, 7, 7, lap_split_time.seconds() as u64);
+        write_bits(
+            self.raw_data_mut(),
+            0x12 + index * 0x03,
+            6,
+            10,
+            lap_split_time.milliseconds() as u64,
+        );
     }
 
     pub fn location(&self) -> &Location {
@@ -263,8 +290,23 @@ impl Header {
     }
 
     pub fn set_location(&mut self, location: Location) {
+        write_bits(
+            self.raw_data_mut(),
+            0x34,
+            0,
+            8,
+            u8::from(location.country()) as u64,
+        );
+
+        let subregion_id = if self.location().country() != Country::NotSet {
+            u8::from(location.subregion()) as u64
+        } else {
+            0xFF
+        };
+
+        write_bits(self.raw_data_mut(), 0x35, 0, 8, subregion_id);
+
         self.location = location;
-        self.is_modified = true;
     }
 
     pub fn mii(&self) -> &Mii {
@@ -273,6 +315,12 @@ impl Header {
 
     pub fn mii_mut(&mut self) -> &mut Mii {
         &mut self.mii
+    }
+
+    pub fn set_mii(&mut self, mii: Mii) {
+        self.mii_crc16 = crc16(&mii.raw_data());
+        self.raw_data_mut()[0x3C..0x86].copy_from_slice(&mii.raw_data());
+        self.mii = mii;
     }
 
     pub fn mii_crc16(&self) -> u16 {
@@ -296,4 +344,41 @@ fn crc16(value: &[u8]) -> u16 {
         }
     }
     crc
+}
+
+fn write_in_game_time(
+    buf: &mut [u8],
+    byte_offset: usize,
+    bit_offset: usize,
+    in_game_time: &InGameTime,
+) {
+    let mut bit_offset = bit_offset + byte_offset * 8;
+
+    write_bits(
+        buf,
+        bit_offset / 8,
+        bit_offset % 8,
+        7,
+        in_game_time.minutes() as u64,
+    );
+
+    bit_offset += 7;
+
+    write_bits(
+        buf,
+        bit_offset / 8,
+        bit_offset % 8,
+        7,
+        in_game_time.seconds() as u64,
+    );
+
+    bit_offset += 7;
+
+    write_bits(
+        buf,
+        bit_offset / 8,
+        bit_offset % 8,
+        10,
+        in_game_time.milliseconds() as u64,
+    );
 }

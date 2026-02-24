@@ -72,6 +72,7 @@ pub enum GlassesColor {
     Yellow,
     Gray,
 }
+
 impl TryFrom<u8> for GlassesColor {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -83,6 +84,19 @@ impl TryFrom<u8> for GlassesColor {
             4 => Ok(Self::Yellow),
             5 => Ok(Self::Gray),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<GlassesColor> for u8 {
+    fn from(value: GlassesColor) -> Self {
+        match value {
+            GlassesColor::Black => 0,
+            GlassesColor::Brown => 1,
+            GlassesColor::Red => 2,
+            GlassesColor::Blue => 3,
+            GlassesColor::Yellow => 4,
+            GlassesColor::Gray => 5,
         }
     }
 }
@@ -114,6 +128,22 @@ impl TryFrom<u8> for GlassesType {
             7 => Ok(Self::SemiOpaqueRectangle),
             8 => Ok(Self::SemiOpaqueCatEye),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<GlassesType> for u8 {
+    fn from(value: GlassesType) -> Self {
+        match value {
+            GlassesType::None => 0,
+            GlassesType::Square => 1,
+            GlassesType::Rectangle => 2,
+            GlassesType::Rounded => 3,
+            GlassesType::Oval => 4,
+            GlassesType::CatEye => 5,
+            GlassesType::SemiOpaqueAviator => 6,
+            GlassesType::SemiOpaqueRectangle => 7,
+            GlassesType::SemiOpaqueCatEye => 8,
         }
     }
 }

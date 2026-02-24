@@ -5,6 +5,7 @@ use crate::{
     header::mii::hair::HairColor,
 };
 
+#[derive(Clone, Copy)]
 pub struct FacialHair {
     beard_type: BeardType,
     mustache_type: MustacheType,
@@ -87,6 +88,17 @@ impl TryFrom<u8> for BeardType {
     }
 }
 
+impl From<BeardType> for u8 {
+    fn from(value: BeardType) -> Self {
+        match value {
+            BeardType::None => 0,
+            BeardType::Goatee => 1,
+            BeardType::GoateeLong => 2,
+            BeardType::LionsManeLong => 3,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum MustacheType {
     None,
@@ -94,6 +106,7 @@ pub enum MustacheType {
     Pencil,
     Horseshoe,
 }
+
 impl TryFrom<u8> for MustacheType {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -103,6 +116,17 @@ impl TryFrom<u8> for MustacheType {
             2 => Ok(Self::Pencil),
             3 => Ok(Self::Horseshoe),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<MustacheType> for u8 {
+    fn from(value: MustacheType) -> Self {
+        match value {
+            MustacheType::None => 0,
+            MustacheType::Walrus => 1,
+            MustacheType::Pencil => 2,
+            MustacheType::Horseshoe => 3,
         }
     }
 }

@@ -2,6 +2,7 @@ use std::convert::Infallible;
 
 use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
+#[derive(Clone, Copy)]
 pub struct Eyes {
     rotation: u8,
     size: u8,
@@ -95,6 +96,19 @@ impl TryFrom<u8> for EyeColor {
             0x04 => Ok(Self::Blue),
             0x05 => Ok(Self::Green),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<EyeColor> for u8 {
+    fn from(value: EyeColor) -> Self {
+        match value {
+            EyeColor::Black => 0x00,
+            EyeColor::Gray => 0x01,
+            EyeColor::Brown => 0x02,
+            EyeColor::Hazel => 0x03,
+            EyeColor::Blue => 0x04,
+            EyeColor::Green => 0x05,
         }
     }
 }
@@ -204,6 +218,61 @@ impl TryFrom<u8> for EyeType {
             0x0E => Ok(Self::LineTwoLashes),
             0x2F => Ok(Self::CrowsFeet),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<EyeType> for u8 {
+    fn from(value: EyeType) -> Self {
+        match value {
+            EyeType::Normal => 0x02,
+            EyeType::NormalLash => 0x04,
+            EyeType::WhiteLash => 0x00,
+            EyeType::WhiteNoBottom => 0x08,
+            EyeType::OvalAngledWhite => 0x27,
+            EyeType::AngryWhite => 0x11,
+            EyeType::DotLashType1 => 0x01,
+            EyeType::Line => 0x1A,
+            EyeType::DotLine => 0x10,
+            EyeType::OvalWhite => 0x0F,
+            EyeType::RoundedWhite => 0x1B,
+            EyeType::NormalShadow => 0x14,
+            EyeType::CircleWhite => 0x21,
+            EyeType::Circle => 0x0B,
+            EyeType::CircleWhiteStroke => 0x13,
+            EyeType::NormalOvalNoBottom => 0x20,
+            EyeType::NormalOvalLarge => 0x09,
+            EyeType::NormalRoundedNoBottom => 0x0C,
+            EyeType::SmallLash => 0x17,
+            EyeType::Small => 0x22,
+            EyeType::TwoSmall => 0x15,
+            EyeType::NormalLongLash => 0x19,
+            EyeType::WhiteTwoLashes => 0x28,
+            EyeType::WhiteThreeLashes => 0x23,
+            EyeType::DotAngry => 0x05,
+            EyeType::DotAngled => 0x29,
+            EyeType::Oval => 0x0D,
+            EyeType::SmallWhite => 0x24,
+            EyeType::WhiteAngledNoBottom => 0x25,
+            EyeType::WhiteAngledNoLeft => 0x06,
+            EyeType::SmallWhiteTwoLashes => 0x18,
+            EyeType::LeafWhiteLash => 0x1E,
+            EyeType::WhiteLargeNoBottom => 0x1F,
+            EyeType::Dot => 0x12,
+            EyeType::DotLashType2 => 0x1C,
+            EyeType::DotThreeLashes => 0x2E,
+            EyeType::WhiteOvalTop => 0x07,
+            EyeType::WhiteOvalBottom => 0x2C,
+            EyeType::WhiteOvalBottomFlat => 0x26,
+            EyeType::WhiteOvalTwoLashes => 0x2A,
+            EyeType::WhiteOvalThreeLashes => 0x2D,
+            EyeType::WhiteOvalNoBottomTwoLashes => 0x1D,
+            EyeType::DotWhite => 0x03,
+            EyeType::WhiteOvalTopFlat => 0x2B,
+            EyeType::WhiteThinLeaf => 0x16,
+            EyeType::StarThreeLashes => 0x0A,
+            EyeType::LineTwoLashes => 0x0E,
+            EyeType::CrowsFeet => 0x2F,
         }
     }
 }

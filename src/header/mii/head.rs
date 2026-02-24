@@ -87,6 +87,21 @@ impl TryFrom<u8> for HeadShape {
     }
 }
 
+impl From<HeadShape> for u8 {
+    fn from(value: HeadShape) -> Self {
+        match value {
+            HeadShape::Sharp => 0x00,
+            HeadShape::Rounded => 0x01,
+            HeadShape::SharpRoundedSmall => 0x02,
+            HeadShape::Large => 0x03,
+            HeadShape::SharpSmall => 0x04,
+            HeadShape::Flat => 0x05,
+            HeadShape::Angular => 0x06,
+            HeadShape::FlatRounded => 0x07,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum SkinTone {
     Beige,
@@ -108,6 +123,19 @@ impl TryFrom<u8> for SkinTone {
             0x04 => Ok(Self::Honey),
             0x05 => Ok(Self::Chestnut),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<SkinTone> for u8 {
+    fn from(value: SkinTone) -> Self {
+        match value {
+            SkinTone::Beige => 0x00,
+            SkinTone::Natural => 0x01,
+            SkinTone::WarmIvory => 0x02,
+            SkinTone::Ivory => 0x03,
+            SkinTone::Honey => 0x04,
+            SkinTone::Chestnut => 0x05,
         }
     }
 }
@@ -145,6 +173,25 @@ impl TryFrom<u8> for FaceFeatures {
             0x0A => Ok(Self::MouthFrown),
             0x0B => Ok(Self::FoldsCrowsFrown),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<FaceFeatures> for u8 {
+    fn from(value: FaceFeatures) -> Self {
+        match value {
+            FaceFeatures::None => 0x00,
+            FaceFeatures::CheekPorcelain => 0x01,
+            FaceFeatures::CheekPorcelainEyeShadowBlue => 0x02,
+            FaceFeatures::Freckles => 0x03,
+            FaceFeatures::UnderTheEyes => 0x04,
+            FaceFeatures::FacialPain => 0x05,
+            FaceFeatures::Cheeks => 0x06,
+            FaceFeatures::Chin => 0x07,
+            FaceFeatures::BrowDroop => 0x08,
+            FaceFeatures::LionsManeBeard => 0x09,
+            FaceFeatures::MouthFrown => 0x0A,
+            FaceFeatures::FoldsCrowsFrown => 0x0B,
         }
     }
 }

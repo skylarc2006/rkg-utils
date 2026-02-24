@@ -217,13 +217,13 @@ impl InputData {
         self.raw_data[4..8] == [0x59, 0x61, 0x7A, 0x31]
     }
 
-    pub fn compress(&mut self) {
+    pub(crate) fn compress(&mut self) {
         if !self.is_compressed() {
             self.raw_data = yaz1_compress(&self.raw_data);
         }
     }
 
-    pub fn decompress(&mut self) {
+    pub(crate) fn decompress(&mut self) {
         if self.is_compressed() {
             self.raw_data = yaz1_decompress(&self.raw_data[4..]).unwrap();
         }
@@ -335,7 +335,7 @@ impl InputData {
 
 /// Decompress YAZ1-compressed input data
 /// Adapted from https://github.com/AtishaRibeiro/InputDisplay/blob/master/InputDisplay/Core/Yaz1dec.cs
-pub fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
     // YAZ1 files start with "Yaz1" magic header
     if data.len() < 16 || &data[0..4] != b"Yaz1" {
         return None;
@@ -433,7 +433,20 @@ fn decompress_block(src: &[u8], offset: usize, uncompressed_size: usize) -> Opti
 
 /// Compress input data with Yaz1 compression
 /// Adapted from https://github.com/AtishaRibeiro/TT-Rec-Tools/blob/dev/ghostmanager/Scripts/YAZ1_comp.js
-pub fn yaz1_compress(src: &[u8]) -> Vec<u8> {
+pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
+    // first remove padded 0s (decompressed input data is padded with 0s to 0x2774 bytes)
+    let mut trailing_bytes_to_remove = 0usize;
+    for idx in (0..src.len()).rev() {
+        if src[idx] == 0 {
+            trailing_bytes_to_remove += 1;
+        }
+        else {
+            break;
+        }
+    }
+
+    let src = &src[0..src.len() - trailing_bytes_to_remove];
+
     let mut dst = Vec::new();
     let src_size = src.len();
     let mut src_pos = 0;

@@ -84,3 +84,22 @@ impl TryFrom<u8> for NoseType {
         }
     }
 }
+
+impl From<NoseType> for u8 {
+    fn from(value: NoseType) -> Self {
+        match value {
+            NoseType::Normal => 0x01,
+            NoseType::Rounded => 0x0A,
+            NoseType::Dot => 0x02,
+            NoseType::Arrow => 0x03,
+            NoseType::Roman => 0x06,
+            NoseType::Triangle => 0x00,
+            NoseType::Button => 0x05,
+            NoseType::RoundedInverted => 0x04,
+            NoseType::Potato => 0x08,
+            NoseType::Grecian => 0x09,
+            NoseType::Snub => 0x07,
+            NoseType::Aquiline => 0x0B,
+        }
+    }
+}
