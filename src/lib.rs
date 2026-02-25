@@ -20,8 +20,8 @@ pub mod input_data;
  * TODO:
  * Unfinished/unimplemented functionality
  * ----------------------------------------------
- * Determine and define bounds for numeric values of Miis (x and y, size and rotation)
- * Split Mii ID into its individual components
+ * Implement new() functions for Mii individual parts (Head, Eyebrows, Eyes, etc.)
+ * Split Mii ID into its separate components
  * Write test for write_to_ghost and fix any failures
  * Functions to construct Chadsoft links as a string using CTGP data
  * Handle brake drift inputs in 200cc ghosts (bit mask 0x10)

@@ -22,7 +22,7 @@ pub struct Build {
 
 impl Build {
     #[inline(always)]
-    fn new(height: u8, weight: u8) -> Result<Self, BuildError> {
+    pub fn new(height: u8, weight: u8) -> Result<Self, BuildError> {
         if height > 127 {
             return Err(BuildError::HeightInvalid);
         }

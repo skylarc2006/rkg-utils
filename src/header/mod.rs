@@ -6,7 +6,7 @@ use crate::{
         date::{Date, DateError},
         ghost_type::{GhostType, GhostTypeError},
         in_game_time::{InGameTime, InGameTimeError},
-        location::{Location, constants::Country},
+        location::{Location, constants::{Country, CountryError, SubregionError}},
         mii::{Mii, MiiError},
         slot_id::{SlotId, SlotIdError},
     },
@@ -48,6 +48,10 @@ pub enum HeaderError {
     MiiError(#[from] MiiError),
     #[error("Io Error: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Country Error: {0}")]
+    CountryError(#[from] CountryError),
+    #[error("Subregion Error: {0}")]
+    SubregionError(#[from] SubregionError),
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
 }
@@ -109,6 +113,7 @@ impl Header {
         }
 
         let codes = ByteHandler::try_from(&header_data[0x34..=0x37]).unwrap();
+        
         let location =
             Location::find(codes.copy_byte(0), codes.copy_byte(1), None).unwrap_or_default();
 
@@ -274,8 +279,20 @@ impl Header {
         }
         self.lap_split_times[index] = lap_split_time;
 
-        write_bits(self.raw_data_mut(), 0x11 + index * 0x03, 0, 7, lap_split_time.minutes() as u64);
-        write_bits(self.raw_data_mut(), 0x11 + index * 0x03, 7, 7, lap_split_time.seconds() as u64);
+        write_bits(
+            self.raw_data_mut(),
+            0x11 + index * 0x03,
+            0,
+            7,
+            lap_split_time.minutes() as u64,
+        );
+        write_bits(
+            self.raw_data_mut(),
+            0x11 + index * 0x03,
+            7,
+            7,
+            lap_split_time.seconds() as u64,
+        );
         write_bits(
             self.raw_data_mut(),
             0x12 + index * 0x03,

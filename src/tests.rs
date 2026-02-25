@@ -3,21 +3,14 @@ use crate::{
     ctgp_metadata::CTGPMetadata,
     header::{
         Header,
-        combo::{Character, Vehicle},
+        combo::{Character, Combo, Vehicle},
         controller::Controller,
         date::Date,
         ghost_type::GhostType,
+        in_game_time::InGameTime,
         location::{Location, constants::*},
         mii::{
-            eyebrows::EyebrowType,
-            eyes::{EyeColor, EyeType},
-            facial_hair::{BeardType, MustacheType},
-            favorite_color::FavoriteColor,
-            glasses::{GlassesColor, GlassesType},
-            hair::{HairColor, HairType},
-            head::{FaceFeatures, HeadShape, SkinTone},
-            lips::{LipsColor, LipsType},
-            nose::NoseType,
+            birthday::Birthday, build::Build, eyebrows::EyebrowType, eyes::{EyeColor, EyeType}, facial_hair::{BeardType, MustacheType}, favorite_color::FavoriteColor, glasses::{GlassesColor, GlassesType}, hair::{HairColor, HairType}, head::{FaceFeatures, HeadShape, SkinTone}, lips::{LipsColor, LipsType}, nose::NoseType
         },
         slot_id::SlotId,
     },
@@ -601,7 +594,6 @@ fn test_full_ghost() {
 
 #[test]
 fn test_write_to_ghost() {
-    // TODO: write modifications and new asserts
     let mut ghost =
         Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
 
@@ -722,6 +714,50 @@ fn test_write_to_ghost() {
 
     assert_eq!(ghost.header().mii_crc16(), 0x06F4);
     assert!(ghost.header().verify_mii_crc16());
+
+    // modify fields
+    ghost
+        .header_mut()
+        .set_finish_time(InGameTime::new(1, 37, 999));
+    ghost.header_mut().set_slot_id(SlotId::DryDryRuins);
+    ghost
+        .header_mut()
+        .set_combo(Combo::new(Vehicle::BlueFalcon, Character::Toad).unwrap());
+    ghost
+        .header_mut()
+        .set_date_set(Date::new(2018, 12, 25).unwrap());
+    ghost.header_mut().set_controller(Controller::Gamecube);
+    ghost.compress_input_data();
+    ghost.header_mut().set_ghost_type(GhostType::Friend23);
+    ghost.header_mut().set_automatic_drift(false);
+    ghost
+        .header_mut()
+        .set_lap_split_time(0, InGameTime::new(0, 6, 741));
+    ghost
+        .header_mut()
+        .set_lap_split_time(1, InGameTime::new(0, 42, 069));
+    ghost
+        .header_mut()
+        .set_lap_split_time(2, InGameTime::new(0, 21, 910));
+    ghost.header_mut().set_location(Location::find(
+        u8::from(Country::UnitedStates),
+        u8::from(Subregion::UnitedStates(UnitedStatesSubregion::California)),
+        None,
+    ).unwrap());
+
+    let mii = ghost.header_mut().mii_mut();
+
+    mii.set_is_girl(true);
+    mii.set_birthday(Birthday::new(4, 20).unwrap());
+    mii.set_favorite_color(FavoriteColor::Red);
+    mii.set_name("DUMBASS");
+    mii.set_build(Build::new(100, 50).unwrap());
+    mii.set_mii_id(0xB00B1355_u32.to_be());
+    mii.set_system_id(0x453AE846_u32.to_be());
+    // TODO: finish writing this test once Mii's substructs have new() functions
+
+    // new ghost asserts
+    let ghost = Ghost::new(&ghost.save_to_bytes().unwrap());
 }
 
 #[test]

@@ -285,12 +285,9 @@ impl InputData {
             [7, -4],
         ];
 
-
         let illegal_stick_inputs = match controller {
             Controller::Nunchuk => &ILLEGAL_STICK_INPUTS[..24],
-            Controller::Classic | Controller::Gamecube => {
-                &ILLEGAL_STICK_INPUTS
-            }
+            Controller::Classic | Controller::Gamecube => &ILLEGAL_STICK_INPUTS,
             Controller::WiiWheel => {
                 return false;
             }
@@ -438,8 +435,7 @@ pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
     for idx in (0..src.len()).rev() {
         if src[idx] == 0 {
             trailing_bytes_to_remove += 1;
-        }
-        else {
+        } else {
             break;
         }
     }
