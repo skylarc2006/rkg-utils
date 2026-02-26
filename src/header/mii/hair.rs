@@ -10,6 +10,14 @@ pub struct Hair {
 }
 
 impl Hair {
+    pub fn new(hair_type: HairType, hair_color: HairColor, is_flipped: bool) -> Self {
+        Self {
+            hair_type,
+            hair_color,
+            is_flipped,
+        }
+    }
+
     pub fn hair_type(&self) -> HairType {
         self.hair_type
     }
@@ -43,7 +51,7 @@ impl FromByteHandler for Hair {
         let mut handler = handler.try_into()?;
         handler.shift_right(1);
         Ok(Self {
-            is_flipped: handler.read_bool(4),
+            is_flipped: handler.read_bool(12),
             hair_type: HairType::try_from(handler.copy_byte(0))
                 .map_err(|_| HairError::TypeInvalid)?,
             hair_color: HairColor::try_from(handler.copy_byte(1) >> 5)

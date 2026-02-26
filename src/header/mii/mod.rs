@@ -114,8 +114,8 @@ impl Mii {
         let system_id = ByteHandler::try_from(&raw_data[0x1C..=0x1F])?.copy_dword();
 
         let bytes = ByteHandler::try_from(&raw_data[0x20..=0x21])?;
-        let mingle_off = bytes.read_bool(2);
-        let downloaded = bytes.read_bool(0);
+        let mingle_off = bytes.read_bool(10);
+        let downloaded = bytes.read_bool(8);
         let head = Head::from_byte_handler(bytes)?;
         let hair = Hair::from_byte_handler(&raw_data[0x22..=0x23])?;
         let eyebrows = Eyebrows::from_byte_handler(&raw_data[0x24..=0x27])?;
@@ -255,10 +255,10 @@ impl Mii {
             return;
         }
         self.name = name.to_string();
-
         let name_bytes = string_to_utf16be(name);
-        self.raw_data_mut()[0x02..0x16].copy_from_slice(&name_bytes);
-
+        let mut padded = [0u8; 0x14];
+        padded[..name_bytes.len()].copy_from_slice(&name_bytes);
+        self.raw_data_mut()[0x02..0x16].copy_from_slice(&padded);
         self.is_modified = true;
     }
 
@@ -577,7 +577,10 @@ impl Mii {
         self.creator_name = creator_name.to_string();
 
         let creator_name_bytes = string_to_utf16be(creator_name);
-        self.raw_data_mut()[0x36..0x4A].copy_from_slice(&creator_name_bytes);
+
+        let mut padded = [0u8; 0x14];
+        padded[..creator_name_bytes.len()].copy_from_slice(&creator_name_bytes);
+        self.raw_data_mut()[0x36..0x4A].copy_from_slice(&padded);
 
         self.is_modified = true;
     }

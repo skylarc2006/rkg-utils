@@ -6,7 +6,10 @@ use crate::{
         date::{Date, DateError},
         ghost_type::{GhostType, GhostTypeError},
         in_game_time::{InGameTime, InGameTimeError},
-        location::{Location, constants::{Country, CountryError, SubregionError}},
+        location::{
+            Location,
+            constants::{Country, CountryError, SubregionError},
+        },
         mii::{Mii, MiiError},
         slot_id::{SlotId, SlotIdError},
     },
@@ -113,7 +116,7 @@ impl Header {
         }
 
         let codes = ByteHandler::try_from(&header_data[0x34..=0x37]).unwrap();
-        
+
         let location =
             Location::find(codes.copy_byte(0), codes.copy_byte(1), None).unwrap_or_default();
 
@@ -315,7 +318,7 @@ impl Header {
             u8::from(location.country()) as u64,
         );
 
-        let subregion_id = if self.location().country() != Country::NotSet {
+        let subregion_id = if location.country() != Country::NotSet {
             u8::from(location.subregion()) as u64
         } else {
             0xFF

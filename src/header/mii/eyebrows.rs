@@ -16,6 +16,37 @@ pub struct Eyebrows {
 }
 
 impl Eyebrows {
+    pub fn new(
+        rotation: u8,
+        size: u8,
+        x: u8,
+        y: u8,
+        eyebrow_color: HairColor,
+        eyebrow_type: EyebrowType,
+    ) -> Result<Self, EyebrowsError> {
+        if rotation > 11 {
+            return Err(EyebrowsError::RotationInvalid);
+        }
+        if size > 8 {
+            return Err(EyebrowsError::SizeInvalid);
+        }
+        if x > 12 {
+            return Err(EyebrowsError::XInvalid);
+        }
+        if (y < 3) | (y > 18) {
+            return Err(EyebrowsError::YInvalid);
+        }
+
+        Ok(Self {
+            rotation,
+            size,
+            x,
+            y,
+            eyebrow_color,
+            eyebrow_type,
+        })
+    }
+
     pub fn rotation(&self) -> u8 {
         self.rotation
     }
@@ -42,6 +73,14 @@ pub enum EyebrowsError {
     TypeInvalid,
     #[error("Color is invalid")]
     ColorInvalid,
+    #[error("Rotation is invalid")]
+    RotationInvalid,
+    #[error("Size is invalid")]
+    SizeInvalid,
+    #[error("Y position is invalid")]
+    YInvalid,
+    #[error("X position is invalid")]
+    XInvalid,
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
     #[error("")]
@@ -67,14 +106,14 @@ impl FromByteHandler for Eyebrows {
         let size = handler.copy_byte(2) & 0x0F;
         handler.shift_right(2);
         let rotation = handler.copy_byte(1) >> 3;
-        Ok(Self {
-            size,
+        Ok(Self::new(
             rotation,
+            size,
             x,
             y,
-            eyebrow_type,
             eyebrow_color,
-        })
+            eyebrow_type,
+        )?)
     }
 }
 

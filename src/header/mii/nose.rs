@@ -10,6 +10,17 @@ pub struct Nose {
 }
 
 impl Nose {
+    pub fn new(y: u8, size: u8, nose_type: NoseType) -> Result<Self, NoseError> {
+        if size > 8 {
+            return Err(NoseError::SizeInvalid);
+        }
+        if y > 18 {
+            return Err(NoseError::YInvalid);
+        }
+
+        Ok(Self { y, size, nose_type })
+    }
+
     pub fn y(&self) -> u8 {
         self.y
     }
@@ -29,12 +40,13 @@ impl FromByteHandler for Nose {
         Self::Err: From<T::Error>,
     {
         let handler = handler.try_into()?;
-        Ok(Self {
-            nose_type: NoseType::try_from(handler.copy_byte(0) >> 4)
-                .map_err(|_| NoseError::TypeInvalid)?,
-            size: handler.copy_byte(0) & 0x0F,
-            y: handler.copy_byte(1) >> 3,
-        })
+
+        let nose_type =
+            NoseType::try_from(handler.copy_byte(0) >> 4).map_err(|_| NoseError::TypeInvalid)?;
+        let size = handler.copy_byte(0) & 0x0F;
+        let y = handler.copy_byte(1) >> 3;
+
+        Ok(Self::new(y, size, nose_type)?)
     }
 }
 
@@ -42,6 +54,10 @@ impl FromByteHandler for Nose {
 pub enum NoseError {
     #[error("Type is invalid")]
     TypeInvalid,
+    #[error("Size is invalid")]
+    SizeInvalid,
+    #[error("Y position is invalid")]
+    YInvalid,
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
     #[error("")]

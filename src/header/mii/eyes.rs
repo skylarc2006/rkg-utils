@@ -13,6 +13,37 @@ pub struct Eyes {
 }
 
 impl Eyes {
+    pub fn new(
+        rotation: u8,
+        size: u8,
+        x: u8,
+        y: u8,
+        eye_color: EyeColor,
+        eye_type: EyeType,
+    ) -> Result<Self, EyesError> {
+        if size > 7 {
+            return Err(EyesError::SizeInvalid);
+        }
+        if rotation > 7 {
+            return Err(EyesError::RotationInvalid);
+        }
+        if y > 18 {
+            return Err(EyesError::YInvalid);
+        }
+        if x > 12 {
+            return Err(EyesError::XInvalid);
+        }
+
+        Ok(Self {
+            rotation,
+            size,
+            x,
+            y,
+            eye_color,
+            eye_type,
+        })
+    }
+
     pub fn rotation(&self) -> u8 {
         self.rotation
     }
@@ -39,6 +70,14 @@ pub enum EyesError {
     TypeInvalid,
     #[error("Color is invalid")]
     ColorInvalid,
+    #[error("Rotation is invalid")]
+    RotationInvalid,
+    #[error("Size is invalid")]
+    SizeInvalid,
+    #[error("Y position is invalid")]
+    YInvalid,
+    #[error("X position is invalid")]
+    XInvalid,
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
     #[error("")]
@@ -64,14 +103,14 @@ impl FromByteHandler for Eyes {
         let x = handler.copy_byte(3) & 0x0F;
         let size = handler.copy_byte(3) >> 4;
 
-        Ok(Self {
-            size,
+        Ok(Self::new(
             rotation,
+            size,
             x,
             y,
-            eye_type,
             eye_color,
-        })
+            eye_type,
+        )?)
     }
 }
 

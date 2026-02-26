@@ -20,11 +20,9 @@ pub mod input_data;
  * TODO:
  * Unfinished/unimplemented functionality
  * ----------------------------------------------
- * Implement new() functions for Mii individual parts (Head, Eyebrows, Eyes, etc.)
- * Split Mii ID into its separate components
- * Write test for write_to_ghost and fix any failures
  * Functions to construct Chadsoft links as a string using CTGP data
  * Handle brake drift inputs in 200cc ghosts (bit mask 0x10)
+ * Split Mii ID into its separate components
  * Implement MKW-SP footer support
  * Implement Retro Rewind footer support
  * Implement Pulsar footer support
@@ -102,6 +100,7 @@ impl Ghost {
     pub fn save_to_bytes(&mut self) -> Result<Vec<u8>, GhostError> {
         let mii_bytes = self.header().mii().raw_data().to_vec();
         self.header_mut().set_mii(Mii::new(mii_bytes)?);
+        self.header_mut().fix_mii_crc16();
 
         let mut buf = Vec::from(self.header().raw_data());
 

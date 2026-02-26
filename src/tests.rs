@@ -10,7 +10,7 @@ use crate::{
         in_game_time::InGameTime,
         location::{Location, constants::*},
         mii::{
-            birthday::Birthday, build::Build, eyebrows::EyebrowType, eyes::{EyeColor, EyeType}, facial_hair::{BeardType, MustacheType}, favorite_color::FavoriteColor, glasses::{GlassesColor, GlassesType}, hair::{HairColor, HairType}, head::{FaceFeatures, HeadShape, SkinTone}, lips::{LipsColor, LipsType}, nose::NoseType
+            birthday::Birthday, build::Build, eyebrows::{EyebrowType, Eyebrows}, eyes::{EyeColor, EyeType, Eyes}, facial_hair::{BeardType, FacialHair, MustacheType}, favorite_color::FavoriteColor, glasses::{Glasses, GlassesColor, GlassesType}, hair::{Hair, HairColor, HairType}, head::{FaceFeatures, Head, HeadShape, SkinTone}, lips::{Lips, LipsColor, LipsType}, mole::Mole, nose::{Nose, NoseType}
         },
         slot_id::SlotId,
     },
@@ -593,7 +593,7 @@ fn test_full_ghost() {
 }
 
 #[test]
-fn test_write_to_ghost() {
+fn write_to_ghost() {
     let mut ghost =
         Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
 
@@ -727,7 +727,7 @@ fn test_write_to_ghost() {
         .header_mut()
         .set_date_set(Date::new(2018, 12, 25).unwrap());
     ghost.header_mut().set_controller(Controller::Gamecube);
-    ghost.compress_input_data();
+    ghost.decompress_input_data();
     ghost.header_mut().set_ghost_type(GhostType::Friend23);
     ghost.header_mut().set_automatic_drift(false);
     ghost
@@ -739,11 +739,14 @@ fn test_write_to_ghost() {
     ghost
         .header_mut()
         .set_lap_split_time(2, InGameTime::new(0, 21, 910));
-    ghost.header_mut().set_location(Location::find(
-        u8::from(Country::UnitedStates),
-        u8::from(Subregion::UnitedStates(UnitedStatesSubregion::California)),
-        None,
-    ).unwrap());
+    ghost.header_mut().set_location(
+        Location::find(
+            u8::from(Country::UnitedStates),
+            u8::from(Subregion::UnitedStates(UnitedStatesSubregion::California)),
+            None,
+        )
+        .unwrap(),
+    );
 
     let mii = ghost.header_mut().mii_mut();
 
@@ -752,12 +755,158 @@ fn test_write_to_ghost() {
     mii.set_favorite_color(FavoriteColor::Red);
     mii.set_name("DUMBASS");
     mii.set_build(Build::new(100, 50).unwrap());
-    mii.set_mii_id(0xB00B1355_u32.to_be());
-    mii.set_system_id(0x453AE846_u32.to_be());
-    // TODO: finish writing this test once Mii's substructs have new() functions
+    mii.set_mii_id(0xB00B1355);
+    mii.set_system_id(0x453AE846);
+    mii.set_head(Head::new(
+        HeadShape::Rounded,
+        SkinTone::Honey,
+        FaceFeatures::Freckles,
+    ));
+    mii.set_mingle_enabled(true);
+    mii.set_downloaded(true);
+    mii.set_hair(Hair::new(HairType::NormalMedium, HairColor::Black, true));
+    mii.set_eyebrows(
+        Eyebrows::new(4, 3, 1, 9, HairColor::Black, EyebrowType::RoundedMedium).unwrap(),
+    );
+    mii.set_eyes(Eyes::new(3, 5, 0, 8, EyeColor::Brown, EyeType::Normal).unwrap());
+    mii.set_nose(Nose::new(7, 1, NoseType::Normal).unwrap());
+    mii.set_lips(Lips::new(5, 6, LipsType::Neutral, LipsColor::Red).unwrap());
+    mii.set_glasses(Glasses::new(9, 3, GlassesType::Square, GlassesColor::Brown).unwrap());
+    mii.set_facial_hair(
+        FacialHair::new(
+            BeardType::GoateeLong,
+            MustacheType::Pencil,
+            HairColor::Walnut,
+            3,
+            9,
+        )
+        .unwrap(),
+    );
+    mii.set_mole(Mole::new(true, 3, 19, 3).unwrap());
+
+    mii.set_creator_name("IDIOT");
 
     // new ghost asserts
-    let ghost = Ghost::new(&ghost.save_to_bytes().unwrap());
+    let mut ghost = Ghost::new(&ghost.save_to_bytes().unwrap()).unwrap();
+
+    // General ghost info
+    assert_eq!(ghost.header().finish_time().minutes(), 1);
+    assert_eq!(ghost.header().finish_time().seconds(), 37);
+    assert_eq!(ghost.header().finish_time().milliseconds(), 999);
+    assert_eq!(ghost.header().finish_time().to_string(), "01:37.999");
+    assert_eq!(ghost.header().slot_id(), SlotId::DryDryRuins);
+    assert_eq!(ghost.header().combo().vehicle(), Vehicle::BlueFalcon);
+    assert_eq!(ghost.header().combo().character(), Character::Toad);
+    assert_eq!(ghost.header().date_set(), &Date::new(2018, 12, 25).unwrap());
+    assert_eq!(ghost.header().controller(), Controller::Gamecube);
+    assert!(!ghost.header().is_compressed());
+    assert_eq!(ghost.header().ghost_type(), GhostType::Friend23);
+    assert!(!ghost.header().is_automatic_drift());
+    assert_eq!(ghost.header().decompressed_input_data_length(), 1856);
+    assert_eq!(ghost.header().lap_count(), 3);
+    assert_eq!(ghost.header().lap_split_times()[0].to_string(), "00:06.741");
+    assert_eq!(ghost.header().lap_split_times()[1].to_string(), "00:42.069");
+    assert_eq!(ghost.header().lap_split_times()[2].to_string(), "00:21.910");
+    assert_eq!(ghost.header().location().country(), Country::UnitedStates);
+    assert_eq!(ghost.header().location().subregion(), Subregion::UnitedStates(UnitedStatesSubregion::California));
+
+    // Mii Data
+    assert!(ghost.header().mii().is_girl());
+    assert_eq!(ghost.header().mii().birthday().month(), Some(4));
+    assert_eq!(ghost.header().mii().birthday().day(), Some(20));
+    assert_eq!(
+        ghost.header().mii().favorite_color(),
+        FavoriteColor::Red
+    );
+    assert_eq!(ghost.header().mii().name(), "DUMBASS");
+    assert_eq!(ghost.header().mii().build().height(), 100);
+    assert_eq!(ghost.header().mii().build().weight(), 50);
+
+    assert_eq!(ghost.header().mii().mii_id(), 0xB00B1355);
+    assert_eq!(ghost.header().mii().system_id(), 0x453AE846);
+
+    assert_eq!(ghost.header().mii().head().shape(), HeadShape::Rounded);
+    assert_eq!(ghost.header().mii().head().skin_tone(), SkinTone::Honey);
+    assert_eq!(
+        ghost.header().mii().head().face_features(),
+        FaceFeatures::Freckles
+    );
+
+    assert!(ghost.header().mii().is_mingle_enabled());
+    assert!(ghost.header().mii().downloaded());
+
+    assert_eq!(
+        ghost.header().mii().hair().hair_type(),
+        HairType::NormalMedium
+    );
+    assert_eq!(
+        ghost.header().mii().hair().hair_color(),
+        HairColor::Black
+    );
+    assert!(ghost.header().mii().hair().is_flipped());
+
+    assert_eq!(
+        ghost.header().mii().eyebrows().eyebrow_type(),
+        EyebrowType::RoundedMedium
+    );
+    assert_eq!(ghost.header().mii().eyebrows().rotation(), 4);
+    assert_eq!(
+        ghost.header().mii().eyebrows().eyebrow_color(),
+        HairColor::Black
+    );
+    assert_eq!(ghost.header().mii().eyebrows().size(), 3);
+    assert_eq!(ghost.header().mii().eyebrows().y(), 9);
+    assert_eq!(ghost.header().mii().eyebrows().x(), 1);
+
+    assert_eq!(ghost.header().mii().eyes().eye_type(), EyeType::Normal);
+    assert_eq!(ghost.header().mii().eyes().rotation(), 3);
+    assert_eq!(ghost.header().mii().eyes().y(), 8);
+    assert_eq!(ghost.header().mii().eyes().eye_color(), EyeColor::Brown);
+    assert_eq!(ghost.header().mii().eyes().size(), 5);
+    assert_eq!(ghost.header().mii().eyes().x(), 0);
+
+    assert_eq!(ghost.header().mii().nose().nose_type(), NoseType::Normal);
+    assert_eq!(ghost.header().mii().nose().size(), 1);
+    assert_eq!(ghost.header().mii().nose().y(), 7);
+
+    assert_eq!(ghost.header().mii().lips().lips_type(), LipsType::Neutral);
+    assert_eq!(ghost.header().mii().lips().lips_color(), LipsColor::Red);
+    assert_eq!(ghost.header().mii().lips().size(), 6);
+    assert_eq!(ghost.header().mii().lips().y(), 5);
+
+    assert_eq!(
+        ghost.header().mii().glasses().glasses_type(),
+        GlassesType::Square
+    );
+    assert_eq!(
+        ghost.header().mii().glasses().glasses_color(),
+        GlassesColor::Brown
+    );
+    assert_eq!(ghost.header().mii().glasses().size(), 3);
+    assert_eq!(ghost.header().mii().glasses().y(), 9);
+
+    assert_eq!(
+        ghost.header().mii().facial_hair().mustache_type(),
+        MustacheType::Pencil
+    );
+    assert_eq!(
+        ghost.header().mii().facial_hair().beard_type(),
+        BeardType::GoateeLong
+    );
+    assert_eq!(ghost.header().mii().facial_hair().color(), HairColor::Walnut);
+    assert_eq!(ghost.header().mii().facial_hair().mustache_size(), 3);
+    assert_eq!(ghost.header().mii().facial_hair().mustache_y(), 9);
+
+    assert!(ghost.header().mii().mole().has_mole());
+    assert_eq!(ghost.header().mii().mole().size(), 3);
+    assert_eq!(ghost.header().mii().mole().y(), 19);
+    assert_eq!(ghost.header().mii().mole().x(), 3);
+
+    assert_eq!(ghost.header().mii().creator_name(), "IDIOT");
+
+    assert!(ghost.header().verify_mii_crc16());
+
+    let _ = ghost.save_to_file("./test_ghosts/JC_transformed_ghost.rkg").unwrap();
 }
 
 #[test]

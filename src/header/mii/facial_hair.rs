@@ -14,6 +14,29 @@ pub struct FacialHair {
     mustache_y: u8,
 }
 impl FacialHair {
+    pub fn new(
+        beard_type: BeardType,
+        mustache_type: MustacheType,
+        color: HairColor,
+        mustache_size: u8,
+        mustache_y: u8,
+    ) -> Result<Self, FacialHairError> {
+        if mustache_size > 8 {
+            return Err(FacialHairError::SizeInvalid);
+        }
+        if mustache_y > 16 {
+            return Err(FacialHairError::YInvalid);
+        }
+
+        Ok(Self {
+            beard_type,
+            mustache_type,
+            color,
+            mustache_size,
+            mustache_y,
+        })
+    }
+
     pub fn beard_type(&self) -> BeardType {
         self.beard_type
     }
@@ -41,16 +64,22 @@ impl FromByteHandler for FacialHair {
         let mut handler = handler.try_into()?;
         let mustache_y = handler.copy_byte(1) & 0x1F;
         handler.shift_right(1);
-        Ok(Self {
+
+        let mustache_size = handler.copy_byte(1) >> 4;
+        let color = HairColor::try_from(handler.copy_byte(0) & 0x07)
+            .map_err(|_| FacialHairError::ColorInvalid)?;
+        let mustache_type = MustacheType::try_from(handler.copy_byte(0) >> 5)
+            .map_err(|_| FacialHairError::MustacheTypeInvalid)?;
+        let beard_type = BeardType::try_from((handler.copy_byte(0) >> 3) & 0x03)
+            .map_err(|_| FacialHairError::BeardTypeInvalid)?;
+
+        Ok(Self::new(
+            beard_type,
+            mustache_type,
+            color,
+            mustache_size,
             mustache_y,
-            mustache_size: handler.copy_byte(1) >> 4,
-            color: HairColor::try_from(handler.copy_byte(0) & 0x07)
-                .map_err(|_| FacialHairError::ColorInvalid)?,
-            mustache_type: MustacheType::try_from(handler.copy_byte(0) >> 5)
-                .map_err(|_| FacialHairError::MustacheTypeInvalid)?,
-            beard_type: BeardType::try_from((handler.copy_byte(0) >> 3) & 0x03)
-                .map_err(|_| FacialHairError::BeardTypeInvalid)?,
-        })
+        )?)
     }
 }
 
@@ -62,6 +91,10 @@ pub enum FacialHairError {
     MustacheTypeInvalid,
     #[error("Color is invalid")]
     ColorInvalid,
+    #[error("Size is invalid")]
+    SizeInvalid,
+    #[error("Y position is invalid")]
+    YInvalid,
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
     #[error("")]

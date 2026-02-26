@@ -10,6 +10,24 @@ pub struct Mole {
     size: u8,
 }
 impl Mole {
+    pub fn new(has_mole: bool, x: u8, y: u8, size: u8) -> Result<Self, MoleError> {
+        if x > 16 {
+            return Err(MoleError::XInvalid);
+        }
+        if y > 30 {
+            return Err(MoleError::YInvalid);
+        }
+        if size > 8 {
+            return Err(MoleError::SizeInvalid);
+        }
+        Ok(Self {
+            has_mole,
+            x,
+            y,
+            size,
+        })
+    }
+
     pub fn has_mole(&self) -> bool {
         self.has_mole
     }
@@ -37,17 +55,18 @@ impl FromByteHandler for Mole {
         handler.shift_right(2);
         let y = handler.copy_byte(1) >> 3;
         let size = handler.copy_byte(0) & 0x0F;
-        Ok(Self {
-            has_mole,
-            x,
-            y,
-            size,
-        })
+        Ok(Self::new(has_mole, x, y, size)?)
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum MoleError {
+    #[error("Size is invalid")]
+    SizeInvalid,
+    #[error("Y position is invalid")]
+    YInvalid,
+    #[error("X position is invalid")]
+    XInvalid,
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
     #[error("")]

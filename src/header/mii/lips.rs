@@ -11,6 +11,26 @@ pub struct Lips {
 }
 
 impl Lips {
+    pub fn new(
+        y: u8,
+        size: u8,
+        lips_type: LipsType,
+        lips_color: LipsColor,
+    ) -> Result<Self, LipsError> {
+        if y > 18 {
+            return Err(LipsError::YInvalid);
+        }
+        if size > 8 {
+            return Err(LipsError::SizeInvalid);
+        }
+        Ok(Self {
+            y,
+            size,
+            lips_type,
+            lips_color,
+        })
+    }
+
     pub fn y(&self) -> u8 {
         self.y
     }
@@ -42,12 +62,7 @@ impl FromByteHandler for Lips {
             .map_err(|_| LipsError::ColorInvalid)?;
         let size = handler.copy_byte(1) >> 4;
 
-        Ok(Self {
-            lips_type,
-            y,
-            lips_color,
-            size,
-        })
+        Ok(Self::new(y, size, lips_type, lips_color)?)
     }
 }
 
@@ -57,6 +72,10 @@ pub enum LipsError {
     TypeInvalid,
     #[error("Color is invalid")]
     ColorInvalid,
+    #[error("Size is invalid")]
+    SizeInvalid,
+    #[error("Y position is invalid")]
+    YInvalid,
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
     #[error("")]

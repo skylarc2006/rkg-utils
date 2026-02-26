@@ -24,6 +24,14 @@ pub enum HeadError {
 }
 
 impl Head {
+    pub fn new(shape: HeadShape, skin_tone: SkinTone, face_features: FaceFeatures) -> Self {
+        Self {
+            shape,
+            skin_tone,
+            face_features,
+        }
+    }
+
     pub fn shape(&self) -> HeadShape {
         self.shape
     }

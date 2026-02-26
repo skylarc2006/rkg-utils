@@ -11,6 +11,27 @@ pub struct Glasses {
 }
 
 impl Glasses {
+    pub fn new(
+        y: u8,
+        size: u8,
+        glasses_type: GlassesType,
+        glasses_color: GlassesColor,
+    ) -> Result<Self, GlassesError> {
+        if size > 7 {
+            return Err(GlassesError::SizeInvalid);
+        }
+        if y > 20 {
+            return Err(GlassesError::YInvalid);
+        }
+
+        Ok(Self {
+            y,
+            size,
+            glasses_type,
+            glasses_color,
+        })
+    }
+
     pub fn y(&self) -> u8 {
         self.y
     }
@@ -42,12 +63,7 @@ impl FromByteHandler for Glasses {
             .map_err(|_| GlassesError::ColorInvalid)?;
         let size = handler.copy_byte(1) >> 4;
 
-        Ok(Self {
-            glasses_type,
-            y,
-            glasses_color,
-            size,
-        })
+        Ok(Self::new(y, size, glasses_type, glasses_color)?)
     }
 }
 
@@ -57,6 +73,10 @@ pub enum GlassesError {
     TypeInvalid,
     #[error("Color is invalid")]
     ColorInvalid,
+    #[error("Size is invalid")]
+    SizeInvalid,
+    #[error("Y position is invalid")]
+    YInvalid,
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
     #[error("")]
