@@ -33,7 +33,7 @@ impl Eyebrows {
         if x > 12 {
             return Err(EyebrowsError::XInvalid);
         }
-        if (y < 3) | (y > 18) {
+        if !(3..=18).contains(&y) {
             return Err(EyebrowsError::YInvalid);
         }
 
@@ -106,14 +106,14 @@ impl FromByteHandler for Eyebrows {
         let size = handler.copy_byte(2) & 0x0F;
         handler.shift_right(2);
         let rotation = handler.copy_byte(1) >> 3;
-        Ok(Self::new(
+        Self::new(
             rotation,
             size,
             x,
             y,
             eyebrow_color,
             eyebrow_type,
-        )?)
+        )
     }
 }
 

@@ -33,15 +33,14 @@ pub struct InputData {
 
 impl InputData {
     /// Expects RKG data 0x88..(end of input data).
-    /// End of input data is either 0x04 from the end of the file of vanilla ghosts,
-    /// or if it's a CTGP ghost the input data end is whatever the CTGP metadata size is.
     pub fn new(input_data: &[u8]) -> Result<Self, InputDataError> {
-        let raw_data = Vec::from(input_data);
+        let mut raw_data = Vec::from(input_data);
 
         let input_data = if input_data[4..8] == [0x59, 0x61, 0x7A, 0x31] {
             // YAZ1 header, decompress
             yaz1_decompress(&input_data[4..]).unwrap()
         } else {
+            raw_data.resize(0x2774, 0x00);
             Vec::from(input_data)
         };
 

@@ -1,3 +1,5 @@
+use chrono::NaiveDateTime;
+
 use crate::{
     Ghost,
     ctgp_metadata::CTGPMetadata,
@@ -10,7 +12,19 @@ use crate::{
         in_game_time::InGameTime,
         location::{Location, constants::*},
         mii::{
-            birthday::Birthday, build::Build, eyebrows::{EyebrowType, Eyebrows}, eyes::{EyeColor, EyeType, Eyes}, facial_hair::{BeardType, FacialHair, MustacheType}, favorite_color::FavoriteColor, glasses::{Glasses, GlassesColor, GlassesType}, hair::{Hair, HairColor, HairType}, head::{FaceFeatures, Head, HeadShape, SkinTone}, lips::{Lips, LipsColor, LipsType}, mole::Mole, nose::{Nose, NoseType}
+            birthday::Birthday,
+            build::Build,
+            eyebrows::{EyebrowType, Eyebrows},
+            eyes::{EyeColor, EyeType, Eyes},
+            facial_hair::{BeardType, FacialHair, MustacheType},
+            favorite_color::FavoriteColor,
+            glasses::{Glasses, GlassesColor, GlassesType},
+            hair::{Hair, HairColor, HairType},
+            head::{FaceFeatures, Head, HeadShape, SkinTone},
+            lips::{Lips, LipsColor, LipsType},
+            mii_type::MiiType,
+            mole::Mole,
+            nose::{Nose, NoseType},
         },
         slot_id::SlotId,
     },
@@ -755,7 +769,10 @@ fn write_to_ghost() {
     mii.set_favorite_color(FavoriteColor::Red);
     mii.set_name("DUMBASS");
     mii.set_build(Build::new(100, 50).unwrap());
-    mii.set_mii_id(0xB00B1355);
+    mii.set_mii_type(MiiType::Foreign);
+    mii.set_creation_date(
+        NaiveDateTime::parse_from_str("2023-10-27 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    );
     mii.set_system_id(0x453AE846);
     mii.set_head(Head::new(
         HeadShape::Rounded,
@@ -808,21 +825,26 @@ fn write_to_ghost() {
     assert_eq!(ghost.header().lap_split_times()[1].to_string(), "00:42.069");
     assert_eq!(ghost.header().lap_split_times()[2].to_string(), "00:21.910");
     assert_eq!(ghost.header().location().country(), Country::UnitedStates);
-    assert_eq!(ghost.header().location().subregion(), Subregion::UnitedStates(UnitedStatesSubregion::California));
+    assert_eq!(
+        ghost.header().location().subregion(),
+        Subregion::UnitedStates(UnitedStatesSubregion::California)
+    );
 
     // Mii Data
     assert!(ghost.header().mii().is_girl());
     assert_eq!(ghost.header().mii().birthday().month(), Some(4));
     assert_eq!(ghost.header().mii().birthday().day(), Some(20));
-    assert_eq!(
-        ghost.header().mii().favorite_color(),
-        FavoriteColor::Red
-    );
+    assert_eq!(ghost.header().mii().favorite_color(), FavoriteColor::Red);
     assert_eq!(ghost.header().mii().name(), "DUMBASS");
     assert_eq!(ghost.header().mii().build().height(), 100);
     assert_eq!(ghost.header().mii().build().weight(), 50);
 
-    assert_eq!(ghost.header().mii().mii_id(), 0xB00B1355);
+    // assert_eq!(ghost.header().mii().mii_id(), 0xB00B1355);
+    assert_eq!(ghost.header().mii().mii_type(), MiiType::Foreign);
+    assert_eq!(
+        ghost.header().mii().creation_date(),
+        NaiveDateTime::parse_from_str("2023-10-27 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+    );
     assert_eq!(ghost.header().mii().system_id(), 0x453AE846);
 
     assert_eq!(ghost.header().mii().head().shape(), HeadShape::Rounded);
@@ -839,10 +861,7 @@ fn write_to_ghost() {
         ghost.header().mii().hair().hair_type(),
         HairType::NormalMedium
     );
-    assert_eq!(
-        ghost.header().mii().hair().hair_color(),
-        HairColor::Black
-    );
+    assert_eq!(ghost.header().mii().hair().hair_color(), HairColor::Black);
     assert!(ghost.header().mii().hair().is_flipped());
 
     assert_eq!(
@@ -893,7 +912,10 @@ fn write_to_ghost() {
         ghost.header().mii().facial_hair().beard_type(),
         BeardType::GoateeLong
     );
-    assert_eq!(ghost.header().mii().facial_hair().color(), HairColor::Walnut);
+    assert_eq!(
+        ghost.header().mii().facial_hair().color(),
+        HairColor::Walnut
+    );
     assert_eq!(ghost.header().mii().facial_hair().mustache_size(), 3);
     assert_eq!(ghost.header().mii().facial_hair().mustache_y(), 9);
 
@@ -906,8 +928,22 @@ fn write_to_ghost() {
 
     assert!(ghost.header().verify_mii_crc16());
 
-    let _ = ghost.save_to_file("./test_ghosts/JC_transformed_ghost.rkg").unwrap();
+    let _ = ghost
+        .save_to_file("./test_ghosts/JC_transformed_ghost.rkg")
+        .unwrap();
 }
+
+// This test requires a "ctgp_ghost_collection" folder not included in the rkg-utils repository, as it's 6.5k ghost files.
+// Downloadable here: https://drive.google.com/file/d/1g-aY0mcBcMq9Zse0dkQEmZqHxV_UhmXM/view?usp=sharing
+/*
+#[test]
+fn bulk_ghost_collection() {
+    for entry in fs::read_dir("./test_ghosts/ctgp_ghost_collection").unwrap() {
+        let _ghost = Ghost::new_from_file(entry.as_ref().unwrap().path())
+            .expect(format!("Failed on ghost {:?}", entry.as_ref().unwrap().file_name()).as_str());
+    }
+}
+*/
 
 #[test]
 fn test_compare_saved_ghost() {

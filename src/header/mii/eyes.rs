@@ -103,14 +103,7 @@ impl FromByteHandler for Eyes {
         let x = handler.copy_byte(3) & 0x0F;
         let size = handler.copy_byte(3) >> 4;
 
-        Ok(Self::new(
-            rotation,
-            size,
-            x,
-            y,
-            eye_color,
-            eye_type,
-        )?)
+        Ok(Self::new(rotation, size, x, y, eye_color, eye_type)?)
     }
 }
 

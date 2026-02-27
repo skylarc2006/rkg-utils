@@ -3,8 +3,8 @@ use crate::ctgp_metadata::exact_finish_time::ExactFinishTime;
 use crate::ctgp_metadata::{category::Category, ctgp_version::CTGPVersion};
 use crate::header::in_game_time::InGameTime;
 use crate::{byte_handler::ByteHandler, input_data::yaz1_decompress};
-use chrono::{Duration, TimeDelta, prelude::*};
-use sha1::{Digest, Sha1};
+use crate::{compute_sha1_hex, datetime_from_timestamp, duration_from_ticks};
+use chrono::{TimeDelta, prelude::*};
 
 pub mod category;
 pub mod ctgp_version;
@@ -314,6 +314,11 @@ impl CTGPMetadata {
         &self.ghost_sha1
     }
 
+    pub(crate) fn set_ghost_sha1(&mut self, ghost_sha1: &[u8]) -> Result<(), CTGPMetadataError> {
+        self.ghost_sha1 = ghost_sha1.try_into()?;
+        Ok(())
+    }
+
     pub fn player_id(&self) -> u64 {
         self.player_id
     }
@@ -322,8 +327,8 @@ impl CTGPMetadata {
         self.exact_finish_time
     }
 
-    pub fn possible_ctgp_versions(&self) -> &Option<Vec<CTGPVersion>> {
-        &self.possible_ctgp_versions
+    pub fn possible_ctgp_versions(&self) -> Option<&Vec<CTGPVersion>> {
+        self.possible_ctgp_versions.as_ref()
     }
 
     pub fn lap_split_suspicious_intersections(&self) -> Option<&[bool]> {
@@ -423,33 +428,7 @@ impl CTGPMetadata {
     }
 }
 
-fn datetime_from_timestamp(tick_count: u64) -> NaiveDateTime {
-    let clock_rate = 60_750_000.0; // 60.75 MHz tick speed
-    let epoch_shift = 946_684_800; // Shifts epoch from 1970-01-01 to 2000-01-01 (which is what the Wii uses)
-    let total_seconds = tick_count as f64 / clock_rate;
-    let total_nanoseconds = (total_seconds * 1_000_000_000.0) as i64;
-
-    let duration = Duration::nanoseconds(total_nanoseconds);
-    let epoch = DateTime::from_timestamp(epoch_shift, 0).unwrap();
-
-    epoch.naive_utc() + duration
-}
-
-fn duration_from_ticks(tick_count: u64) -> TimeDelta {
-    let clock_rate = 60_750_000.0; // 60.75 MHz tick speed
-    let total_seconds = tick_count as f64 / clock_rate;
-    let total_milliseconds = (total_seconds * 1_000.0) as i64;
-
-    Duration::milliseconds(total_milliseconds)
-}
-
 /// Used with a face button byte
 fn contains_ctgp_pause(buttons: u8) -> bool {
     buttons & 0x40 != 0
-}
-
-fn compute_sha1_hex(input: &[u8]) -> [u8; 0x14] {
-    let mut hasher = Sha1::new();
-    hasher.update(input);
-    hasher.finalize().into()
 }

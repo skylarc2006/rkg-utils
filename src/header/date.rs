@@ -31,7 +31,7 @@ impl Date {
             1 | 3 | 5 | 7 | 8 | 10 | 12 if day > 31 => Err(DateError::DayInvalid),
             4 | 6 | 9 | 11 if day > 30 => Err(DateError::DayInvalid),
             2 if year.is_multiple_of(4) && day > 29 => Err(DateError::DayInvalid),
-            2 if day > 28 => Err(DateError::DayInvalid),
+            2 if !year.is_multiple_of(4) && day > 28 => Err(DateError::DayInvalid),
             1..=12 => Ok(Self { year, month, day }),
             _ => Err(DateError::MonthInvalid),
         }

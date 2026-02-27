@@ -1,5 +1,7 @@
 // http://wiibrew.org/wiki/Mii_Data#Mii_format
 
+use chrono::{DateTime, Duration, NaiveDateTime};
+
 use crate::{
     byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
     header::mii::{
@@ -13,6 +15,7 @@ use crate::{
         hair::{Hair, HairError},
         head::{Head, HeadError},
         lips::{Lips, LipsError},
+        mii_type::{MiiType, MiiTypeError},
         mole::{Mole, MoleError},
         nose::{Nose, NoseError},
     },
@@ -31,6 +34,7 @@ pub mod glasses;
 pub mod hair;
 pub mod head;
 pub mod lips;
+pub mod mii_type;
 pub mod mole;
 pub mod nose;
 
@@ -60,10 +64,12 @@ pub enum MiiError {
     LipsError(#[from] LipsError),
     #[error("Glasses Error: {0}")]
     GlassesError(#[from] GlassesError),
-    #[error("FacialHair Error: {0}")]
+    #[error("Facial Hair Error: {0}")]
     FacialHairError(#[from] FacialHairError),
     #[error("Mole Error: {0}")]
     MoleError(#[from] MoleError),
+    #[error("Mii Type Error: {0}")]
+    MiiTypeError(#[from] MiiTypeError),
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
     #[error("IO Error: {0}")]
@@ -79,6 +85,8 @@ pub struct Mii {
     is_favorite: bool,
     name: String,
     build: Build,
+    mii_type: MiiType,
+    creation_date: NaiveDateTime,
     mii_id: u32,
     system_id: u32,
     head: Head,
@@ -110,6 +118,13 @@ impl Mii {
 
         let build = Build::from_byte_handler(&raw_data[0x16..=0x17])?;
 
+        let mii_type = MiiType::try_from(&raw_data[0x18] >> 5)?;
+
+        let mut mii_id = raw_data[0x18..0x1C].to_owned();
+        mii_id[0] = mii_id[0] & 0x1F;
+        let creation_date =
+            creation_date_from_timestamp(u32::from_be_bytes(mii_id.try_into().unwrap()));
+
         let mii_id = ByteHandler::try_from(&raw_data[0x18..=0x1B])?.copy_dword();
         let system_id = ByteHandler::try_from(&raw_data[0x1C..=0x1F])?.copy_dword();
 
@@ -139,6 +154,8 @@ impl Mii {
             is_favorite,
             name,
             build,
+            mii_type,
+            creation_date,
             mii_id,
             system_id,
             head,
@@ -275,14 +292,40 @@ impl Mii {
         self.is_modified = true;
     }
 
-    pub fn mii_id(&self) -> u32 {
-        self.mii_id
+    pub fn mii_type(&self) -> MiiType {
+        self.mii_type
     }
 
-    pub fn set_mii_id(&mut self, mii_id: u32) {
-        self.mii_id = mii_id;
-        self.raw_data_mut()[0x18..0x1C].copy_from_slice(&mii_id.to_be_bytes());
-        self.is_modified = true;
+    pub fn set_mii_type(&mut self, mii_type: MiiType) {
+        if self.mii_type() == mii_type {
+            return;
+        }
+        let raw_data = self.raw_data_mut();
+        write_bits(raw_data, 0x18, 0, 3, u8::from(mii_type) as u64);
+        self.mii_id = u32::from_be_bytes(raw_data[0x18..0x1C].try_into().unwrap());
+        self.mii_type = mii_type;
+    }
+
+    pub fn creation_date(&self) -> NaiveDateTime {
+        self.creation_date
+    }
+
+    pub fn set_creation_date(&mut self, creation_date: NaiveDateTime) {
+        // TODO: determine limits for timestamp
+        let raw_data = self.raw_data_mut();
+        write_bits(
+            raw_data,
+            0x18,
+            3,
+            29,
+            timestamp_from_creation_date(creation_date) as u64,
+        );
+        self.mii_id = u32::from_be_bytes(raw_data[0x18..0x1C].try_into().unwrap());
+        self.creation_date = creation_date;
+    }
+
+    pub fn mii_id(&self) -> u32 {
+        self.mii_id
     }
 
     pub fn system_id(&self) -> u32 {
@@ -603,4 +646,26 @@ fn string_to_utf16be(string: &str) -> Vec<u8> {
         .iter()
         .flat_map(|&u| u.to_be_bytes())
         .collect()
+}
+
+fn creation_date_from_timestamp(value: u32) -> NaiveDateTime {
+    let clock_rate = 0.25; // 3 second ticks
+    let epoch_shift = 1_136_073_600; // Shifts epoch from 1970-01-01 to 2006-01-01 (which is what Miis use)
+    let total_seconds = (value as f64 / clock_rate).floor() as i64;
+
+    let duration = Duration::seconds(total_seconds);
+    let epoch = DateTime::from_timestamp(epoch_shift, 0).unwrap();
+
+    epoch.naive_utc() + duration
+}
+
+fn timestamp_from_creation_date(date: NaiveDateTime) -> u32 {
+    let clock_rate = 0.25; // 3 second ticks
+    let epoch_shift = 1_136_073_600; // Shifts epoch from 1970-01-01 to 2006-01-01 (which is what Miis use)
+    let epoch = DateTime::from_timestamp(epoch_shift, 0).unwrap();
+
+    let duration = date.signed_duration_since(epoch.naive_utc());
+    let total_seconds = duration.num_seconds();
+
+    (total_seconds as f64 * clock_rate).floor() as u32
 }

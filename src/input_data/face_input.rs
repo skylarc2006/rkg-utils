@@ -9,6 +9,7 @@ pub enum FaceButton {
     Accelerator,
     Brake,
     Drift,
+    BrakeDrift,
     Item,
     Unknown,
 }
@@ -28,9 +29,14 @@ pub fn parse_face_buttons(value: u8) -> Result<Vec<FaceButton>, FaceButtonError>
         buttons.push(FaceButton::Drift);
     }
 
+    if value & 0x10 != 0 {
+        buttons.push(FaceButton::BrakeDrift);
+    }
+
     if value & 0x04 != 0 {
         buttons.push(FaceButton::Item);
     }
+
     // 0x40 is the CTGP pause mask and would trigger this otherwise
     if value & 0xF0 != 0 && value & 0x40 == 0 {
         buttons.push(FaceButton::Unknown);
