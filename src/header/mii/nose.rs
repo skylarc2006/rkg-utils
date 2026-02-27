@@ -46,7 +46,7 @@ impl FromByteHandler for Nose {
         let size = handler.copy_byte(0) & 0x0F;
         let y = handler.copy_byte(1) >> 3;
 
-        Ok(Self::new(y, size, nose_type)?)
+        Self::new(y, size, nose_type)
     }
 }
 

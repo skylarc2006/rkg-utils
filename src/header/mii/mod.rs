@@ -121,7 +121,7 @@ impl Mii {
         let mii_type = MiiType::try_from(&raw_data[0x18] >> 5)?;
 
         let mut mii_id = raw_data[0x18..0x1C].to_owned();
-        mii_id[0] = mii_id[0] & 0x1F;
+        mii_id[0] &= 0x1F;
         let creation_date =
             creation_date_from_timestamp(u32::from_be_bytes(mii_id.try_into().unwrap()));
 

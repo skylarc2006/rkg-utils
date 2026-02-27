@@ -62,7 +62,7 @@ impl FromByteHandler for Lips {
             .map_err(|_| LipsError::ColorInvalid)?;
         let size = handler.copy_byte(1) >> 4;
 
-        Ok(Self::new(y, size, lips_type, lips_color)?)
+        Self::new(y, size, lips_type, lips_color)
     }
 }
 

@@ -55,7 +55,7 @@ impl FromByteHandler for Mole {
         handler.shift_right(2);
         let y = handler.copy_byte(1) >> 3;
         let size = handler.copy_byte(0) & 0x0F;
-        Ok(Self::new(has_mole, x, y, size)?)
+        Self::new(has_mole, x, y, size)
     }
 }
 

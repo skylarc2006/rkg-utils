@@ -63,7 +63,7 @@ impl FromByteHandler for Glasses {
             .map_err(|_| GlassesError::ColorInvalid)?;
         let size = handler.copy_byte(1) >> 4;
 
-        Ok(Self::new(y, size, glasses_type, glasses_color)?)
+        Self::new(y, size, glasses_type, glasses_color)
     }
 }
 
