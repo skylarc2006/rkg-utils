@@ -8,10 +8,10 @@ use crate::{
         in_game_time::{InGameTime, InGameTimeError},
         location::{
             Location,
-            constants::{Country, CountryError, SubregionError},
+            constants::{Country, CountryError, SubregionError, Version},
         },
         mii::{Mii, MiiError},
-        slot_id::{SlotId, SlotIdError},
+        slot_id::{SlotId, SlotIdError}, transmission_mod::{TransmissionMod, TransmissionModError},
     },
     write_bits,
 };
@@ -26,6 +26,7 @@ pub mod in_game_time;
 pub mod location;
 pub mod mii;
 pub mod slot_id;
+pub mod transmission_mod;
 
 #[derive(thiserror::Error, Debug)]
 pub enum HeaderError {
@@ -45,6 +46,8 @@ pub enum HeaderError {
     DateError(#[from] DateError),
     #[error("Controller Error: {0}")]
     ControllerError(#[from] ControllerError),
+    #[error("Transmission Mod Error: {0}")]
+    TransmissionModError(#[from] TransmissionModError),
     #[error("Ghost Type Error: {0}")]
     GhostTypeError(#[from] GhostTypeError),
     #[error("Mii Error: {0}")]
@@ -69,6 +72,7 @@ pub struct Header {
     date_set: Date,
     controller: Controller,
     is_compressed: bool,
+    transmission_mod: TransmissionMod,
     ghost_type: GhostType,
     is_automatic_drift: bool,
     decompressed_input_data_length: u16,
@@ -102,6 +106,7 @@ impl Header {
         let date_set = Date::from_byte_handler(&header_data[0x09..=0x0B])?;
         let controller = Controller::from_byte_handler(header_data[0x0B])?;
         let is_compressed = ByteHandler::from(header_data[0x0C]).read_bool(3);
+        let transmission_mod = TransmissionMod::from_byte_handler(header_data[0x0C])?;
         let ghost_type = GhostType::from_byte_handler(&header_data[0x0C..=0x0D])?;
         let is_automatic_drift = ByteHandler::from(header_data[0x0D]).read_bool(1);
         let decompressed_input_data_length =
@@ -118,7 +123,7 @@ impl Header {
         let codes = ByteHandler::try_from(&header_data[0x34..=0x37]).unwrap();
 
         let location =
-            Location::find(codes.copy_byte(0), codes.copy_byte(1), None).unwrap_or_default();
+            Location::find(codes.copy_byte(0), codes.copy_byte(1), Some(Version::ER12)).unwrap_or_default();
 
         let mii = Mii::new(&header_data[0x3C..0x3C + 0x4A])?;
 
@@ -132,6 +137,7 @@ impl Header {
             date_set,
             controller,
             is_compressed,
+            transmission_mod,
             ghost_type,
             is_automatic_drift,
             decompressed_input_data_length,
@@ -240,6 +246,15 @@ impl Header {
     pub(crate) fn set_compressed(&mut self, is_compressed: bool) {
         self.is_compressed = is_compressed;
         write_bits(self.raw_data_mut(), 0x0C, 4, 1, is_compressed as u64);
+    }
+
+    pub fn transmission_mod(&self) -> TransmissionMod {
+        self.transmission_mod
+    }
+
+    pub fn set_transmission_mod(&mut self, transmission_mod: TransmissionMod) {
+        self.transmission_mod = transmission_mod;
+        write_bits(self.raw_data_mut(), 0x0C, 5, 2, u8::from(transmission_mod) as u64);
     }
 
     pub fn ghost_type(&self) -> GhostType {

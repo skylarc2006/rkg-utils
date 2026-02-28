@@ -30,7 +30,7 @@ use crate::{
     },
     input_data::{InputData, yaz1_compress, yaz1_decompress},
 };
-use std::io::Read;
+use std::{fs, io::Read};
 
 #[test]
 fn test_rkg_header() {
@@ -804,7 +804,8 @@ fn write_to_ghost() {
     mii.set_creator_name("IDIOT");
 
     // new ghost asserts
-    let mut ghost = Ghost::new(&ghost.save_to_bytes().unwrap()).unwrap();
+    ghost.update_raw_data().unwrap();
+    let mut ghost = Ghost::new(&ghost.raw_data).unwrap();
 
     // General ghost info
     assert_eq!(ghost.header().finish_time().minutes(), 1);

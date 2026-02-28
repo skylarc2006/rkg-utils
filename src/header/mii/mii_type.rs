@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(thiserror::Error, Debug)]
 pub enum MiiTypeError {
     #[error("Invalid Mii type")]
@@ -6,7 +8,7 @@ pub enum MiiTypeError {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MiiType {
-    Regular,
+    Normal,
     Foreign,
     Special,
 }
@@ -21,7 +23,7 @@ impl TryFrom<u8> for MiiType {
         } else if (value & 0x05) == 0 {
             Ok(MiiType::Special)
         } else if value <= 0x07 {
-            Ok(MiiType::Regular)
+            Ok(MiiType::Normal)
         } else {
             Err(MiiTypeError::MiiTypeInvalid)
         }
@@ -31,9 +33,19 @@ impl TryFrom<u8> for MiiType {
 impl From<MiiType> for u8 {
     fn from(value: MiiType) -> Self {
         match value {
-            MiiType::Regular => 0x04,
+            MiiType::Normal => 0x04,
             MiiType::Foreign => 0x06,
             MiiType::Special => 0x02,
+        }
+    }
+}
+
+impl Display for MiiType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MiiType::Normal => write!(f, "Normal"),
+            MiiType::Foreign => write!(f, "Foreign"),
+            MiiType::Special => write!(f, "Special"),
         }
     }
 }

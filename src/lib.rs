@@ -24,8 +24,6 @@ pub mod input_data;
  * Unfinished/unimplemented functionality
  * ----------------------------------------------
  * Implement MKW-SP footer support
- * Implement Retro Rewind data support
- * Implement Pulsar data support
  * Implement TryFrom<_> for T where T: Into<ByteHandler>, relies on https://github.com/rust-lang/rust/issues/31844 currently
  * Represent at a Type-system level which types can convert from T to TypeHandler to whichever Struct
  * Optimize Little-Endian calculations
@@ -54,6 +52,7 @@ pub enum GhostError {
 }
 
 pub struct Ghost {
+    raw_data: Vec<u8>,
     header: Header,
     input_data: InputData,
     base_crc32: u32,
@@ -95,6 +94,7 @@ impl Ghost {
         let input_data = InputData::new(&bytes[0x88..0x88 + input_data_len])?;
 
         Ok(Self {
+            raw_data: bytes.to_vec(),
             header,
             input_data,
             base_crc32,
@@ -104,7 +104,8 @@ impl Ghost {
         })
     }
 
-    pub fn save_to_bytes(&mut self) -> Result<Vec<u8>, GhostError> {
+    /// Updates raw data field of ghost with all modifications.
+    pub fn update_raw_data(&mut self) -> Result<(), GhostError> {
         let mii_bytes = self.header().mii().raw_data().to_vec();
         self.header_mut().set_mii(Mii::new(mii_bytes)?);
         self.header_mut().fix_mii_crc16();
@@ -113,28 +114,69 @@ impl Ghost {
 
         buf.extend_from_slice(self.input_data().raw_data());
 
+        let header_len = 0x88;
+        let new_input_data_end = header_len + self.input_data().raw_data().len();
+
+        // Find input data length of old data
+        let old_input_data_end = if self.raw_data[0x8C..0x90] == *b"Yaz1" {
+            u32::from_be_bytes(self.raw_data[0x88..0x8C].try_into().unwrap()) as usize
+        } else {
+            header_len + 0x2774
+        };
+
+        if new_input_data_end > old_input_data_end {
+            let diff = new_input_data_end - old_input_data_end;
+            let insert_pos = old_input_data_end;
+            self.raw_data.splice(insert_pos..insert_pos, vec![0u8; diff]);
+        } else if new_input_data_end < old_input_data_end {
+            let diff = old_input_data_end - new_input_data_end;
+            let remove_end = old_input_data_end;
+            self.raw_data.drain(remove_end - diff..remove_end);
+        }
+
+        self.raw_data[..new_input_data_end].copy_from_slice(&buf[..new_input_data_end]);
+        let base_crc32 = crc32(&buf);
+
         if let Some(ctgp_metadata) = self.ctgp_metadata()
             && self.should_preserve_external_metadata()
         {
-            let base_crc32 = crc32(&buf);
             buf.extend_from_slice(&base_crc32.to_be_bytes());
             buf.extend_from_slice(ctgp_metadata.raw_data());
+            
+            let metadata_len = ctgp_metadata.len();
+            self.raw_data.drain(new_input_data_end..);
+            self.raw_data.extend_from_slice(&buf[buf.len() - metadata_len..]);
+            self.raw_data.extend_from_slice(&[0u8; 4]);
         }
 
-        let crc32 = crc32(&buf);
-        buf.extend_from_slice(&crc32.to_be_bytes());
+        else if !self.should_preserve_external_metadata()
+            && self.raw_data.len() >= new_input_data_end + 0x08 {
+            self.raw_data.drain(new_input_data_end + 0x04..);
+        }
 
+        else if self.should_preserve_external_metadata()
+            && self.raw_data.len() >= new_input_data_end + 0x08
+        {
+            self.raw_data[new_input_data_end..new_input_data_end + 0x04].copy_from_slice(&base_crc32.to_be_bytes());
+        }
+
+        let len = self.raw_data.len();
+        let crc32 = crc32(&self.raw_data[..len - 0x04]);
+        self.raw_data[len - 0x04..].copy_from_slice(&crc32.to_be_bytes());
+
+
+        let sha1 = compute_sha1_hex(&self.raw_data);
         if let Some(ctgp_metadata) = self.ctgp_metadata_mut() {
-            ctgp_metadata.set_ghost_sha1(&compute_sha1_hex(&buf))?;
+            ctgp_metadata.set_ghost_sha1(&sha1)?;
         }
 
-        Ok(buf)
+        Ok(())
     }
 
     pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
-        let buf = self.save_to_bytes()?;
+        self.update_raw_data()?;
         let mut file = std::fs::File::create(path)?;
-        file.write_all(&buf)?;
+        file.write_all(&self.raw_data)?;
 
         Ok(())
     }
@@ -155,6 +197,14 @@ impl Ghost {
 
         self.input_data_mut().decompress();
         self.header_mut().set_compressed(false);
+    }
+
+    pub fn raw_data(&self) -> &[u8] {
+        &self.raw_data
+    }
+
+    pub fn raw_data_mut(&mut self) -> &mut [u8] {
+        &mut self.raw_data
     }
 
     pub fn header(&self) -> &Header {
