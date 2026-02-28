@@ -36,6 +36,8 @@ pub enum HeaderError {
     NotCorrectSize,
     #[error("Friend ghost number out of range (1-30)")]
     FriendNumberOutOfRange,
+    #[error("Lap split index not semantically valid")]
+    LapSplitIndexError,
     #[error("In Game Time Error: {0}")]
     InGameTimeError(#[from] InGameTimeError),
     #[error("Slot ID Error: {0}")]
@@ -77,7 +79,7 @@ pub struct Header {
     is_automatic_drift: bool,
     decompressed_input_data_length: u16,
     lap_count: u8,
-    lap_split_times: [InGameTime; 10],
+    lap_split_times: [InGameTime; 11],
     location: Location,
     mii: Mii,
     mii_crc16: u16,
@@ -113,7 +115,7 @@ impl Header {
             ByteHandler::try_from(&header_data[0x0E..=0x0F])?.copy_word(0);
 
         let lap_count = header_data[0x10];
-        let mut lap_split_times: [InGameTime; 10] = [Default::default(); 10];
+        let mut lap_split_times: [InGameTime; 11] = [Default::default(); 11];
         for index in 0..10 {
             let start = (0x11 + index * 3) as usize;
             lap_split_times[index as usize] =
@@ -287,8 +289,11 @@ impl Header {
         &self.lap_split_times[0..self.lap_count as usize]
     }
 
-    pub fn lap_split_time(&self, idx: usize) -> InGameTime {
-        self.lap_split_times[idx]
+    pub fn lap_split_time(&self, idx: usize) -> Result<InGameTime, HeaderError> {
+        if idx >= self.lap_count as usize {
+            return Err(HeaderError::LapSplitIndexError);
+        }
+        Ok(self.lap_split_times[idx])
     }
 
     pub fn set_lap_split_time(&mut self, index: usize, lap_split_time: InGameTime) {
