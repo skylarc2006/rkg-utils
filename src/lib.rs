@@ -75,7 +75,7 @@ impl Ghost {
         let base_crc32;
 
         let ctgp_metadata = if let Ok(ctgp_metadata) = CTGPMetadata::new(bytes) {
-            let input_data_end_offset = bytes.len() - ctgp_metadata.len() - 0x04;
+            let input_data_end_offset = bytes.len() - ctgp_metadata.len() - 0x08;
             base_crc32 = u32::from_be_bytes(
                 bytes[input_data_end_offset..input_data_end_offset + 0x04].try_into()?,
             );
@@ -145,7 +145,7 @@ impl Ghost {
             
             let metadata_len = ctgp_metadata.len();
             self.raw_data.drain(new_input_data_end..);
-            self.raw_data.extend_from_slice(&buf[buf.len() - metadata_len..]);
+            self.raw_data.extend_from_slice(&buf[buf.len() - metadata_len - 0x04..]);
             self.raw_data.extend_from_slice(&[0u8; 4]);
         }
 

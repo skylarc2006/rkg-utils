@@ -940,7 +940,7 @@ fn write_to_ghost() {
 #[test]
 fn bulk_ghost_collection() {
     for entry in fs::read_dir("./test_ghosts/ctgp_ghost_collection").unwrap() {
-        let _ghost = Ghost::new_from_file(entry.as_ref().unwrap().path())
+        let ghost = Ghost::new_from_file(entry.as_ref().unwrap().path())
             .expect(format!("Failed on ghost {:?}", entry.as_ref().unwrap().file_name()).as_str());
     }
 }

@@ -293,7 +293,7 @@ impl CTGPMetadata {
             respawns,
             category,
             metadata_version,
-            len,
+            len: len - 0x04,
             lap_count,
         })
     }
@@ -378,6 +378,19 @@ impl CTGPMetadata {
         &self.shroomstrat[0..self.lap_count as usize]
     }
 
+    pub fn shroomstrat_string(&self) -> String {
+        let mut s = String::new();
+        
+        for (idx, lap) in self.shroomstrat().iter().enumerate() {
+            s += lap.to_string().as_str();
+
+            if idx + 1 < self.lap_count as usize {
+                s += "-";
+            }
+        }
+        s
+    }
+
     pub fn cannoned(&self) -> bool {
         self.cannoned
     }
@@ -418,7 +431,7 @@ impl CTGPMetadata {
         self.metadata_version
     }
 
-    /// Returns length of CTGP Metadata including the CRC-32 checksum at the end of the file
+    /// Returns length of CTGP Metadata excluding the CRC-32 at the end of the file
     pub fn len(&self) -> usize {
         self.len
     }
