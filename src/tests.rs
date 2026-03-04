@@ -2,7 +2,7 @@ use chrono::NaiveDateTime;
 
 use crate::{
     Ghost,
-    ctgp_metadata::CTGPMetadata,
+    ctgp_footer::CTGPFooter,
     header::{
         Header,
         combo::{Character, Combo, Vehicle},
@@ -205,7 +205,7 @@ fn test_ctgp_metadata() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let ctgp_metadata = CTGPMetadata::new(&rkg_data).expect("Failed to read CTGP metadata");
+    let ctgp_metadata = CTGPFooter::new(&rkg_data).expect("Failed to read CTGP metadata");
 
     // Some asserts
     assert_eq!(
@@ -231,7 +231,7 @@ fn print_ctgp_metadata() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let ctgp_metadata = CTGPMetadata::new(&rkg_data).expect("Failed to read CTGP metadata");
+    let ctgp_metadata = CTGPFooter::new(&rkg_data).expect("Failed to read CTGP metadata");
 
     // Print info
     print!("Track SHA1: ");
@@ -321,7 +321,7 @@ fn print_ctgp_metadata() {
     println!("Respawns? {}", ctgp_metadata.respawns());
     println!(
         "CTGP metadata version: {}",
-        ctgp_metadata.metadata_version()
+        ctgp_metadata.footer_version()
     );
 }
 
@@ -403,7 +403,7 @@ fn test_exact_finish_time() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let ctgp_metadata = CTGPMetadata::new(&rkg_data).expect("Failed to read CTGP metadata");
+    let ctgp_metadata = CTGPFooter::new(&rkg_data).expect("Failed to read CTGP metadata");
 
     assert_eq!(
         ctgp_metadata.exact_finish_time().to_string(),

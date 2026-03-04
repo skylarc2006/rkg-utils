@@ -1,6 +1,6 @@
 use crate::byte_handler::FromByteHandler;
-use crate::ctgp_metadata::exact_finish_time::ExactFinishTime;
-use crate::ctgp_metadata::{category::Category, ctgp_version::CTGPVersion};
+use crate::ctgp_footer::exact_finish_time::ExactFinishTime;
+use crate::ctgp_footer::{category::Category, ctgp_version::CTGPVersion};
 use crate::header::in_game_time::InGameTime;
 use crate::{byte_handler::ByteHandler, input_data::yaz1_decompress};
 use crate::{compute_sha1_hex, datetime_from_timestamp, duration_from_ticks};
@@ -11,11 +11,11 @@ pub mod ctgp_version;
 pub mod exact_finish_time;
 
 #[derive(thiserror::Error, Debug)]
-pub enum CTGPMetadataError {
+pub enum CTGPFooterError {
     #[error("Ghost is not CKGD")]
     NotCKGD,
-    #[error("Invalid CTGP metadata version")]
-    InvalidMetadataVersion,
+    #[error("Invalid CTGP footer version")]
+    InvalidFooterVersion,
     #[error("Try From Slice Error: {0}")]
     TryFromSliceError(#[from] std::array::TryFromSliceError),
     #[error("Category Error: {0}")]
@@ -24,7 +24,7 @@ pub enum CTGPMetadataError {
     InGameTimeError(#[from] crate::header::in_game_time::InGameTimeError),
 }
 
-pub struct CTGPMetadata {
+pub struct CTGPFooter {
     raw_data: Vec<u8>,
     security_data: Vec<u8>,
     track_sha1: [u8; 0x14],
@@ -52,30 +52,30 @@ pub struct CTGPMetadata {
     has_name_replaced: bool, // Hi Korben
     respawns: bool,
     category: Category,
-    metadata_version: u8,
+    footer_version: u8,
     len: usize,
     lap_count: u8,
 }
 
-impl CTGPMetadata {
+impl CTGPFooter {
     /// Expects full rkg data
-    pub fn new(data: &[u8]) -> Result<Self, CTGPMetadataError> {
+    pub fn new(data: &[u8]) -> Result<Self, CTGPFooterError> {
         if data[data.len() - 0x08..data.len() - 0x04] != [0x43, 0x4B, 0x47, 0x44] {
-            return Err(CTGPMetadataError::NotCKGD);
+            return Err(CTGPFooterError::NotCKGD);
         }
 
-        let metadata_version = data[data.len() - 0x0D];
+        let footer_version = data[data.len() - 0x0D];
 
-        match metadata_version {
+        match footer_version {
             1 | 2 | 3 | 5 | 6 | 7 => {}
             _ => {
-                return Err(CTGPMetadataError::InvalidMetadataVersion);
+                return Err(CTGPFooterError::InvalidFooterVersion);
             }
         }
 
-        let len = if metadata_version < 7 { 0xD4 } else { 0xE4 };
+        let len = if footer_version < 7 { 0xD4 } else { 0xE4 };
 
-        let security_data_size = if metadata_version < 7 { 0x48 } else { 0x58 };
+        let security_data_size = if footer_version < 7 { 0x48 } else { 0x58 };
 
         let raw_data = Vec::from(&data[data.len() - len..data.len() - 0x04]);
 
@@ -118,7 +118,7 @@ impl CTGPMetadata {
         let possible_ctgp_versions;
         let mut lap_split_suspicious_intersections = Some([false; 10]);
 
-        if metadata_version >= 2 {
+        if footer_version >= 2 {
             possible_ctgp_versions =
                 CTGPVersion::from(&metadata[current_offset..current_offset + 0x04]);
             current_offset += 0x04;
@@ -292,7 +292,7 @@ impl CTGPMetadata {
             has_name_replaced,
             respawns,
             category,
-            metadata_version,
+            footer_version,
             len: len - 0x04,
             lap_count,
         })
@@ -314,7 +314,7 @@ impl CTGPMetadata {
         &self.ghost_sha1
     }
 
-    pub(crate) fn set_ghost_sha1(&mut self, ghost_sha1: &[u8]) -> Result<(), CTGPMetadataError> {
+    pub(crate) fn set_ghost_sha1(&mut self, ghost_sha1: &[u8]) -> Result<(), CTGPFooterError> {
         self.ghost_sha1 = ghost_sha1.try_into()?;
         Ok(())
     }
@@ -427,11 +427,11 @@ impl CTGPMetadata {
         self.category
     }
 
-    pub fn metadata_version(&self) -> u8 {
-        self.metadata_version
+    pub fn footer_version(&self) -> u8 {
+        self.footer_version
     }
 
-    /// Returns length of CTGP Metadata excluding the CRC-32 at the end of the file
+    /// Returns length of CTGP footer excluding the CRC-32 at the end of the file
     pub fn len(&self) -> usize {
         self.len
     }

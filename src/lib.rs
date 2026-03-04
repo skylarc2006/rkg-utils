@@ -8,14 +8,14 @@ use sha1::{Digest, Sha1};
 
 use crate::{
     crc::crc32,
-    ctgp_metadata::CTGPMetadata,
+    ctgp_footer::CTGPFooter,
     header::{Header, mii::Mii},
     input_data::InputData,
 };
 
 pub mod byte_handler;
 pub mod crc;
-pub mod ctgp_metadata;
+pub mod ctgp_footer;
 pub mod header;
 pub mod input_data;
 
@@ -42,7 +42,7 @@ pub enum GhostError {
     #[error("Input Data Error: {0}")]
     InputDataError(#[from] input_data::InputDataError),
     #[error("CTGP Metadata Error: {0}")]
-    CTGPMetadataError(#[from] ctgp_metadata::CTGPMetadataError),
+    CTGPMetadataError(#[from] ctgp_footer::CTGPFooterError),
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] byte_handler::ByteHandlerError),
     #[error("Try From Slice Error: {0}")]
@@ -56,7 +56,7 @@ pub struct Ghost {
     header: Header,
     input_data: InputData,
     base_crc32: u32,
-    ctgp_metadata: Option<CTGPMetadata>,
+    ctgp_metadata: Option<CTGPFooter>,
     file_crc32: u32,
     should_preserve_external_metadata: bool,
 }
@@ -74,7 +74,7 @@ impl Ghost {
         let file_crc32 = u32::from_be_bytes(bytes[bytes.len() - 0x04..].try_into()?);
         let base_crc32;
 
-        let ctgp_metadata = if let Ok(ctgp_metadata) = CTGPMetadata::new(bytes) {
+        let ctgp_metadata = if let Ok(ctgp_metadata) = CTGPFooter::new(bytes) {
             let input_data_end_offset = bytes.len() - ctgp_metadata.len() - 0x08;
             base_crc32 = u32::from_be_bytes(
                 bytes[input_data_end_offset..input_data_end_offset + 0x04].try_into()?,
@@ -223,11 +223,11 @@ impl Ghost {
         &mut self.input_data
     }
 
-    pub fn ctgp_metadata(&self) -> Option<&CTGPMetadata> {
+    pub fn ctgp_metadata(&self) -> Option<&CTGPFooter> {
         self.ctgp_metadata.as_ref()
     }
 
-    pub fn ctgp_metadata_mut(&mut self) -> Option<&mut CTGPMetadata> {
+    pub fn ctgp_metadata_mut(&mut self) -> Option<&mut CTGPFooter> {
         self.ctgp_metadata.as_mut()
     }
 
