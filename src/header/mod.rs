@@ -11,7 +11,8 @@ use crate::{
             constants::{Country, CountryError, SubregionError, Version},
         },
         mii::{Mii, MiiError},
-        slot_id::{SlotId, SlotIdError}, transmission_mod::{TransmissionMod, TransmissionModError},
+        slot_id::{SlotId, SlotIdError},
+        transmission_mod::{TransmissionMod, TransmissionModError},
     },
     write_bits,
 };
@@ -124,8 +125,8 @@ impl Header {
 
         let codes = ByteHandler::try_from(&header_data[0x34..=0x37]).unwrap();
 
-        let location =
-            Location::find(codes.copy_byte(0), codes.copy_byte(1), Some(Version::ER12)).unwrap_or_default();
+        let location = Location::find(codes.copy_byte(0), codes.copy_byte(1), Some(Version::ER12))
+            .unwrap_or_default();
 
         let mii = Mii::new(&header_data[0x3C..0x3C + 0x4A])?;
 
@@ -256,7 +257,13 @@ impl Header {
 
     pub fn set_transmission_mod(&mut self, transmission_mod: TransmissionMod) {
         self.transmission_mod = transmission_mod;
-        write_bits(self.raw_data_mut(), 0x0C, 5, 2, u8::from(transmission_mod) as u64);
+        write_bits(
+            self.raw_data_mut(),
+            0x0C,
+            5,
+            2,
+            u8::from(transmission_mod) as u64,
+        );
     }
 
     pub fn ghost_type(&self) -> GhostType {

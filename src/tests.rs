@@ -253,7 +253,8 @@ fn print_ctgp_metadata() {
     println!();
 
     println!("Exact finish time: {}", ctgp_metadata.exact_finish_time());
-    print!("Possible CTGP Versions: ");
+    println!("CORE version: {}", ctgp_metadata.core_version());
+    print!("Possible CTGP release versions: ");
     if let Some(ctgp_versions) = ctgp_metadata.possible_ctgp_versions() {
         for version in ctgp_versions {
             print!("{}, ", version)
@@ -319,10 +320,7 @@ fn print_ctgp_metadata() {
         ctgp_metadata.has_name_replaced()
     );
     println!("Respawns? {}", ctgp_metadata.respawns());
-    println!(
-        "CTGP metadata version: {}",
-        ctgp_metadata.footer_version()
-    );
+    println!("CTGP metadata version: {}", ctgp_metadata.footer_version());
 }
 
 /// CTGP adds a pause mask to frames where a pause is pressed. Actual race inputs should stay the same.

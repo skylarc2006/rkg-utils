@@ -127,7 +127,8 @@ impl Ghost {
         if new_input_data_end > old_input_data_end {
             let diff = new_input_data_end - old_input_data_end;
             let insert_pos = old_input_data_end;
-            self.raw_data.splice(insert_pos..insert_pos, vec![0u8; diff]);
+            self.raw_data
+                .splice(insert_pos..insert_pos, vec![0u8; diff]);
         } else if new_input_data_end < old_input_data_end {
             let diff = old_input_data_end - new_input_data_end;
             let remove_end = old_input_data_end;
@@ -142,28 +143,26 @@ impl Ghost {
         {
             buf.extend_from_slice(&base_crc32.to_be_bytes());
             buf.extend_from_slice(ctgp_metadata.raw_data());
-            
+
             let metadata_len = ctgp_metadata.len();
             self.raw_data.drain(new_input_data_end..);
-            self.raw_data.extend_from_slice(&buf[buf.len() - metadata_len - 0x04..]);
+            self.raw_data
+                .extend_from_slice(&buf[buf.len() - metadata_len - 0x04..]);
             self.raw_data.extend_from_slice(&[0u8; 4]);
-        }
-
-        else if !self.should_preserve_external_metadata()
-            && self.raw_data.len() >= new_input_data_end + 0x08 {
-            self.raw_data.drain(new_input_data_end + 0x04..);
-        }
-
-        else if self.should_preserve_external_metadata()
+        } else if !self.should_preserve_external_metadata()
             && self.raw_data.len() >= new_input_data_end + 0x08
         {
-            self.raw_data[new_input_data_end..new_input_data_end + 0x04].copy_from_slice(&base_crc32.to_be_bytes());
+            self.raw_data.drain(new_input_data_end + 0x04..);
+        } else if self.should_preserve_external_metadata()
+            && self.raw_data.len() >= new_input_data_end + 0x08
+        {
+            self.raw_data[new_input_data_end..new_input_data_end + 0x04]
+                .copy_from_slice(&base_crc32.to_be_bytes());
         }
 
         let len = self.raw_data.len();
         let crc32 = crc32(&self.raw_data[..len - 0x04]);
         self.raw_data[len - 0x04..].copy_from_slice(&crc32.to_be_bytes());
-
 
         let sha1 = compute_sha1_hex(&self.raw_data);
         if let Some(ctgp_metadata) = self.ctgp_metadata_mut() {

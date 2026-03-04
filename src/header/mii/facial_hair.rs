@@ -73,13 +73,7 @@ impl FromByteHandler for FacialHair {
         let beard_type = BeardType::try_from((handler.copy_byte(0) >> 3) & 0x03)
             .map_err(|_| FacialHairError::BeardTypeInvalid)?;
 
-        Self::new(
-            beard_type,
-            mustache_type,
-            color,
-            mustache_size,
-            mustache_y,
-        )
+        Self::new(beard_type, mustache_type, color, mustache_size, mustache_y)
     }
 }
 

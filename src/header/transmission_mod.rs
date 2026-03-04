@@ -58,8 +58,6 @@ impl FromByteHandler for TransmissionMod {
     }
 }
 
-
-
 impl Display for TransmissionMod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

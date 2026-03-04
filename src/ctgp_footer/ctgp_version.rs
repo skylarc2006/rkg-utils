@@ -18,6 +18,7 @@ impl CTGPVersion {
         }
     }
 
+    /// Returns an Option<Vec<>> of possible release versions
     pub fn from(bytes: &[u8]) -> Option<Vec<Self>> {
         let mut possible_versions = Vec::new();
         match bytes {
@@ -257,6 +258,15 @@ impl CTGPVersion {
         }
         Some(possible_versions)
     }
+
+    /// Constructs CORE version
+    pub fn core_from(bytes: &[u8]) -> Result<Self, std::num::ParseIntError> {
+        let major: u8 = format!("{:02X}", bytes[0]).parse()?;
+        let minor: u8 = format!("{:02X}", bytes[1]).parse()?;
+        let revision: u16 = format!("{:02X}{:02X}", bytes[2], bytes[3]).parse()?;
+
+        Ok(Self::new(major, minor, revision, None))
+    }
 }
 
 impl Display for CTGPVersion {
@@ -268,11 +278,7 @@ impl Display for CTGPVersion {
                 self.major, self.minor, self.revision, subrevision
             )
         } else {
-            write!(
-                f,
-                "{}.{:02}.{:04}",
-                self.major, self.minor, self.revision
-            )
+            write!(f, "{}.{:02}.{:04}", self.major, self.minor, self.revision)
         }
     }
 }

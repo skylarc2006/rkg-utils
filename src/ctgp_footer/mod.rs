@@ -20,8 +20,10 @@ pub enum CTGPFooterError {
     TryFromSliceError(#[from] std::array::TryFromSliceError),
     #[error("Category Error: {0}")]
     CategoryError(#[from] category::CategoryError),
-    #[error("In Game Time Error")]
+    #[error("In Game Time Error: {0}")]
     InGameTimeError(#[from] crate::header::in_game_time::InGameTimeError),
+    #[error("Parse Int Error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
 }
 
 pub struct CTGPFooter {
@@ -31,6 +33,7 @@ pub struct CTGPFooter {
     ghost_sha1: [u8; 0x14],
     player_id: u64,
     exact_finish_time: ExactFinishTime,
+    core_version: CTGPVersion,
     possible_ctgp_versions: Option<Vec<CTGPVersion>>,
     lap_split_suspicious_intersections: Option<[bool; 10]>,
     exact_lap_times: [ExactFinishTime; 10],
@@ -116,11 +119,13 @@ impl CTGPFooter {
         current_offset += 0x04;
 
         let possible_ctgp_versions;
+        let core_version;
         let mut lap_split_suspicious_intersections = Some([false; 10]);
 
         if footer_version >= 2 {
-            possible_ctgp_versions =
-                CTGPVersion::from(&metadata[current_offset..current_offset + 0x04]);
+            let version_bytes = &metadata[current_offset..current_offset + 0x04];
+            core_version = CTGPVersion::core_from(version_bytes)?;
+            possible_ctgp_versions = CTGPVersion::from(version_bytes);
             current_offset += 0x04;
 
             let laps_handler = ByteHandler::try_from(&metadata[current_offset..current_offset + 2])
@@ -133,6 +138,8 @@ impl CTGPFooter {
             }
             current_offset -= 0x04;
         } else {
+            // Infer that the core version is 1.03.0134, since the next batch of updates after TT release was CORE 1.03.0136
+            core_version = CTGPVersion::new(1, 3, 0134, None);
             // Metadata version 2 was introduced in between the 1.03.1044 and 1046 update, so it must be 1.03.1044
             possible_ctgp_versions = Some(Vec::from([CTGPVersion::new(1, 3, 1044, None)]));
             lap_split_suspicious_intersections = None;
@@ -271,6 +278,7 @@ impl CTGPFooter {
             ghost_sha1,
             player_id,
             exact_finish_time,
+            core_version,
             possible_ctgp_versions,
             lap_split_suspicious_intersections,
             exact_lap_times,
@@ -327,6 +335,12 @@ impl CTGPFooter {
         self.exact_finish_time
     }
 
+    /// Returns CORE version that the ghost was driven on.
+    pub fn core_version(&self) -> CTGPVersion {
+        self.core_version
+    }
+
+    /// Returns possible release versions which the ghost was driven on.
     pub fn possible_ctgp_versions(&self) -> Option<&Vec<CTGPVersion>> {
         self.possible_ctgp_versions.as_ref()
     }
@@ -380,7 +394,7 @@ impl CTGPFooter {
 
     pub fn shroomstrat_string(&self) -> String {
         let mut s = String::new();
-        
+
         for (idx, lap) in self.shroomstrat().iter().enumerate() {
             s += lap.to_string().as_str();
 
