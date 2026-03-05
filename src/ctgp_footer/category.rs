@@ -47,6 +47,7 @@ impl Category {
     ///
     /// ```
     /// use rkg_utils::ctgp_footer::category::Category;
+    ///
     /// assert_eq!(Category::try_from(0x00, 0).unwrap(), Category::Normal);
     /// assert_eq!(Category::try_from(0x00, 1).unwrap(), Category::Shortcut);
     /// assert_eq!(Category::try_from(0x01, 0).unwrap(), Category::Glitch);
