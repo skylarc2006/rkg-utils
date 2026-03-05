@@ -1,6 +1,5 @@
 use crate::{
-    byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
-    header::{
+    byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler}, crc::crc16, header::{
         combo::{Combo, ComboError},
         controller::{Controller, ControllerError},
         date::{Date, DateError},
@@ -13,8 +12,7 @@ use crate::{
         mii::{Mii, MiiError},
         slot_id::{SlotId, SlotIdError},
         transmission_mod::{TransmissionMod, TransmissionModError},
-    },
-    write_bits,
+    }, write_bits
 };
 
 use std::io::Read;
@@ -373,24 +371,6 @@ impl Header {
     pub fn mii_crc16(&self) -> u16 {
         self.mii_crc16
     }
-}
-
-fn crc16(value: &[u8]) -> u16 {
-    let mut crc: u16 = 0x0000; // Initial value for XModem variant
-    let polynomial: u16 = 0x1021; // Standard CCITT polynomial
-
-    for &byte in value.iter() {
-        crc ^= (byte as u16) << 8; // XOR current byte with the high byte of CRC
-
-        for _ in 0..8 {
-            if crc & 0x8000 != 0 {
-                crc = (crc << 1) ^ polynomial;
-            } else {
-                crc <<= 1;
-            }
-        }
-    }
-    crc
 }
 
 fn write_in_game_time(
