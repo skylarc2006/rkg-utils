@@ -16,8 +16,8 @@ pub enum SlotIdError {
 }
 
 /// All Nintendo-Assigned Slot IDs. Some have special effects such as switching OST.
-/// https://wiki.tockdom.com/wiki/List_of_Identifiers#Courses
-/// https://wiki.tockdom.com/wiki/Slot
+/// <https://wiki.tockdom.com/wiki/List_of_Identifiers#Courses>
+/// <https://wiki.tockdom.com/wiki/Slot>
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SlotId {
     // Normal Tracks

@@ -67,7 +67,7 @@ pub enum HeaderError {
 }
 
 /// All the data in the Header of an RKGD
-/// https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header
+/// <https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header>
 pub struct Header {
     raw_data: [u8; 0x88],
     finish_time: InGameTime,
