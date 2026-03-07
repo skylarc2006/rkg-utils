@@ -5,8 +5,8 @@
 //! - [x] Reading and Writing Vanilla Game Data
 //! - [x] Reading and Writing CTGP Modified Data
 //! - [x] Reading and Writing Pulsar (Retro Rewind) Modified Data
-//! - [ ] Reading and Writing MKW-SP Modified Data
-//! - [ ] Implementing Setters for Mii Substructs
+//! - [x] Reading and Writing MKW-SP Modified Data
+//! - [x] Implementing Setters for Mii Substructs
 //! - [ ] Implementing `TryFrom<_>` for T where T: `Into<ByteHandler>`, relies on <https://github.com/rust-lang/rust/issues/31844> currently
 //! - [ ] Represent at a Type-system level which types can convert from `T1` (Bytes) to `crate::byte_handler::ByteHandler` to `T2` (Typed Structs)
 //! - [ ] Optimize Little-Endian calculations with `crate::byte_handler::ByteHandler`
@@ -40,6 +40,8 @@ mod tests;
 
 #[derive(thiserror::Error, Debug)]
 pub enum GhostError {
+    #[error("Data length too short for a ghost")]
+    DataLengthTooShort,
     #[error("Header Error: {0}")]
     HeaderError(#[from] header::HeaderError),
     #[error("Mii Error: {0}")]
@@ -75,6 +77,10 @@ impl Ghost {
     }
 
     pub fn new(bytes: &[u8]) -> Result<Self, GhostError> {
+        if bytes.len() < 0x8E {
+            return Err(GhostError::DataLengthTooShort);
+        }
+
         let header = Header::new(&bytes[..0x88])?;
 
         let file_crc32 = u32::from_be_bytes(bytes[bytes.len() - 0x04..].try_into()?);

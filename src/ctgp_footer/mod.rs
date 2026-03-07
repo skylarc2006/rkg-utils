@@ -537,7 +537,7 @@ impl CTGPFooter {
         self.has_mii_data_replaced
     }
 
-    /// Returns whether the player name in the ghost file has been replaced.
+    /// Returns whether the Mii name in the ghost file has been replaced.
     pub fn has_name_replaced(&self) -> bool {
         self.has_name_replaced
     }
