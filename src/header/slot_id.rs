@@ -18,11 +18,11 @@ pub enum SlotIdError {
 }
 
 /// All Nintendo-Assigned Slot IDs. Some have special effects such as switching OST.
-/// 
+///
 /// Each variant corresponds to a specific slot in the game's internal course
 /// table. Slot IDs are not assigned sequentially by cup order; for example,
 /// `GalaxyColosseum` (`0xC9`) is a special slot that can trigger unique behavior.
-/// 
+///
 /// <https://wiki.tockdom.com/wiki/List_of_Identifiers#Courses>
 /// <https://wiki.tockdom.com/wiki/Slot>
 #[derive(Clone, Copy, Debug, PartialEq)]

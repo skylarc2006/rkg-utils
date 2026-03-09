@@ -283,7 +283,7 @@ impl InputData {
     /// for the given controller type. More info on illegal input ranges here:
     /// <https://github.com/malleoz/mkw-replay?tab=readme-ov-file#regarding-input-ranges>
     /// <https://youtu.be/KUjS7qWWu9c?t=489>
-    /// 
+    ///
     /// The Wii Wheel has a fully unrestricted input range and is never considered to
     /// have illegal inputs.
     pub fn contains_illegal_stick_inputs(&self, controller: Controller) -> bool {
