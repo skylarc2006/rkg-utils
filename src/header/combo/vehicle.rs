@@ -232,6 +232,47 @@ impl GetWeightClass for Vehicle {
 }
 
 impl Vehicle {
+    pub const fn is_bike(&self) -> bool {
+        match self {
+            Self::BulletBike
+            | Self::Quacker
+            | Self::Magikruiser
+            | Self::MachBike
+            | Self::Sneakster
+            | Self::StandardBikeL
+            | Self::WarioBike
+            | Self::ShootingStar
+            | Self::Phantom
+            | Self::FlameRunner
+            | Self::Spear
+            | Self::BitBike
+            | Self::StandardBikeS
+            | Self::StandardBikeM
+            | Self::Jetsetter
+            | Self::Sugarscoot
+            | Self::ZipZip
+            | Self::DolphinDasher
+            | Self::JetBubble => true,
+            Self::StandardKartS
+            | Self::BoosterSeat
+            | Self::MiniBeast
+            | Self::CheepCharger
+            | Self::TinyTitan
+            | Self::BlueFalcon
+            | Self::StandardKartM
+            | Self::ClassicDragster
+            | Self::WildWing
+            | Self::SuperBlooper
+            | Self::Daytripper
+            | Self::Sprinter
+            | Self::Offroader
+            | Self::StandardKartL
+            | Self::FlameFlyer
+            | Self::PiranhaProwler
+            | Self::Honeycoupe => false,
+        }
+    }
+
     pub const fn get_transmission(&self) -> Transmission {
         match self {
             Self::BulletBike
