@@ -5,17 +5,44 @@ use crate::{
     header::mii::hair::HairColor,
 };
 
+/// Represents the eyebrow customization options of a Mii.
+///
+/// All positional and size values are validated against the ranges permitted
+/// by the Mii data format on construction.
 #[derive(Clone, Copy)]
 pub struct Eyebrows {
+    /// Eyebrow rotation (0–11).
     rotation: u8,
+    /// Eyebrow size (0–8).
     size: u8,
+    /// Horizontal position of the eyebrows (0–12).
     x: u8,
+    /// Vertical position of the eyebrows (3–18).
     y: u8,
+    /// Eyebrow color, shared with the hair color palette.
     eyebrow_color: HairColor,
+    /// Eyebrow shape/style.
     eyebrow_type: EyebrowType,
 }
 
 impl Eyebrows {
+    /// Creates a new [`Eyebrows`] from its individual components.
+    ///
+    /// # Arguments
+    ///
+    /// * `rotation` - Eyebrow rotation (0–11).
+    /// * `size` - Eyebrow size (0–8).
+    /// * `x` - Horizontal position (0–12).
+    /// * `y` - Vertical position (3–18).
+    /// * `eyebrow_color` - Eyebrow color from the [`HairColor`] palette.
+    /// * `eyebrow_type` - Eyebrow shape/style.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyebrowsError::RotationInvalid`] if `rotation` exceeds 11.
+    /// Returns [`EyebrowsError::SizeInvalid`] if `size` exceeds 8.
+    /// Returns [`EyebrowsError::XInvalid`] if `x` exceeds 12.
+    /// Returns [`EyebrowsError::YInvalid`] if `y` is outside the range 3–18.
     pub fn new(
         rotation: u8,
         size: u8,
@@ -47,25 +74,41 @@ impl Eyebrows {
         })
     }
 
+    /// Returns the eyebrow rotation (0–11).
     pub fn rotation(&self) -> u8 {
         self.rotation
     }
+
+    /// Returns the eyebrow size (0–8).
     pub fn size(&self) -> u8 {
         self.size
     }
+
+    /// Returns the horizontal position of the eyebrows (0–12).
     pub fn x(&self) -> u8 {
         self.x
     }
+
+    /// Returns the vertical position of the eyebrows (3–18).
     pub fn y(&self) -> u8 {
         self.y
     }
+
+    /// Returns the eyebrow color.
     pub fn eyebrow_color(&self) -> HairColor {
         self.eyebrow_color
     }
+
+    /// Returns the eyebrow shape/style.
     pub fn eyebrow_type(&self) -> EyebrowType {
         self.eyebrow_type
     }
 
+    /// Sets the eyebrow rotation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyebrowsError::RotationInvalid`] if `rotation` exceeds 11.
     pub fn set_rotation(&mut self, rotation: u8) -> Result<(), EyebrowsError> {
         if rotation > 11 {
             return Err(EyebrowsError::RotationInvalid);
@@ -74,6 +117,11 @@ impl Eyebrows {
         Ok(())
     }
 
+    /// Sets the eyebrow size.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyebrowsError::SizeInvalid`] if `size` exceeds 8.
     pub fn set_size(&mut self, size: u8) -> Result<(), EyebrowsError> {
         if size > 8 {
             return Err(EyebrowsError::SizeInvalid);
@@ -82,6 +130,11 @@ impl Eyebrows {
         Ok(())
     }
 
+    /// Sets the horizontal position of the eyebrows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyebrowsError::XInvalid`] if `x` exceeds 12.
     pub fn set_x(&mut self, x: u8) -> Result<(), EyebrowsError> {
         if x > 12 {
             return Err(EyebrowsError::XInvalid);
@@ -90,6 +143,11 @@ impl Eyebrows {
         Ok(())
     }
 
+    /// Sets the vertical position of the eyebrows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyebrowsError::YInvalid`] if `y` is outside the range 3–18.
     pub fn set_y(&mut self, y: u8) -> Result<(), EyebrowsError> {
         if !(3..=18).contains(&y) {
             return Err(EyebrowsError::YInvalid);
@@ -98,35 +156,50 @@ impl Eyebrows {
         Ok(())
     }
 
+    /// Sets the eyebrow color.
     pub fn set_eyebrow_color(&mut self, eyebrow_color: HairColor) {
         self.eyebrow_color = eyebrow_color;
     }
 
+    /// Sets the eyebrow shape/style.
     pub fn set_eyebrow_type(&mut self, eyebrow_type: EyebrowType) {
         self.eyebrow_type = eyebrow_type;
     }
 }
 
+/// Errors that can occur while constructing or deserializing [`Eyebrows`].
 #[derive(thiserror::Error, Debug)]
 pub enum EyebrowsError {
+    /// The eyebrow type byte did not map to a known [`EyebrowType`] variant.
     #[error("Type is invalid")]
     TypeInvalid,
+    /// The eyebrow color byte did not map to a known [`HairColor`] variant.
     #[error("Color is invalid")]
     ColorInvalid,
+    /// The rotation value exceeds the maximum of 11.
     #[error("Rotation is invalid")]
     RotationInvalid,
+    /// The size value exceeds the maximum of 8.
     #[error("Size is invalid")]
     SizeInvalid,
+    /// The vertical position is outside the valid range (3–18).
     #[error("Y position is invalid")]
     YInvalid,
+    /// The horizontal position exceeds the maximum of 12.
     #[error("X position is invalid")]
     XInvalid,
+    /// A [`ByteHandler`](crate::byte_handler::ByteHandler) operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
+    /// Infallible conversion error; cannot occur at runtime.
     #[error("")]
     Infallible(#[from] Infallible),
 }
 
+/// Deserializes [`Eyebrows`] from a [`ByteHandler`](crate::byte_handler::ByteHandler).
+///
+/// Extracts and unpacks the eyebrow type, color, horizontal position, vertical position,
+/// size, and rotation from the packed Mii binary format using a series of bit shifts and masks.
 impl FromByteHandler for Eyebrows {
     type Err = EyebrowsError;
     fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
@@ -150,6 +223,7 @@ impl FromByteHandler for Eyebrows {
     }
 }
 
+/// All eyebrow shapes available in the Mii editor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EyebrowType {
     FlatAngledLarge,
@@ -178,6 +252,9 @@ pub enum EyebrowType {
     None,
 }
 
+/// Converts a raw byte value from the Mii data format into an [`EyebrowType`].
+///
+/// Returns `Err(())` if the byte does not correspond to any known eyebrow type.
 impl TryFrom<u8> for EyebrowType {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -211,6 +288,7 @@ impl TryFrom<u8> for EyebrowType {
     }
 }
 
+/// Converts an [`EyebrowType`] into its raw byte representation for the Mii data format.
 impl From<EyebrowType> for u8 {
     fn from(value: EyebrowType) -> Self {
         match value {

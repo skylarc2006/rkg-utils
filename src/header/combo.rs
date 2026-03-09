@@ -1,35 +1,54 @@
 use crate::byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler};
 use std::fmt::Display;
 
-/// Struct that handles the validity of the Character/Vehicle combo used in the RKG file
+/// Represents a valid character and vehicle combination from a Mario Kart Wii RKG ghost file.
+///
+/// A combo is only valid when the character and vehicle share the same [`WeightClass`].
+/// Construction via [`Combo::new`] or [`FromByteHandler`] enforces this constraint.
 pub struct Combo {
+    /// The character used in the run.
     character: Character,
+    /// The vehicle used in the run.
     vehicle: Vehicle,
 }
 
+/// Formats the combo as `"{character} on {vehicle}"` (e.g. `"Mario on Mach Bike"`).
 impl Display for Combo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} on {}", self.character(), self.vehicle())
     }
 }
 
+/// Errors that can occur while constructing or deserializing a [`Combo`].
 #[derive(thiserror::Error, Debug)]
 pub enum ComboError {
+    /// The input iterator did not contain enough bytes to extract a combo.
     #[error("Insufficiently Long Iterator")]
     InsufficientlyLongIterator,
+    /// The character and vehicle belong to different weight classes.
     #[error("The combo has incongruent weight classes")]
     IncongruentWeightClasses,
+    /// The vehicle byte did not map to a known [`Vehicle`] variant.
     #[error("Invalid Vehicle ID")]
     InvalidVehicleId,
+    /// The character byte did not map to a known [`Character`] variant.
     #[error("Invalid Character ID")]
     InvalidCharacterId,
+    /// The character ID corresponds to a character that cannot appear in ghost files.
     #[error("Impossible Character ID")]
     ImpossibleCharacterId,
+    /// A [`ByteHandler`] operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
 }
 
 impl Combo {
+    /// Creates a new [`Combo`] from a vehicle and character.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ComboError::IncongruentWeightClasses`] if the character and vehicle
+    /// do not share the same [`WeightClass`].
     #[inline(always)]
     pub fn new(vehicle: Vehicle, character: Character) -> Result<Self, ComboError> {
         if character.get_weight_class() != vehicle.get_weight_class() {
@@ -39,20 +58,28 @@ impl Combo {
         Ok(Self { vehicle, character })
     }
 
+    /// Returns the character used in the run.
     pub fn character(&self) -> Character {
         self.character
     }
 
+    /// Returns the vehicle used in the run.
     pub fn vehicle(&self) -> Vehicle {
         self.vehicle
     }
 }
 
+/// Deserializes a [`Combo`] from a [`ByteHandler`] containing 2 bytes at header offset `0x08..0x0A`.
+///
+/// The bytes are packed as follows:
+/// ```text
+/// Byte 1: VVVVVVCC
+/// Byte 2: CCCCXXXX
+/// ```
+/// where `V` = vehicle ID bits and `C` = character ID bits.
 impl FromByteHandler for Combo {
     type Err = ComboError;
-    /// Expects Header 0x08..0x0A, 2 Bytes, where V = vehicle and C = character
-    /// 1. VVVVVVCC
-    /// 2. CCCCXXXX
+
     fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
     where
         T: TryInto<ByteHandler>,
@@ -73,12 +100,17 @@ impl FromByteHandler for Combo {
     }
 }
 
+/// Returns the weight class of the combo, which is always equal to both the
+/// character's and vehicle's weight class (enforced at construction time).
 impl GetWeightClass for Combo {
     fn get_weight_class(&self) -> WeightClass {
         self.character.get_weight_class()
     }
 }
 
+/// The weight class of a character or vehicle in Mario Kart Wii.
+///
+/// A valid [`Combo`] requires the character and vehicle to share the same weight class.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WeightClass {
     Small,
@@ -86,12 +118,17 @@ pub enum WeightClass {
     Large,
 }
 
+/// Trait for types that have an associated [`WeightClass`].
 pub trait GetWeightClass {
+    /// Returns the weight class of this character, vehicle, or combo.
     fn get_weight_class(&self) -> WeightClass;
 }
 
-/// Enum with all valid characters
-/// Tockdom documentation: <https://wiki.tockdom.com/wiki/List_of_Identifiers#Characters>
+/// All playable characters in Mario Kart Wii, including Mii outfit variants and
+/// menu-only characters.
+///
+/// Character identifiers are documented at
+/// <https://wiki.tockdom.com/wiki/List_of_Identifiers#Characters>.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Character {
     Mario,
@@ -136,14 +173,21 @@ pub enum Character {
     LargeMiiOutfitBFemale,
     LargeMiiOutfitCMale,
     LargeMiiOutfitCFemale,
+    /// Generic medium-class Mii without a specific outfit variant.
     MediumMii,
+    /// Generic small-class Mii without a specific outfit variant.
     SmallMii,
+    /// Generic large-class Mii without a specific outfit variant.
     LargeMii,
+    /// Peach as she appears in menu screens; cannot appear in ghost files.
     MenuPeach,
+    /// Daisy as she appears in menu screens; cannot appear in ghost files.
     MenuDaisy,
+    /// Rosalina as she appears in menu screens; cannot appear in ghost files.
     MenuRosalina,
 }
 
+/// Formats the character as her/his display name (e.g. `"Donkey Kong"`, `"Baby Peach"`).
 impl Display for Character {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -171,32 +215,27 @@ impl Display for Character {
             Character::DryBowser => "Dry Bowser",
             Character::FunkyKong => "Funky Kong",
             Character::Rosalina => "Rosalina",
-
             Character::SmallMiiOutfitAMale => "Small Mii Outfit A (Male)",
             Character::SmallMiiOutfitAFemale => "Small Mii Outfit A (Female)",
             Character::SmallMiiOutfitBMale => "Small Mii Outfit B (Male)",
             Character::SmallMiiOutfitBFemale => "Small Mii Outfit B (Female)",
             Character::SmallMiiOutfitCMale => "Small Mii Outfit C (Male)",
             Character::SmallMiiOutfitCFemale => "Small Mii Outfit C (Female)",
-
             Character::MediumMiiOutfitAMale => "Medium Mii Outfit A (Male)",
             Character::MediumMiiOutfitAFemale => "Medium Mii Outfit A (Female)",
             Character::MediumMiiOutfitBMale => "Medium Mii Outfit B (Male)",
             Character::MediumMiiOutfitBFemale => "Medium Mii Outfit B (Female)",
             Character::MediumMiiOutfitCMale => "Medium Mii Outfit C (Male)",
             Character::MediumMiiOutfitCFemale => "Medium Mii Outfit C (Female)",
-
             Character::LargeMiiOutfitAMale => "Large Mii Outfit A (Male)",
             Character::LargeMiiOutfitAFemale => "Large Mii Outfit A (Female)",
             Character::LargeMiiOutfitBMale => "Large Mii Outfit B (Male)",
             Character::LargeMiiOutfitBFemale => "Large Mii Outfit B (Female)",
             Character::LargeMiiOutfitCMale => "Large Mii Outfit C (Male)",
             Character::LargeMiiOutfitCFemale => "Large Mii Outfit C (Female)",
-
             Character::MediumMii => "Medium Mii",
             Character::SmallMii => "Small Mii",
             Character::LargeMii => "Large Mii",
-
             Character::MenuPeach => "Peach (Menu)",
             Character::MenuDaisy => "Daisy (Menu)",
             Character::MenuRosalina => "Rosalina (Menu)",
@@ -206,6 +245,10 @@ impl Display for Character {
 }
 
 impl Character {
+    /// Returns `true` if this character cannot legitimately appear in a ghost file.
+    ///
+    /// The impossible characters are the generic Mii variants (`SmallMii`, `MediumMii`,
+    /// `LargeMii`) and the menu-only versions of Peach, Daisy, and Rosalina.
     pub fn is_impossible(self) -> bool {
         match self {
             Self::Mario
@@ -260,10 +303,14 @@ impl Character {
     }
 }
 
+/// Converts a raw byte value from the RKG header into a [`Character`].
+///
+/// Returns `Err(())` if the byte does not correspond to any known character.
 impl TryFrom<u8> for Character {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
+            0x00 => Ok(Self::Mario),
             0x01 => Ok(Self::BabyPeach),
             0x02 => Ok(Self::Waluigi),
             0x03 => Ok(Self::Bowser),
@@ -316,6 +363,7 @@ impl TryFrom<u8> for Character {
     }
 }
 
+/// Converts a [`Character`] into its raw byte representation for the RKG header.
 impl From<Character> for u8 {
     fn from(value: Character) -> Self {
         match value {
@@ -371,6 +419,7 @@ impl From<Character> for u8 {
     }
 }
 
+/// Returns the [`WeightClass`] of this character.
 impl GetWeightClass for Character {
     fn get_weight_class(&self) -> WeightClass {
         match self {
@@ -426,8 +475,10 @@ impl GetWeightClass for Character {
     }
 }
 
-/// Enum with all valid vehicles
-/// <https://wiki.tockdom.com/wiki/List_of_Identifiers#Vehicles>
+/// Represents all drivable vehicles in Mario Kart Wii.
+///
+/// Vehicle identifiers are documented at
+/// <https://wiki.tockdom.com/wiki/List_of_Identifiers#Vehicles>.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Vehicle {
     StandardKartS,
@@ -468,6 +519,7 @@ pub enum Vehicle {
     Phantom,
 }
 
+/// Formats the vehicle as its display name (e.g. `"Mach Bike"`, `"Flame Runner"`).
 impl Display for Vehicle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -513,6 +565,9 @@ impl Display for Vehicle {
     }
 }
 
+/// Converts a raw byte value from the RKG header into a [`Vehicle`].
+///
+/// Returns `Err(())` if the byte does not correspond to any known vehicle.
 impl TryFrom<u8> for Vehicle {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -558,6 +613,7 @@ impl TryFrom<u8> for Vehicle {
     }
 }
 
+/// Converts a [`Vehicle`] into its raw byte representation for the RKG header.
 impl From<Vehicle> for u8 {
     fn from(value: Vehicle) -> Self {
         match value {
@@ -601,6 +657,7 @@ impl From<Vehicle> for u8 {
     }
 }
 
+/// Returns the [`WeightClass`] of this vehicle.
 impl GetWeightClass for Vehicle {
     fn get_weight_class(&self) -> WeightClass {
         match self {

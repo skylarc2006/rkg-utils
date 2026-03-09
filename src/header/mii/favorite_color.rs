@@ -2,16 +2,23 @@ use std::convert::Infallible;
 
 use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
+/// Errors that can occur while constructing a [`FavoriteColor`].
 #[derive(thiserror::Error, Debug)]
 pub enum FavoriteColorError {
+    /// The color byte did not map to a known [`FavoriteColor`] variant.
     #[error("Color is invalid")]
     ColorInvalid,
+    /// A [`ByteHandler`](crate::byte_handler::ByteHandler) operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
+    /// Infallible conversion error; cannot occur at runtime.
     #[error("")]
     Infallible(#[from] Infallible),
 }
 
+/// The Mii's favorite color, as selected in the Mii editor.
+///
+/// This color is used to tint the Mii's outfit and other UI elements associated with the Mii.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum FavoriteColor {
     Red,
@@ -28,6 +35,12 @@ pub enum FavoriteColor {
     Black,
 }
 
+/// Converts a raw byte value from the Mii data format into a [`FavoriteColor`].
+///
+/// # Errors
+///
+/// Returns [`FavoriteColorError::ColorInvalid`] if the byte does not correspond
+/// to any known favorite color (valid range is 0–11).
 impl TryFrom<u8> for FavoriteColor {
     type Error = FavoriteColorError;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -49,6 +62,7 @@ impl TryFrom<u8> for FavoriteColor {
     }
 }
 
+/// Converts a [`FavoriteColor`] into its raw byte representation for the Mii data format.
 impl From<FavoriteColor> for u8 {
     fn from(value: FavoriteColor) -> Self {
         match value {
@@ -68,10 +82,13 @@ impl From<FavoriteColor> for u8 {
     }
 }
 
+/// Deserializes a [`FavoriteColor`] from a [`ByteHandler`](crate::byte_handler::ByteHandler).
+///
+/// Expects byte `0x01` of the Mii data. The color index is extracted by shifting
+/// the byte right by 1 and masking the lower 4 bits.
 impl FromByteHandler for FavoriteColor {
     type Err = FavoriteColorError;
 
-    /// Expects byte 0x01
     fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
     where
         T: TryInto<crate::byte_handler::ByteHandler>,

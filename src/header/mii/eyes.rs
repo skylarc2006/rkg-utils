@@ -2,17 +2,44 @@ use std::convert::Infallible;
 
 use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
+/// Represents the eye customization options of a Mii.
+///
+/// All positional and size values are validated against the ranges permitted
+/// by the Mii data format on construction.
 #[derive(Clone, Copy)]
 pub struct Eyes {
+    /// Eye rotation (0–7).
     rotation: u8,
+    /// Eye size (0–7).
     size: u8,
+    /// Horizontal position of the eyes (0–12).
     x: u8,
+    /// Vertical position of the eyes (0–18).
     y: u8,
+    /// Eye color.
     eye_color: EyeColor,
+    /// Eye shape/style.
     eye_type: EyeType,
 }
 
 impl Eyes {
+    /// Creates a new [`Eyes`] from its individual components.
+    ///
+    /// # Arguments
+    ///
+    /// * `rotation` - Eye rotation (0–7).
+    /// * `size` - Eye size (0–7).
+    /// * `x` - Horizontal position (0–12).
+    /// * `y` - Vertical position (0–18).
+    /// * `eye_color` - Eye color.
+    /// * `eye_type` - Eye shape/style.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyesError::SizeInvalid`] if `size` exceeds 7.
+    /// Returns [`EyesError::RotationInvalid`] if `rotation` exceeds 7.
+    /// Returns [`EyesError::YInvalid`] if `y` exceeds 18.
+    /// Returns [`EyesError::XInvalid`] if `x` exceeds 12.
     pub fn new(
         rotation: u8,
         size: u8,
@@ -44,25 +71,41 @@ impl Eyes {
         })
     }
 
+    /// Returns the eye rotation (0–7).
     pub fn rotation(&self) -> u8 {
         self.rotation
     }
+
+    /// Returns the eye size (0–7).
     pub fn size(&self) -> u8 {
         self.size
     }
+
+    /// Returns the horizontal position of the eyes (0–12).
     pub fn x(&self) -> u8 {
         self.x
     }
+
+    /// Returns the vertical position of the eyes (0–18).
     pub fn y(&self) -> u8 {
         self.y
     }
+
+    /// Returns the eye color.
     pub fn eye_color(&self) -> EyeColor {
         self.eye_color
     }
+
+    /// Returns the eye shape/style.
     pub fn eye_type(&self) -> EyeType {
         self.eye_type
     }
 
+    /// Sets the eye rotation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyesError::RotationInvalid`] if `rotation` exceeds 7.
     pub fn set_rotation(&mut self, rotation: u8) -> Result<(), EyesError> {
         if rotation > 7 {
             return Err(EyesError::RotationInvalid);
@@ -71,6 +114,11 @@ impl Eyes {
         Ok(())
     }
 
+    /// Sets the eye size.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyesError::SizeInvalid`] if `size` exceeds 7.
     pub fn set_size(&mut self, size: u8) -> Result<(), EyesError> {
         if size > 7 {
             return Err(EyesError::SizeInvalid);
@@ -79,6 +127,11 @@ impl Eyes {
         Ok(())
     }
 
+    /// Sets the horizontal position of the eyes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyesError::XInvalid`] if `x` exceeds 12.
     pub fn set_x(&mut self, x: u8) -> Result<(), EyesError> {
         if x > 12 {
             return Err(EyesError::XInvalid);
@@ -87,6 +140,11 @@ impl Eyes {
         Ok(())
     }
 
+    /// Sets the vertical position of the eyes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EyesError::YInvalid`] if `y` exceeds 18.
     pub fn set_y(&mut self, y: u8) -> Result<(), EyesError> {
         if y > 18 {
             return Err(EyesError::YInvalid);
@@ -95,35 +153,50 @@ impl Eyes {
         Ok(())
     }
 
+    /// Sets the eye color.
     pub fn set_eye_color(&mut self, eye_color: EyeColor) {
         self.eye_color = eye_color;
     }
 
+    /// Sets the eye shape/style.
     pub fn set_eye_type(&mut self, eye_type: EyeType) {
         self.eye_type = eye_type;
     }
 }
 
+/// Errors that can occur while constructing or deserializing [`Eyes`].
 #[derive(thiserror::Error, Debug)]
 pub enum EyesError {
+    /// The eye type byte did not map to a known [`EyeType`] variant.
     #[error("Type is invalid")]
     TypeInvalid,
+    /// The eye color byte did not map to a known [`EyeColor`] variant.
     #[error("Color is invalid")]
     ColorInvalid,
+    /// The rotation value exceeds the maximum of 7.
     #[error("Rotation is invalid")]
     RotationInvalid,
+    /// The size value exceeds the maximum of 7.
     #[error("Size is invalid")]
     SizeInvalid,
+    /// The vertical position exceeds the maximum of 18.
     #[error("Y position is invalid")]
     YInvalid,
+    /// The horizontal position exceeds the maximum of 12.
     #[error("X position is invalid")]
     XInvalid,
+    /// A [`ByteHandler`](crate::byte_handler::ByteHandler) operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
+    /// Infallible conversion error; cannot occur at runtime.
     #[error("")]
     Infallible(#[from] Infallible),
 }
 
+/// Deserializes [`Eyes`] from a [`ByteHandler`](crate::byte_handler::ByteHandler).
+///
+/// Extracts and unpacks the eye type, color, vertical position, rotation, horizontal
+/// position, and size from the packed Mii binary format using a series of bit shifts and masks.
 impl FromByteHandler for Eyes {
     type Err = EyesError;
     fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
@@ -147,6 +220,7 @@ impl FromByteHandler for Eyes {
     }
 }
 
+/// Eye color options available in the Mii editor.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EyeColor {
     Black,
@@ -157,6 +231,9 @@ pub enum EyeColor {
     Green,
 }
 
+/// Converts a raw byte value from the Mii data format into an [`EyeColor`].
+///
+/// Returns `Err(())` if the byte does not correspond to any known eye color.
 impl TryFrom<u8> for EyeColor {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -172,6 +249,7 @@ impl TryFrom<u8> for EyeColor {
     }
 }
 
+/// Converts an [`EyeColor`] into its raw byte representation for the Mii data format.
 impl From<EyeColor> for u8 {
     fn from(value: EyeColor) -> Self {
         match value {
@@ -185,6 +263,7 @@ impl From<EyeColor> for u8 {
     }
 }
 
+/// All eye shapes available in the Mii editor.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EyeType {
     Normal,
@@ -237,6 +316,9 @@ pub enum EyeType {
     CrowsFeet,
 }
 
+/// Converts a raw byte value from the Mii data format into an [`EyeType`].
+///
+/// Returns `Err(())` if the byte does not correspond to any known eye type.
 impl TryFrom<u8> for EyeType {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -294,6 +376,7 @@ impl TryFrom<u8> for EyeType {
     }
 }
 
+/// Converts an [`EyeType`] into its raw byte representation for the Mii data format.
 impl From<EyeType> for u8 {
     fn from(value: EyeType) -> Self {
         match value {

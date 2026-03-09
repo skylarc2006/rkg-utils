@@ -2,28 +2,46 @@ use std::convert::Infallible;
 
 use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
+/// Represents the head customization options of a Mii,
+/// including face shape, skin tone, and facial feature overlay.
 #[derive(Clone, Copy)]
 pub struct Head {
+    /// Face/head shape.
     shape: HeadShape,
+    /// Skin tone.
     skin_tone: SkinTone,
+    /// Facial feature overlay applied to the face.
     face_features: FaceFeatures,
 }
 
+/// Errors that can occur while deserializing a [`Head`].
 #[derive(thiserror::Error, Debug)]
 pub enum HeadError {
+    /// The head shape byte did not map to a known [`HeadShape`] variant.
     #[error("Shape is invalid")]
     ShapeInvalid,
+    /// The skin tone byte did not map to a known [`SkinTone`] variant.
     #[error("SkinTone is invalid")]
     SkinToneInvalid,
+    /// The face features byte did not map to a known [`FaceFeatures`] variant.
     #[error("FaceFeatures is invalid")]
     FaceFeaturesInvalid,
+    /// A [`ByteHandler`](crate::byte_handler::ByteHandler) operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
+    /// Infallible conversion error; cannot occur at runtime.
     #[error("")]
     Infallible(#[from] Infallible),
 }
 
 impl Head {
+    /// Creates a new [`Head`] from its individual components.
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - Face/head shape.
+    /// * `skin_tone` - Skin tone.
+    /// * `face_features` - Facial feature overlay.
     pub fn new(shape: HeadShape, skin_tone: SkinTone, face_features: FaceFeatures) -> Self {
         Self {
             shape,
@@ -32,29 +50,42 @@ impl Head {
         }
     }
 
+    /// Returns the face/head shape.
     pub fn shape(&self) -> HeadShape {
         self.shape
     }
+
+    /// Returns the skin tone.
     pub fn skin_tone(&self) -> SkinTone {
         self.skin_tone
     }
+
+    /// Returns the facial feature overlay.
     pub fn face_features(&self) -> FaceFeatures {
         self.face_features
     }
 
+    /// Sets the face/head shape.
     pub fn set_shape(&mut self, shape: HeadShape) {
         self.shape = shape;
     }
 
+    /// Sets the skin tone.
     pub fn set_skin_tone(&mut self, skin_tone: SkinTone) {
         self.skin_tone = skin_tone;
     }
 
+    /// Sets the facial feature overlay.
     pub fn set_face_features(&mut self, face_features: FaceFeatures) {
         self.face_features = face_features;
     }
 }
 
+/// Deserializes a [`Head`] from a [`ByteHandler`](crate::byte_handler::ByteHandler).
+///
+/// The handler is shifted right by 5 bits to align the head shape, then shifted
+/// right by 1 more bit to extract the skin tone and face features from the
+/// packed Mii binary format using bit masks.
 impl FromByteHandler for Head {
     type Err = HeadError;
     fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
@@ -78,6 +109,7 @@ impl FromByteHandler for Head {
     }
 }
 
+/// Face/head shape options available in the Mii editor.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum HeadShape {
     Sharp,
@@ -90,6 +122,9 @@ pub enum HeadShape {
     FlatRounded,
 }
 
+/// Converts a raw byte value from the Mii data format into a [`HeadShape`].
+///
+/// Returns `Err(())` if the byte does not correspond to any known head shape.
 impl TryFrom<u8> for HeadShape {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -107,6 +142,7 @@ impl TryFrom<u8> for HeadShape {
     }
 }
 
+/// Converts a [`HeadShape`] into its raw byte representation for the Mii data format.
 impl From<HeadShape> for u8 {
     fn from(value: HeadShape) -> Self {
         match value {
@@ -122,6 +158,7 @@ impl From<HeadShape> for u8 {
     }
 }
 
+/// Skin tone options available in the Mii editor.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum SkinTone {
     Beige,
@@ -132,6 +169,9 @@ pub enum SkinTone {
     Chestnut,
 }
 
+/// Converts a raw byte value from the Mii data format into a [`SkinTone`].
+///
+/// Returns `Err(())` if the byte does not correspond to any known skin tone.
 impl TryFrom<u8> for SkinTone {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -147,6 +187,7 @@ impl TryFrom<u8> for SkinTone {
     }
 }
 
+/// Converts a [`SkinTone`] into its raw byte representation for the Mii data format.
 impl From<SkinTone> for u8 {
     fn from(value: SkinTone) -> Self {
         match value {
@@ -160,22 +201,39 @@ impl From<SkinTone> for u8 {
     }
 }
 
+/// Facial feature overlays available in the Mii editor.
+///
+/// These are decorative markings drawn on top of the Mii's face shape.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum FaceFeatures {
+    /// No facial feature overlay.
     None,
+    /// Porcelain-style cheek blush.
     CheekPorcelain,
+    /// Porcelain-style cheek blush with blue eye shadow.
     CheekPorcelainEyeShadowBlue,
     Freckles,
+    /// Dark circles or bags under the eyes.
     UnderTheEyes,
+    /// Marks suggesting facial pain or stress lines.
     FacialPain,
+    /// Rounded cheek blush marks.
     Cheeks,
+    /// Chin shading or cleft.
     Chin,
+    /// Drooping brow lines.
     BrowDroop,
+    /// Lion's mane-style beard overlay.
     LionsManeBeard,
+    /// Downturned mouth frown lines.
     MouthFrown,
+    /// Nasolabial folds with crow's feet and frown lines.
     FoldsCrowsFrown,
 }
 
+/// Converts a raw byte value from the Mii data format into a [`FaceFeatures`] variant.
+///
+/// Returns `Err(())` if the byte does not correspond to any known face features value.
 impl TryFrom<u8> for FaceFeatures {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -197,6 +255,7 @@ impl TryFrom<u8> for FaceFeatures {
     }
 }
 
+/// Converts a [`FaceFeatures`] variant into its raw byte representation for the Mii data format.
 impl From<FaceFeatures> for u8 {
     fn from(value: FaceFeatures) -> Self {
         match value {

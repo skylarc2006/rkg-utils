@@ -30,72 +30,122 @@ pub mod mii;
 pub mod slot_id;
 pub mod transmission_mod;
 
+/// Errors that can occur while parsing or modifying a [`Header`].
 #[derive(thiserror::Error, Debug)]
 pub enum HeaderError {
+    /// The file does not begin with the `RKGD` magic bytes.
     #[error("File is not RKGD")]
     NotRKGD,
+    /// The input slice is not exactly `0x88` bytes long.
     #[error("Data passed is not correct size (0x88)")]
     NotCorrectSize,
+    /// A friend ghost number was specified outside the valid range of 1–30.
     #[error("Friend ghost number out of range (1-30)")]
     FriendNumberOutOfRange,
-    #[error("Lap split index not semantically valid")]
+    /// A lap split idx was out of bounds for the recorded lap count.
+    #[error("Lap split idx not semantically valid")]
     LapSplitIndexError,
+    /// A finish or lap time field could not be parsed.
     #[error("In Game Time Error: {0}")]
     InGameTimeError(#[from] InGameTimeError),
+    /// The slot ID field could not be parsed.
     #[error("Slot ID Error: {0}")]
     SlotIdError(#[from] SlotIdError),
+    /// The character/vehicle combo field could not be parsed.
     #[error("Combo Error: {0}")]
     ComboError(#[from] ComboError),
+    /// The date field could not be parsed.
     #[error("Date Error: {0}")]
     DateError(#[from] DateError),
+    /// The controller field could not be parsed.
     #[error("Controller Error: {0}")]
     ControllerError(#[from] ControllerError),
+    /// The transmission mod field could not be parsed.
     #[error("Transmission Mod Error: {0}")]
     TransmissionModError(#[from] TransmissionModError),
+    /// The ghost type field could not be parsed.
     #[error("Ghost Type Error: {0}")]
     GhostTypeError(#[from] GhostTypeError),
+    /// The embedded Mii data could not be parsed.
     #[error("Mii Error: {0}")]
     MiiError(#[from] MiiError),
+    /// A file I/O operation failed.
     #[error("Io Error: {0}")]
     IoError(#[from] std::io::Error),
+    /// The country code could not be parsed.
     #[error("Country Error: {0}")]
     CountryError(#[from] CountryError),
+    /// The subregion code could not be parsed.
     #[error("Subregion Error: {0}")]
     SubregionError(#[from] SubregionError),
+    /// A [`ByteHandler`](crate::byte_handler::ByteHandler) operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
 }
 
-/// All the data in the Header of an RKGD
-/// <https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header>
+/// The parsed 136-byte (`0x88`) header of a Mario Kart Wii RKG ghost file.
+///
+/// Holds all metadata decoded from the RKGD file header, along with a copy of
+/// the raw bytes kept in sync with every setter. The layout is documented at
+/// <https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header>.
 pub struct Header {
+    /// The raw 136-byte header block, kept in sync with all parsed fields.
     raw_data: [u8; 0x88],
+    /// The ghost's recorded finish time.
     finish_time: InGameTime,
+    /// The course slot the ghost was recorded on.
     slot_id: SlotId,
+    /// The character and vehicle used.
     combo: Combo,
+    /// The calendar date the ghost was set.
     date_set: Date,
+    /// The input controller used to record the ghost.
     controller: Controller,
+    /// Whether the ghost's input data is Yaz compressed.
     is_compressed: bool,
+    /// The Retro Rewind transmission override active when the ghost was recorded.
     transmission_mod: TransmissionMod,
+    /// The storage slot or origin category of the ghost.
     ghost_type: GhostType,
+    /// Whether automatic drift (as opposed to manual) was used.
     is_automatic_drift: bool,
+    /// The byte length of the input data after decompression.
     decompressed_input_data_length: u16,
+    /// The number of laps recorded in the ghost.
     lap_count: u8,
+    /// Per-lap split times; only the first [`lap_count`](Header::lap_count) entries are valid.
     lap_split_times: [InGameTime; 11],
+    /// The player's geographic location at the time the ghost was set.
     location: Location,
+    /// The Mii character embedded in the ghost header.
     mii: Mii,
+    /// The CRC-16 checksum of the embedded Mii data (`0x3C`–`0x85` inclusive).
     mii_crc16: u16,
 }
 
 impl Header {
-    /// Reads header from a file at the path
+    /// Parses a [`Header`] from an RKG file at the given path.
+    ///
+    /// Only the first `0x88` bytes of the file are read.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HeaderError::IoError`] if the file cannot be opened or read,
+    /// and other [`HeaderError`] variants if any field fails to parse.
     pub fn new_from_path<P: AsRef<std::path::Path>>(p: P) -> Result<Self, HeaderError> {
         let mut rkg_data = [0u8; 0x88];
         std::fs::File::open(p)?.read_exact(&mut rkg_data)?;
         Self::new(&rkg_data)
     }
 
-    /// Reads header from slice
+    /// Parses a [`Header`] from a 136-byte (`0x88`) slice.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HeaderError::NotCorrectSize`] if `header_data` is not exactly
+    /// `0x88` bytes long. Returns [`HeaderError::NotRKGD`] if the first four
+    /// bytes are not the `RKGD` magic. Returns other [`HeaderError`] variants
+    /// if any individual field fails to parse.
     pub fn new(header_data: &[u8]) -> Result<Self, HeaderError> {
         if header_data.len() != 0x88 {
             return Err(HeaderError::NotCorrectSize);
@@ -118,9 +168,9 @@ impl Header {
 
         let lap_count = header_data[0x10];
         let mut lap_split_times = [InGameTime::default(); 11];
-        for index in 0..lap_count {
-            let start = (0x11 + index * 3) as usize;
-            lap_split_times[index as usize] =
+        for idx in 0..lap_count {
+            let start = (0x11 + idx * 3) as usize;
+            lap_split_times[idx as usize] =
                 InGameTime::from_byte_handler(&header_data[start..start + 3])?;
         }
 
@@ -153,51 +203,57 @@ impl Header {
         })
     }
 
-    /// Returns true if Mii CRC16 is correct (i.e. Mii data not illegally tampered with)
+    /// Returns `true` if the stored Mii CRC-16 matches a computed
+    /// checksum of the Mii bytes at offsets `0x3C`–`0x85`.
     pub fn verify_mii_crc16(&self) -> bool {
-        // Verify CRC16 based on the actual bytes in the header buffer (0x3C to 0x86)
         crc16(&self.raw_data[0x3C..0x86]) == self.mii_crc16()
     }
 
-    /// Recalculates and updates Mii CRC16
+    /// Recomputes the Mii CRC-16 from the current raw header bytes and writes
+    /// the updated value to both the parsed field and the raw buffer.
     pub fn fix_mii_crc16(&mut self) {
-        // Calculate CRC16 based on the actual bytes in the header buffer (0x3C to 0x86)
-        // This ensures the CRC matches what's actually written to the file
         self.mii_crc16 = crc16(&self.raw_data[0x3C..0x86]);
         self.raw_data[0x86..0x88].copy_from_slice(&self.mii_crc16.to_be_bytes());
     }
 
-    /// Getter
+    /// Returns the raw 136-byte header block.
     pub fn raw_data(&self) -> &[u8; 0x88] {
         &self.raw_data
     }
 
+    /// Returns a mutable reference to the raw 136-byte header block.
     pub fn raw_data_mut(&mut self) -> &mut [u8; 0x88] {
         &mut self.raw_data
     }
 
+    /// Returns the ghost's recorded finish time.
     pub fn finish_time(&self) -> &InGameTime {
         &self.finish_time
     }
 
+    /// Sets the finish time and updates the raw data accordingly.
     pub fn set_finish_time(&mut self, finish_time: InGameTime) {
         self.finish_time = finish_time;
         write_in_game_time(self.raw_data_mut(), 0x04, 0, &finish_time);
     }
 
+    /// Returns the course slot the ghost was recorded on.
     pub fn slot_id(&self) -> SlotId {
         self.slot_id
     }
 
+    /// Sets the course slot and updates the raw data accordingly.
     pub fn set_slot_id(&mut self, slot_id: SlotId) {
         self.slot_id = slot_id;
         write_bits(self.raw_data_mut(), 0x07, 0, 6, u8::from(slot_id) as u64);
     }
 
+    /// Returns the character and vehicle combo used in the ghost.
     pub fn combo(&self) -> &Combo {
         &self.combo
     }
 
+    /// Sets the character/vehicle combo and updates the raw data accordingly.
     pub fn set_combo(&mut self, combo: Combo) {
         write_bits(
             self.raw_data_mut(),
@@ -217,10 +273,12 @@ impl Header {
         self.combo = combo;
     }
 
+    /// Returns the date the ghost was set.
     pub fn date_set(&self) -> &Date {
         &self.date_set
     }
 
+    /// Sets the ghost's date and updates the raw data accordingly.
     pub fn set_date_set(&mut self, date_set: Date) {
         write_bits(
             self.raw_data_mut(),
@@ -235,28 +293,37 @@ impl Header {
         self.date_set = date_set;
     }
 
+    /// Returns the input controller used to record the ghost.
     pub fn controller(&self) -> Controller {
         self.controller
     }
 
+    /// Sets the controller and updates the raw data accordingly.
     pub fn set_controller(&mut self, controller: Controller) {
         self.controller = controller;
         write_bits(self.raw_data_mut(), 0x0B, 4, 4, u8::from(controller) as u64);
     }
 
+    /// Returns whether the ghost's input data is Yaz1 compressed.
     pub fn is_compressed(&self) -> bool {
         self.is_compressed
     }
 
+    /// Sets the compression flag and updates the raw data accordingly.
+    ///
+    /// This is `pub(crate)` because compression state should be managed by the
+    /// RKG file layer, not set directly by callers.
     pub(crate) fn set_compressed(&mut self, is_compressed: bool) {
         self.is_compressed = is_compressed;
         write_bits(self.raw_data_mut(), 0x0C, 4, 1, is_compressed as u64);
     }
 
+    /// Returns the Retro Rewind (Pulsar) transmission override active for this ghost.
     pub fn transmission_mod(&self) -> TransmissionMod {
         self.transmission_mod
     }
 
+    /// Sets the transmission mod and updates the raw data accordingly.
     pub fn set_transmission_mod(&mut self, transmission_mod: TransmissionMod) {
         self.transmission_mod = transmission_mod;
         write_bits(
@@ -268,36 +335,49 @@ impl Header {
         );
     }
 
+    /// Returns the ghost type of this ghost.
     pub fn ghost_type(&self) -> GhostType {
         self.ghost_type
     }
 
+    /// Sets the ghost type and updates the raw data accordingly.
     pub fn set_ghost_type(&mut self, ghost_type: GhostType) {
         self.ghost_type = ghost_type;
         write_bits(self.raw_data_mut(), 0x0C, 7, 7, u8::from(ghost_type) as u64);
     }
 
+    /// Returns whether automatic drift was used during the recorded run.
     pub fn is_automatic_drift(&self) -> bool {
         self.is_automatic_drift
     }
 
+    /// Sets the automatic drift flag and updates the raw data accordingly.
     pub fn set_automatic_drift(&mut self, is_automatic_drift: bool) {
         self.is_automatic_drift = is_automatic_drift;
         write_bits(self.raw_data_mut(), 0x0D, 6, 1, is_automatic_drift as u64);
     }
 
+    /// Returns the byte length of the input data block after decompression.
     pub fn decompressed_input_data_length(&self) -> u16 {
         self.decompressed_input_data_length
     }
 
+    /// Returns the number of laps recorded in this ghost.
     pub fn lap_count(&self) -> u8 {
         self.lap_count
     }
 
+    /// Returns a slice of the valid lap split times (length equal to [`lap_count`](Header::lap_count)).
     pub fn lap_split_times(&self) -> &[InGameTime] {
         &self.lap_split_times[0..self.lap_count as usize]
     }
 
+    /// Returns the lap split time at the given zero-based idx.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HeaderError::LapSplitIndexError`] if `idx` is greater than or
+    /// equal to [`lap_count`](Header::lap_count).
     pub fn lap_split_time(&self, idx: usize) -> Result<InGameTime, HeaderError> {
         if idx >= self.lap_count as usize {
             return Err(HeaderError::LapSplitIndexError);
@@ -305,39 +385,47 @@ impl Header {
         Ok(self.lap_split_times[idx])
     }
 
-    pub fn set_lap_split_time(&mut self, index: usize, lap_split_time: InGameTime) {
-        if index >= self.lap_count as usize {
+    /// Sets the lap split time at the given zero-based idx and updates the raw data accordingly.
+    ///
+    /// Does nothing if `idx` is greater than or equal to [`lap_count`](Header::lap_count).
+    pub fn set_lap_split_time(&mut self, idx: usize, lap_split_time: InGameTime) {
+        if idx >= self.lap_count as usize {
             return;
         }
-        self.lap_split_times[index] = lap_split_time;
+        self.lap_split_times[idx] = lap_split_time;
 
         write_bits(
             self.raw_data_mut(),
-            0x11 + index * 0x03,
+            0x11 + idx * 0x03,
             0,
             7,
             lap_split_time.minutes() as u64,
         );
         write_bits(
             self.raw_data_mut(),
-            0x11 + index * 0x03,
+            0x11 + idx * 0x03,
             7,
             7,
             lap_split_time.seconds() as u64,
         );
         write_bits(
             self.raw_data_mut(),
-            0x12 + index * 0x03,
+            0x12 + idx * 0x03,
             6,
             10,
             lap_split_time.milliseconds() as u64,
         );
     }
 
+    /// Returns the player's geographic location when the ghost was set.
     pub fn location(&self) -> &Location {
         &self.location
     }
 
+    /// Sets the player's location and updates the raw data accordingly.
+    ///
+    /// When the country is [`Country::NotSet`], the subregion byte is written
+    /// as `0xFF` (Not Set).
     pub fn set_location(&mut self, location: Location) {
         write_bits(
             self.raw_data_mut(),
@@ -358,25 +446,32 @@ impl Header {
         self.location = location;
     }
 
+    /// Returns a reference to the Mii embedded in the ghost header.
     pub fn mii(&self) -> &Mii {
         &self.mii
     }
 
+    /// Returns a mutable reference to the Mii embedded in the ghost header.
     pub fn mii_mut(&mut self) -> &mut Mii {
         &mut self.mii
     }
 
+    /// Replaces the embedded Mii, updates the raw header bytes at `0x3C`–`0x85`,
+    /// and recomputes the Mii CRC-16.
     pub fn set_mii(&mut self, mii: Mii) {
         self.mii_crc16 = crc16(mii.raw_data());
         self.raw_data_mut()[0x3C..0x86].copy_from_slice(mii.raw_data());
         self.mii = mii;
     }
 
+    /// Returns the CRC-16 checksum of the embedded Mii data as stored in the header.
     pub fn mii_crc16(&self) -> u16 {
         self.mii_crc16
     }
 }
 
+/// Writes a packed [`InGameTime`] value (7 minutes + 7 seconds + 10 milliseconds bits)
+/// into `buf` starting at the given byte and bit offset.
 fn write_in_game_time(
     buf: &mut [u8],
     byte_offset: usize,

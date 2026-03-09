@@ -9,30 +9,59 @@ pub mod face_input;
 pub mod input;
 pub mod stick_input;
 
+/// Errors that can occur while parsing [`InputData`].
 #[derive(thiserror::Error, Debug)]
 pub enum InputDataError {
+    /// A face input entry could not be parsed.
     #[error("Face Input Error: {0}")]
     FaceInputError(#[from] face_input::FaceInputError),
+    /// A D-pad input entry could not be parsed.
     #[error("DPad Input Error: {0}")]
     DPadInputError(#[from] dpad_input::DPadInputError),
+    /// A stick input entry could not be parsed.
     #[error("Stick Input Error: {0}")]
     StickInputError(#[from] stick_input::StickInputError),
 }
 
-/// Handles all input data being read
-/// Tockdom wiki: <https://wiki.tockdom.com/wiki/RKG_(File_Format)#Controller_Input_Data>
+/// The controller input stream from a Mario Kart Wii RKG ghost file.
+///
+/// Stores the raw bytes (compressed or decompressed) alongside three decoded
+/// run-length encoded input streams: face buttons, analog stick, and D-pad.
+/// Adjacent identical entries across byte boundaries are merged during parsing
+/// so that each entry in the decoded vectors represents a single contiguous
+/// hold period.
+///
+/// The binary layout is documented at
+/// <https://wiki.tockdom.com/wiki/RKG_(File_Format)#Controller_Input_Data>.
 pub struct InputData {
+    /// The raw input data bytes as they appear in the file (may be Yaz1 compressed).
     raw_data: Vec<u8>,
+    /// The number of face input entries as recorded in the stream header.
     face_input_count: u16,
+    /// The number of stick input entries as recorded in the stream header.
     stick_input_count: u16,
+    /// The number of D-pad input entries as recorded in the stream header.
     dpad_input_count: u16,
+    /// The decoded and merged face button input stream.
     face_inputs: Vec<FaceInput>,
+    /// The decoded and merged analog stick input stream.
     stick_inputs: Vec<StickInput>,
+    /// The decoded D-pad input stream.
     dpad_inputs: Vec<DPadInput>,
 }
 
 impl InputData {
-    /// Expects RKG data 0x88..(end of input data).
+    /// Parses controller input data from raw RKG bytes starting at offset `0x88`.
+    ///
+    /// If the bytes beginning at offset 4 carry a `Yaz1` magic header, the
+    /// data is decompressed before parsing. Otherwise the slice is zero-padded
+    /// to `0x2774` bytes. After parsing, adjacent identical face and stick
+    /// entries are merged to represent each continuous hold as a single entry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InputDataError`] variant if any individual input entry
+    /// fails to parse.
     pub fn new(input_data: &[u8]) -> Result<Self, InputDataError> {
         let mut raw_data = Vec::from(input_data);
 
@@ -107,6 +136,12 @@ impl InputData {
         })
     }
 
+    /// Returns the three input streams merged into a single frame-accurate sequence of [`Input`] values.
+    ///
+    /// The face, stick, and D-pad streams are interleaved by advancing through
+    /// all three simultaneously and emitting a new [`Input`] whenever any
+    /// stream transitions to its next entry. Each emitted [`Input`] covers
+    /// exactly the frames until the next transition across any stream.
     pub fn inputs(&self) -> Vec<Input> {
         let mut result = Vec::new();
 
@@ -187,7 +222,11 @@ impl InputData {
         result
     }
 
-    /// Returns true if the inputs contain an illegal drift or brake input.
+    /// Returns `true` if the face input stream contains an illegal drift or brake input.
+    ///
+    /// An input is illegal if drift is active without brake, or if brake and
+    /// accelerator are pressed simultaneously without drift when the previous
+    /// frame had accelerator but not brake (indicating a missing drift flag).
     pub fn contains_illegal_brake_or_drift_inputs(&self) -> bool {
         for (idx, input) in self.face_inputs().iter().enumerate() {
             let current_buttons = input.buttons();
@@ -212,27 +251,41 @@ impl InputData {
         false
     }
 
+    /// Returns `true` if the raw input data begins with a Yaz1 magic header at offset 4.
     pub fn is_compressed(&self) -> bool {
         self.raw_data[4..8] == [0x59, 0x61, 0x7A, 0x31]
     }
 
+    /// Compresses the raw input data using Yaz1 encoding.
+    ///
+    /// Does nothing if the data is already compressed.
     pub(crate) fn compress(&mut self) {
         if !self.is_compressed() {
             self.raw_data = yaz1_compress(&self.raw_data);
         }
     }
 
+    /// Decompresses the raw input data from Yaz1 encoding.
+    ///
+    /// Does nothing if the data is not compressed.
     pub(crate) fn decompress(&mut self) {
         if self.is_compressed() {
             self.raw_data = yaz1_decompress(&self.raw_data[4..]).unwrap();
         }
     }
 
+    /// Returns the raw input data bytes as they appear in the file.
     pub fn raw_data(&self) -> &[u8] {
         &self.raw_data
     }
 
-    /// Returns true if the inputs contain illegal stick inputs.
+    /// Returns `true` if the stick input stream contains any illegal stick position
+    /// for the given controller type. More info on illegal input ranges here:
+    /// <https://github.com/malleoz/mkw-replay?tab=readme-ov-file#regarding-input-ranges>
+    /// <https://youtu.be/KUjS7qWWu9c?t=489>
+    /// 
+    /// The Wii Wheel has a fully unrestricted input range and is never considered to
+    /// have illegal inputs.
     pub fn contains_illegal_stick_inputs(&self, controller: Controller) -> bool {
         // Definition of illegal stick inputs [x, y]
         const ILLEGAL_STICK_INPUTS: [[i8; 2]; 44] = [
@@ -303,33 +356,47 @@ impl InputData {
         false
     }
 
+    /// Returns the decoded face button input stream.
     pub fn face_inputs(&self) -> &[FaceInput] {
         &self.face_inputs
     }
 
+    /// Returns the decoded analog stick input stream.
     pub fn stick_inputs(&self) -> &[StickInput] {
         &self.stick_inputs
     }
 
+    /// Returns the decoded D-pad input stream.
     pub fn dpad_inputs(&self) -> &[DPadInput] {
         &self.dpad_inputs
     }
 
+    /// Returns the number of face input entries as recorded in the stream header.
     pub fn face_input_count(&self) -> u16 {
         self.face_input_count
     }
 
+    /// Returns the number of stick input entries as recorded in the stream header.
     pub fn stick_input_count(&self) -> u16 {
         self.stick_input_count
     }
 
+    /// Returns the number of D-pad input entries as recorded in the stream header.
     pub fn dpad_input_count(&self) -> u16 {
         self.dpad_input_count
     }
 }
 
-/// Decompress YAZ1-compressed input data
-/// Adapted from <https://github.com/AtishaRibeiro/InputDisplay/blob/master/InputDisplay/Core/Yaz1dec.cs>
+/// Decompresses a Yaz1-encoded byte slice into raw input data.
+///
+/// The slice must begin with the `Yaz1` magic followed by the uncompressed
+/// size as a big-endian `u32` and 8 bytes of padding. The result is
+/// zero-padded to `0x2774` bytes.
+///
+/// Returns `None` if the magic is missing, the data is truncated, or the
+/// decompressed output does not match the expected size.
+///
+/// Adapted from <https://github.com/AtishaRibeiro/InputDisplay/blob/master/InputDisplay/Core/Yaz1dec.cs>.
 pub(crate) fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
     // YAZ1 files start with "Yaz1" magic header
     if data.len() < 16 || &data[0..4] != b"Yaz1" {
@@ -358,6 +425,10 @@ pub(crate) fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
+/// Decompresses a single Yaz1 block starting at `offset` within `src`.
+///
+/// Returns `None` if the source data is truncated mid-block. The output is
+/// exactly `uncompressed_size` bytes when successful.
 fn decompress_block(src: &[u8], offset: usize, uncompressed_size: usize) -> Option<Vec<u8>> {
     let mut dst = Vec::with_capacity(uncompressed_size);
     let mut src_pos = offset;
@@ -426,8 +497,14 @@ fn decompress_block(src: &[u8], offset: usize, uncompressed_size: usize) -> Opti
     Some(dst)
 }
 
-/// Compress input data with Yaz1 compression
-/// Adapted from <https://github.com/AtishaRibeiro/TT-Rec-Tools/blob/dev/ghostmanager/Scripts/YAZ1_comp.js>
+/// Compresses raw input data using Yaz1 encoding.
+///
+/// Trailing zero bytes (used to pad decompressed data to `0x2774` bytes) are
+/// stripped before compression. The output includes a full Yaz1 file header
+/// containing the compressed size, the `Yaz1` magic, the uncompressed size,
+/// and 8 bytes of padding.
+///
+/// Adapted from <https://github.com/AtishaRibeiro/TT-Rec-Tools/blob/dev/ghostmanager/Scripts/YAZ1_comp.js>.
 pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
     // first remove padded 0s (decompressed input data is padded with 0s to 0x2774 bytes)
     let mut trailing_bytes_to_remove = 0usize;
@@ -523,6 +600,12 @@ pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
     compressed_data
 }
 
+/// Determines the best encoding for the byte at `pos` using the Nintendo Yaz1 heuristic.
+///
+/// If the previous call set a lookahead flag, the cached values from that call
+/// are returned immediately. Otherwise [`simple_encode`] is run at `pos` and
+/// at `pos + 1`; if the next position's match is 2 or more bytes longer, the
+/// lookahead flag is set and a literal copy is emitted for the current position.
 fn nintendo_encode(
     src: &[u8],
     size: usize,
@@ -556,6 +639,12 @@ fn nintendo_encode(
     (num_bytes, match_pos)
 }
 
+/// Finds the longest match for `src[pos..]` within the preceding `0x1000`-byte
+/// window using a simple linear scan.
+///
+/// Returns `(num_bytes, match_pos)` where `num_bytes` is the length of the
+/// longest match found (1 if no match of length ≥ 3 was found) and
+/// `match_pos` is the starting offset of that match in `src`.
 fn simple_encode(src: &[u8], size: usize, pos: usize) -> (usize, usize) {
     let mut start_pos = pos as i32 - 0x1000;
     let mut num_bytes = 1;

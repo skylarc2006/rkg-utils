@@ -1,23 +1,30 @@
 use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 use std::fmt::Display;
 
+/// Errors that can occur while constructing a [`GhostType`].
 #[derive(thiserror::Error, Debug)]
 pub enum GhostTypeError {
+    /// The ghost type byte did not map to any known [`GhostType`] variant.
     #[error("Nonexistent Ghost Type")]
     NonexistentGhostType,
+    /// A [`ByteHandler`](crate::byte_handler::ByteHandler) operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
 }
 
-/// All possible Ghost Types depending on slots
+/// All possible Ghost Types representable in a ghost file.
 ///
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GhostType {
     PlayerBest,
     WorldRecord,
     ContinentalRecord,
+    /// A rival ghost matched against the player's time.
     Rival,
+    /// A special ghost (e.g. a Nintendo event ghost).
+    /// More info on special ghosts here: <https://tcrf.net/User:B_squo#About_Mario_Kart_Wii.27s_Special_Ghosts>
     Special,
+    /// A ghost downloaded from the Mario Kart Channel's "Ghost Race" gamemode.
     GhostRace,
     Friend1,
     Friend2,
@@ -98,6 +105,12 @@ impl Display for GhostType {
     }
 }
 
+/// Converts a raw byte value from the RKG header into a [`GhostType`].
+///
+/// # Errors
+///
+/// Returns [`GhostTypeError::NonexistentGhostType`] if the byte does not
+/// correspond to any known ghost type (valid range is `0x01`–`0x26`).
 impl TryFrom<u8> for GhostType {
     type Error = GhostTypeError;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -145,6 +158,7 @@ impl TryFrom<u8> for GhostType {
     }
 }
 
+/// Converts a [`GhostType`] into its raw byte representation for the RKG header.
 impl From<GhostType> for u8 {
     fn from(value: GhostType) -> Self {
         match value {
@@ -190,9 +204,9 @@ impl From<GhostType> for u8 {
     }
 }
 
+/// Deserializes a [`GhostType`] from 2 bytes at header offset `0x0C..=0x0D`.
 impl FromByteHandler for GhostType {
     type Err = GhostTypeError;
-    /// Expects Header 0x0C..=0x0D
     fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
     where
         T: TryInto<crate::byte_handler::ByteHandler>,

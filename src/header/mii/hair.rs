@@ -2,14 +2,26 @@ use std::convert::Infallible;
 
 use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
+/// Represents the hair customization options of a Mii,
+/// including hair style, color, and whether the style is horizontally flipped.
 #[derive(Clone, Copy)]
 pub struct Hair {
+    /// Hair style.
     hair_type: HairType,
+    /// Hair color.
     hair_color: HairColor,
+    /// Whether the hair style is horizontally mirrored.
     is_flipped: bool,
 }
 
 impl Hair {
+    /// Creates a new [`Hair`] from its individual components.
+    ///
+    /// # Arguments
+    ///
+    /// * `hair_type` - Hair style.
+    /// * `hair_color` - Hair color.
+    /// * `is_flipped` - Whether the hair style is horizontally mirrored.
     pub fn new(hair_type: HairType, hair_color: HairColor, is_flipped: bool) -> Self {
         Self {
             hair_type,
@@ -18,41 +30,58 @@ impl Hair {
         }
     }
 
+    /// Returns the hair style.
     pub fn hair_type(&self) -> HairType {
         self.hair_type
     }
+
+    /// Returns the hair color.
     pub fn hair_color(&self) -> HairColor {
         self.hair_color
     }
+
+    /// Returns whether the hair style is horizontally mirrored.
     pub fn is_flipped(&self) -> bool {
         self.is_flipped
     }
 
+    /// Sets the hair style.
     pub fn set_hair_type(&mut self, hair_type: HairType) {
         self.hair_type = hair_type;
     }
 
+    /// Sets the hair color.
     pub fn set_hair_color(&mut self, hair_color: HairColor) {
         self.hair_color = hair_color;
     }
 
+    /// Sets whether the hair style is horizontally mirrored.
     pub fn set_is_flipped(&mut self, is_flipped: bool) {
         self.is_flipped = is_flipped;
     }
 }
 
+/// Errors that can occur while deserializing [`Hair`].
 #[derive(thiserror::Error, Debug)]
 pub enum HairError {
+    /// The hair type byte did not map to a known [`HairType`] variant.
     #[error("Type is invalid")]
     TypeInvalid,
+    /// The hair color byte did not map to a known [`HairColor`] variant.
     #[error("Color is invalid")]
     ColorInvalid,
+    /// A [`ByteHandler`](crate::byte_handler::ByteHandler) operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
+    /// Infallible conversion error; cannot occur at runtime.
     #[error("")]
     Infallible(#[from] Infallible),
 }
 
+/// Deserializes [`Hair`] from a [`ByteHandler`](crate::byte_handler::ByteHandler).
+///
+/// The handler is shifted right by 1 bit before extracting the flip flag,
+/// hair type, and hair color from the packed Mii binary format.
 impl FromByteHandler for Hair {
     type Err = HairError;
     fn from_byte_handler<T>(handler: T) -> Result<Self, Self::Err>
@@ -72,6 +101,9 @@ impl FromByteHandler for Hair {
     }
 }
 
+/// Hair color options available in the Mii editor.
+///
+/// This palette is also shared by eyebrows and facial hair.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum HairColor {
     Black,
@@ -84,6 +116,9 @@ pub enum HairColor {
     Blond,
 }
 
+/// Converts a raw byte value from the Mii data format into a [`HairColor`].
+///
+/// Returns `Err(())` if the byte does not correspond to any known hair color.
 impl TryFrom<u8> for HairColor {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -101,6 +136,7 @@ impl TryFrom<u8> for HairColor {
     }
 }
 
+/// Converts a [`HairColor`] into its raw byte representation for the Mii data format.
 impl From<HairColor> for u8 {
     fn from(value: HairColor) -> Self {
         match value {
@@ -116,6 +152,11 @@ impl From<HairColor> for u8 {
     }
 }
 
+/// Hair styles available in the Mii editor.
+///
+/// Variants prefixed with `LongUnknown` are long hair styles whose exact
+/// appearance has not yet been identified and are named by their raw byte value.
+/// Similarly, `ShortUnknown` variants are unidentified short styles.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum HairType {
     NormalLong,
@@ -192,6 +233,9 @@ pub enum HairType {
     LongUnknown51,
 }
 
+/// Converts a raw byte value from the Mii data format into a [`HairType`].
+///
+/// Returns `Err(())` if the byte does not correspond to any known hair type.
 impl TryFrom<u8> for HairType {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -273,6 +317,7 @@ impl TryFrom<u8> for HairType {
     }
 }
 
+/// Converts a [`HairType`] into its raw byte representation for the Mii data format.
 impl From<HairType> for u8 {
     fn from(value: HairType) -> Self {
         match value {

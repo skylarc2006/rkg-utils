@@ -1,21 +1,28 @@
-// https://wiki.tockdom.com/wiki/Slot
-
 use std::convert::Infallible;
 use std::fmt::Display;
 
 use crate::byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler};
 
+/// Errors that can occur while constructing a [`SlotId`].
 #[derive(thiserror::Error, Debug)]
 pub enum SlotIdError {
+    /// The slot ID byte did not map to any known [`SlotId`] variant.
     #[error("Non Existent Slot ID")]
     NonExistentSlotId,
+    /// A [`ByteHandler`] operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] ByteHandlerError),
+    /// Infallible conversion error; cannot occur at runtime.
     #[error("")]
     Infallible(#[from] Infallible),
 }
 
 /// All Nintendo-Assigned Slot IDs. Some have special effects such as switching OST.
+/// 
+/// Each variant corresponds to a specific slot in the game's internal course
+/// table. Slot IDs are not assigned sequentially by cup order; for example,
+/// `GalaxyColosseum` (`0xC9`) is a special slot that can trigger unique behavior.
+/// 
 /// <https://wiki.tockdom.com/wiki/List_of_Identifiers#Courses>
 /// <https://wiki.tockdom.com/wiki/Slot>
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -67,12 +74,17 @@ pub enum SlotId {
     DSTwilightHouse,
 
     // Other Slots
-    GalaxyColosseum, // Only technically possible one?
+    /// The only non-standard slot technically possible via Nintendo's Galaxy Colosseum-based tournament.
+    GalaxyColosseum,
+    /// The post-race victory slot.
     WinningScene,
+    /// The post-race defeat slot.
     LosingScene,
+    /// The credits sequence slot.
     Credits,
 }
 
+/// Formats the slot as its full course name (e.g. `"Maple Treeway"`, `"GCN DK Mountain"`).
 impl Display for SlotId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -134,6 +146,7 @@ impl Display for SlotId {
     }
 }
 
+/// Converts a [`SlotId`] into its raw byte representation for the RKG header.
 impl From<SlotId> for u8 {
     fn from(value: SlotId) -> u8 {
         match value {
@@ -187,6 +200,12 @@ impl From<SlotId> for u8 {
     }
 }
 
+/// Converts a raw byte value from the RKG header into a [`SlotId`].
+///
+/// # Errors
+///
+/// Returns [`SlotIdError::NonExistentSlotId`] if the byte does not correspond
+/// to any known slot.
 impl TryFrom<u8> for SlotId {
     type Error = SlotIdError;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -242,6 +261,7 @@ impl TryFrom<u8> for SlotId {
     }
 }
 
+/// Deserializes a [`SlotId`] from header byte `0x07`.
 impl FromByteHandler for SlotId {
     type Err = SlotIdError;
     /// Expects Header 0x07

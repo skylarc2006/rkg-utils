@@ -1,9 +1,11 @@
 #[derive(thiserror::Error, Debug)]
 pub enum ByteHandlerError {
+    /// The input slice was longer than 4 bytes and cannot fit in a [`ByteHandler`].
     #[error("Couldn't convert type to ByteHandler: Too Long")]
     ConversionErrorTooLong,
 }
 
+/// Internal union to handle reading bits
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) union ByteHandler {
