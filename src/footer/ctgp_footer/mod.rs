@@ -18,6 +18,12 @@ pub enum CTGPFooterError {
     /// The ghost file does not contain the expected `CKGD` magic bytes.
     #[error("Ghost is not CKGD")]
     NotCKGD,
+    /// Data passed is impossibly too short.
+    #[error("Data length is too short")]
+    DataLengthTooShort,
+    /// Full RKG data was not passed.
+    #[error("File is not an RKG file")]
+    NotRKGD,
     /// The footer version byte is not one of the supported values (1, 2, 3, 5, 6, 7).
     #[error("Invalid CTGP footer version")]
     InvalidFooterVersion,
@@ -128,6 +134,18 @@ impl CTGPFooter {
     /// - The footer version is not supported ([`CTGPFooterError::InvalidFooterVersion`]).
     /// - Any byte slice conversion, integer parse, category parse, or time parse fails.
     pub fn new(data: &[u8]) -> Result<Self, CTGPFooterError> {
+        if data.len() < 0x04 {
+            return Err(CTGPFooterError::DataLengthTooShort);
+        }
+
+        if data[..0x04] != *b"RKGD" {
+            return Err(CTGPFooterError::NotRKGD);
+        }
+
+        if data.len() < 0x08 {
+            return Err(CTGPFooterError::DataLengthTooShort);
+        }
+
         if data[data.len() - 0x08..data.len() - 0x04] != *b"CKGD" {
             return Err(CTGPFooterError::NotCKGD);
         }
@@ -142,6 +160,10 @@ impl CTGPFooter {
         }
 
         let len = if footer_version < 7 { 0xD4 } else { 0xE4 };
+
+        if data.len() < len {
+            return Err(CTGPFooterError::DataLengthTooShort);
+        }
 
         let security_data_size = if footer_version < 7 { 0x48 } else { 0x58 };
 

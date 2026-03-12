@@ -12,6 +12,12 @@ pub enum SPFooterError {
     /// The ghost file does not contain the expected `SPGD` magic bytes.
     #[error("Ghost is not SPGD")]
     NotSPGD,
+    /// The file is not an RKG file.
+    #[error("File is not an RKG")]
+    NotRKGD,
+    /// Data passed is impossibly too short.
+    #[error("Data length is too short")]
+    DataLengthTooShort,
     /// The footer version number exceeds the maximum supported value (5).
     #[error("Invalid MKW-SP footer version")]
     InvalidFooterVersion,
@@ -86,8 +92,24 @@ impl SPFooter {
     /// - The footer version exceeds 5 ([`SPFooterError::InvalidFooterVersion`]).
     /// - Any byte slice conversion, integer parse, or time parse fails.
     pub fn new(data: &[u8]) -> Result<Self, SPFooterError> {
+        if data.len() < 0x04 {
+            return Err(SPFooterError::DataLengthTooShort);
+        }
+
+        if data[..0x04] != *b"RKGD" {
+            return Err(SPFooterError::NotRKGD);
+        }
+
+        if data.len() < 0x08 {
+            return Err(SPFooterError::DataLengthTooShort);
+        }
+
         if data[data.len() - 0x08..data.len() - 0x04] != *b"SPGD" {
             return Err(SPFooterError::NotSPGD);
+        }
+
+        if data.len() < 0x0C {
+            return Err(SPFooterError::DataLengthTooShort);
         }
 
         let footer_len = (u32::from_be_bytes(
@@ -95,6 +117,10 @@ impl SPFooter {
                 .try_into()
                 .unwrap(),
         ) + 0x08) as usize;
+
+        if data.len() < footer_len {
+            return Err(SPFooterError::DataLengthTooShort);
+        }
 
         let lap_count = data[0x10];
         let laps_data = &data[0x11..0x32];

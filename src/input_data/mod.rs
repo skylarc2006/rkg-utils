@@ -12,6 +12,9 @@ pub mod stick_input;
 /// Errors that can occur while parsing [`InputData`].
 #[derive(thiserror::Error, Debug)]
 pub enum InputDataError {
+    /// Input data is impossibly short.
+    #[error("Input data length is too short")]
+    InputDataLengthTooShort,
     /// A face input entry could not be parsed.
     #[error("Face Input Error: {0}")]
     FaceInputError(#[from] face_input::FaceInputError),
@@ -63,6 +66,10 @@ impl InputData {
     /// Returns an [`InputDataError`] variant if any individual input entry
     /// fails to parse.
     pub fn new(input_data: &[u8]) -> Result<Self, InputDataError> {
+        if input_data.len() < 0x08 {
+            return Err(InputDataError::InputDataLengthTooShort);
+        }
+
         let mut raw_data = Vec::from(input_data);
 
         let input_data = if input_data[4..8] == [0x59, 0x61, 0x7A, 0x31] {
