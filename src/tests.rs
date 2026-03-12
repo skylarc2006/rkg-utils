@@ -1027,3 +1027,9 @@ fn test_sp_footer() {
 
     assert!(ghost.verify_file_crc32());
 }
+
+#[test]
+fn south_korea_ghost_test() {
+    let ghost = Ghost::new_from_file("./test_ghosts/ghost2_comp_00.rkg").unwrap();
+    assert_eq!(ghost.header().location().country(), Country::SouthKorea);
+}

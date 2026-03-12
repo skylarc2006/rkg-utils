@@ -176,8 +176,21 @@ impl Header {
 
         let codes = ByteHandler::try_from(&header_data[0x34..=0x37]).unwrap();
 
-        let location = Location::find(codes.copy_byte(0), codes.copy_byte(1), Some(Version::ER12))
-            .unwrap_or_default();
+        let mut location = Location::find(codes.copy_byte(0), codes.copy_byte(1), Some(Version::ER12));
+
+        if location.is_none() {
+            location = Location::find(codes.copy_byte(0), codes.copy_byte(1), Some(Version::ER11));
+            
+            if location.is_none() {
+                location = Location::find(codes.copy_byte(0), codes.copy_byte(1), Some(Version::ER10));
+
+                if location.is_none() {
+                    location = Location::find(codes.copy_byte(0), codes.copy_byte(1), Some(Version::Vanilla));
+                }
+            }
+        }
+        
+        let location = location.unwrap_or_default();
 
         let mii = Mii::new(&header_data[0x3C..0x3C + 0x4A])?;
 
