@@ -15,6 +15,9 @@ pub enum InputDataError {
     /// Input data is impossibly short.
     #[error("Input data length is too short")]
     InputDataLengthTooShort,
+    /// Input data is malformed.
+    #[error("Input data is malformed")]
+    InputDataMalformed,
     /// A face input entry could not be parsed.
     #[error("Face Input Error: {0}")]
     FaceInputError(#[from] face_input::FaceInputError),
@@ -84,6 +87,13 @@ impl InputData {
         let stick_input_count = u16::from_be_bytes([input_data[2], input_data[3]]);
         let dpad_input_count = u16::from_be_bytes([input_data[4], input_data[5]]);
         // bytes 6-7: padding
+
+        if (input_data.len() as u64)
+            < ((face_input_count as u64 + stick_input_count as u64 + dpad_input_count as u64) * 2)
+                + 8
+        {
+            return Err(InputDataError::InputDataMalformed);
+        }
 
         let mut current_byte = 8;
         let mut face_inputs: Vec<FaceInput> = Vec::with_capacity(face_input_count as usize);

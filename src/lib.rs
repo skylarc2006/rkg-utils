@@ -38,8 +38,8 @@ mod tests;
 /// Errors that can occur while parsing or modifying a [`Ghost`].
 #[derive(thiserror::Error, Debug)]
 pub enum GhostError {
-    /// The input data is shorter than the minimum valid ghost size (`0x8E` bytes).
-    #[error("Data length too short for a ghost")]
+    /// Error with data length being too short.
+    #[error("Data length too short")]
     DataLengthTooShort,
     /// The RKG file header could not be parsed.
     #[error("Header Error: {0}")]
@@ -110,10 +110,11 @@ impl Ghost {
     /// # Errors
     ///
     /// Returns [`GhostError::DataLengthTooShort`] if `bytes` is shorter than
-    /// `0x8E` bytes. Returns other [`GhostError`] variants if any field fails
+    /// `0x90` bytes OR input data is shorter than the expected input data size.
+    /// Returns other [`GhostError`] variants if any field fails
     /// to parse.
     pub fn new(bytes: &[u8]) -> Result<Self, GhostError> {
-        if bytes.len() < 0x8E {
+        if bytes.len() < 0x90 {
             return Err(GhostError::DataLengthTooShort);
         }
 
@@ -143,6 +144,10 @@ impl Ghost {
         } else {
             header.decompressed_input_data_length() as usize
         };
+
+        if bytes.len() < 0x88 + input_data_len + 0x04 {
+            return Err(GhostError::DataLengthTooShort);
+        }
 
         let input_data = InputData::new(&bytes[0x88..0x88 + input_data_len])?;
 

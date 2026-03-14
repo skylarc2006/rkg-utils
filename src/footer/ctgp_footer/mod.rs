@@ -1,4 +1,3 @@
-use std::fmt::Write;
 use crate::byte_handler::FromByteHandler;
 use crate::footer::ctgp_footer::{
     category::Category, ctgp_version::CTGPVersion, exact_finish_time::ExactFinishTime,
@@ -7,6 +6,7 @@ use crate::header::in_game_time::InGameTime;
 use crate::{byte_handler::ByteHandler, input_data::yaz1_decompress};
 use crate::{compute_sha1_hex, datetime_from_timestamp, duration_from_ticks};
 use chrono::{TimeDelta, prelude::*};
+use std::fmt::Write;
 
 pub mod category;
 pub mod ctgp_version;
