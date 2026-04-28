@@ -2,7 +2,10 @@ use chrono::NaiveDateTime;
 
 use crate::{
     Ghost,
-    footer::{FooterType, ctgp_footer::{CTGPFooter, region::Region}},
+    footer::{
+        FooterType,
+        ctgp_footer::{CTGPFooter, region::Region},
+    },
     header::{
         Header,
         combo::{Combo, character::Character, vehicle::Vehicle},
@@ -178,13 +181,10 @@ fn test_rkg_input_data() {
     let input_data =
         InputData::new(&rkg_data[0x88..rkg_data.len() - 0xE0]).expect("Couldn't read input data");
 
-    assert_eq!(input_data.face_input_count(), 0x18);
+    assert_eq!(input_data.face_button_input_count(), 0x18);
     assert_eq!(input_data.stick_input_count(), 0x037B);
-    assert_eq!(input_data.dpad_input_count(), 0x09);
-    assert_eq!(input_data.inputs().len(), 907);
-    assert_eq!(input_data.face_inputs().len(), 12);
-    assert_eq!(input_data.stick_inputs().len(), 891);
-    assert_eq!(input_data.dpad_inputs().len(), 9);
+    assert_eq!(input_data.dpad_button_input_count(), 0x09);
+    assert_eq!(input_data.controller_inputs().len(), 907);
 
     assert!(!input_data.contains_illegal_brake_or_drift_inputs());
 }
@@ -193,7 +193,7 @@ fn test_rkg_input_data() {
 fn print_input_data() {
     let ghost = Ghost::new_from_file("./test_ghosts/illegal_brake_input.rkg").unwrap();
 
-    for input in ghost.input_data().inputs().iter() {
+    for input in ghost.input_data().controller_inputs().iter() {
         println!("{:#?}", input)
     }
 }
@@ -289,8 +289,9 @@ fn print_ctgp_metadata() {
         "USB Gamecube enabled? {}",
         ctgp_metadata.usb_gamecube_enabled()
     );
-    println!("Disc region: {:#?}",
-      ctgp_metadata.disc_region().unwrap_or(Region::Unknown)  
+    println!(
+        "Disc region: {:#?}",
+        ctgp_metadata.disc_region().unwrap_or(Region::Unknown)
     );
     println!(
         "Final lap dubious intersection? {}",
@@ -347,11 +348,7 @@ fn test_ctgp_pause_vs_vanilla_input_timing() {
     let vanilla_inputs = InputData::new(&vanilla_rkg_data[0x88..vanilla_rkg_data.len() - 0x04])
         .expect("Failed to read inputs from vanilla ghost");
 
-    assert_eq!(pause_inputs.face_inputs(), vanilla_inputs.face_inputs());
-    assert_eq!(pause_inputs.stick_inputs(), vanilla_inputs.stick_inputs());
-    assert_eq!(pause_inputs.dpad_inputs(), pause_inputs.dpad_inputs());
-
-    assert_eq!(pause_inputs.inputs(), vanilla_inputs.inputs());
+    assert_eq!(pause_inputs.controller_inputs(), vanilla_inputs.controller_inputs());
 }
 
 #[test]
@@ -459,10 +456,10 @@ fn test_recompressed_input_data() {
         ])
     );
     assert_eq!(
-        original_input_data.inputs(),
-        recompressed_input_data.inputs()
+        original_input_data.controller_inputs(),
+        recompressed_input_data.controller_inputs()
     );
-    assert!(original_input_data.inputs().len() > 100);
+    assert!(original_input_data.controller_inputs().len() > 100);
 }
 
 #[test]
@@ -589,20 +586,18 @@ fn test_full_ghost() {
     assert!(ghost.header().verify_mii_crc16());
 
     // Input data
-    assert_eq!(ghost.input_data().face_input_count(), 0x18);
+    assert_eq!(ghost.input_data().face_button_input_count(), 0x18);
     assert_eq!(ghost.input_data().stick_input_count(), 0x037B);
-    assert_eq!(ghost.input_data().dpad_input_count(), 0x09);
-    assert_eq!(ghost.input_data().inputs().len(), 907);
-    assert_eq!(ghost.input_data().face_inputs().len(), 12);
-    assert_eq!(ghost.input_data().stick_inputs().len(), 891);
-    assert_eq!(ghost.input_data().dpad_inputs().len(), 9);
+    assert_eq!(ghost.input_data().dpad_button_input_count(), 0x09);
+    assert_eq!(ghost.input_data().controller_inputs().len(), 907);
 
     assert!(!ghost.input_data().contains_illegal_brake_or_drift_inputs());
-    assert!(
-        !ghost
-            .input_data()
-            .contains_illegal_stick_inputs(ghost.header().controller())
-    );
+
+    for controller_input in ghost.input_data().controller_inputs() {
+        assert!(
+            !controller_input.stick().is_impossible(ghost.header().controller())
+        );
+    }
 
     // CTGP Metadata
     assert!(ghost.footer().is_some() && ghost.footer().unwrap().is_ctgp());

@@ -1,0 +1,117 @@
+use crate::input_data::{
+    dpad_button::DPadButton,
+    stick_input::StickInput,
+};
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct ControllerInput {
+    accelerator: bool,
+    brake: bool,
+    brake_drift: bool,
+    drift_flag: bool,
+    item: bool,
+    /// Unknown face input; mask 0xF0 in a button byte. If creating a new `ControllerInput`, this can be essentially ignored and set to false.
+    unknown_face_button: bool,
+    dpad: DPadButton,
+    stick: StickInput,
+    frame_duration: u32,
+}
+
+impl ControllerInput {
+    /// Creates a new `ControllerInput`. `unknown_face_button` can be safely set to false.
+    pub fn new(
+        accelerator: bool,
+        brake: bool,
+        brake_drift: bool,
+        drift_flag: bool,
+        item: bool,
+        unknown_face_button: bool,
+        dpad: DPadButton,
+        stick: StickInput,
+        frame_duration: u32,
+    ) -> Self {
+        ControllerInput {
+            accelerator,
+            brake,
+            brake_drift,
+            drift_flag,
+            item,
+            unknown_face_button,
+            dpad,
+            stick,
+            frame_duration,
+        }
+    }
+
+    pub fn accelerator(&self) -> bool {
+        self.accelerator
+    }
+
+    pub fn set_accelerator(&mut self, value: bool) {
+        self.accelerator = value;
+    }
+
+    pub fn brake(&self) -> bool {
+        self.brake
+    }
+
+    pub fn set_brake(&mut self, value: bool) {
+        self.brake = value;
+    }
+
+    pub fn brake_drift(&self) -> bool {
+        self.brake_drift
+    }
+
+    pub fn set_brake_drift(&mut self, value: bool) {
+        self.brake_drift = value;
+    }
+
+    pub fn drift_flag(&self) -> bool {
+        self.drift_flag
+    }
+
+    pub fn set_drift_flag(&mut self, value: bool) {
+        self.drift_flag = value;
+    }
+
+    pub fn item(&self) -> bool {
+        self.item
+    }
+
+    pub fn set_item(&mut self, value: bool) {
+        self.item = value;
+    }
+
+    pub fn unknown_face_button(&self) -> bool {
+        self.unknown_face_button
+    }
+
+    pub fn set_unknown_face_button(&mut self, value: bool) {
+        self.unknown_face_button = value;
+    }
+
+    pub fn dpad(&self) -> DPadButton {
+        self.dpad
+    }
+
+    pub fn set_dpad(&mut self, value: DPadButton) {
+        self.dpad = value;
+    }
+
+    pub fn stick(&self) -> StickInput {
+        self.stick
+    }
+
+    pub fn set_stick(&mut self, value: StickInput) {
+        self.stick = value;
+    }
+
+    pub fn frame_duration(&self) -> u32 {
+        self.frame_duration
+    }
+
+    pub fn set_frame_duration(&mut self, value: u32) {
+        self.frame_duration = value;
+    }
+}

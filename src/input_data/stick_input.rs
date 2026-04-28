@@ -1,92 +1,136 @@
+use crate::header::controller::Controller;
+
 /// Errors that can occur while parsing a [`StickInput`].
 #[derive(thiserror::Error, Debug)]
 pub enum StickInputError {
     /// One or both raw axis values exceeded the maximum encoded value of 14.
-    #[error("Invalid Stick Input")]
+    #[error("Invalid Stick Input (must be range 0-14).")]
     InvalidStickInput,
 }
 
 /// A single encoded analog stick input entry from a Mario Kart Wii ghost file.
 ///
-/// Each entry records the stick position and for how many consecutive frames it
-/// was held. Both axes are encoded in a single byte as 4-bit unsigned values
-/// (0–14), then shifted to the signed range −7 to +7 for intuitive use.
-///
-/// Negative `x` values represent left; positive values represent right.
-/// Negative `y` values represent down; positive values represent up.
-#[derive(Debug)]
+/// Both axes are encoded in a single byte as 4-bit unsigned values (0–14).
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct StickInput {
-    /// Horizontal axis position in the range −7 (full left) to +7 (full right).
-    x: i8,
-    /// Vertical axis position in the range −7 (full down) to +7 (full up).
-    y: i8,
-    /// The number of frames this stick position was held.
-    frame_duration: u32,
+    x: u8,
+    y: u8,
 }
 
 impl StickInput {
-    /// Returns the horizontal axis position (−7 to +7).
-    pub fn x(&self) -> i8 {
+    pub fn new(x: u8, y: u8) -> Result<Self, StickInputError> {
+        if x > 14 || y > 14 {
+            Err(StickInputError::InvalidStickInput)
+        } else {
+            Ok(Self { x, y })
+        }
+    }
+
+    /// Whether the stick input is impossible based on the `Controller` used.
+    pub fn is_impossible(&self, controller: Controller) -> bool {
+        const ILLEGAL_STICK_INPUTS: [[u8; 2]; 44] = [
+            // These inputs are illegal for GCN, CCP, and Nunchuk (24 total)
+            [0, 14],
+            [0, 13],
+            [0, 12],
+            [0, 0],
+            [0, 1],
+            [0, 2],
+            [1, 14],
+            [1, 13],
+            [1, 0],
+            [1, 1],
+            [2, 14],
+            [2, 0],
+            [14, 14],
+            [14, 13],
+            [14, 12],
+            [14, 0],
+            [14, 1],
+            [14, 2],
+            [13, 14],
+            [13, 13],
+            [13, 0],
+            [13, 1],
+            [12, 14],
+            [12, 0],
+            // Illegal stick inputs for specifically GCN/CCP (additional 20)
+            [0, 11],
+            [1, 12],
+            [2, 13],
+            [3, 14],
+            [4, 14],
+            [10, 14],
+            [11, 14],
+            [11, 13],
+            [11, 0],
+            [12, 13],
+            [12, 12],
+            [12, 1],
+            [13, 12],
+            [13, 11],
+            [13, 2],
+            [14, 11],
+            [14, 10],
+            [14, 9],
+            [14, 4],
+            [14, 3],
+        ];
+
+        let illegal_stick_inputs = match controller {
+            Controller::Nunchuk => &ILLEGAL_STICK_INPUTS[..24],
+            Controller::Classic | Controller::Gamecube => &ILLEGAL_STICK_INPUTS,
+            Controller::WiiWheel => {
+                return false;
+            }
+        };
+
+        for illegal_stick_input in illegal_stick_inputs.iter() {
+            if &[self.x, self.y] == illegal_stick_input {
+                return true;
+            }
+        }
+
+        false
+
+
+
+    }
+
+    pub fn x(&self) -> u8 {
         self.x
     }
 
-    /// Returns the vertical axis position (−7 to +7).
-    pub fn y(&self) -> i8 {
+    pub fn set_x(&mut self, x: u8) -> Result<(), StickInputError> {
+        if x > 14 {
+            Err(StickInputError::InvalidStickInput)
+        } else {
+            self.x = x;
+            Ok(())
+        }
+    }
+
+    pub fn y(&self) -> u8 {
         self.y
     }
 
-    /// Returns the number of frames this stick position was held.
-    pub fn frame_duration(&self) -> u32 {
-        self.frame_duration
-    }
-
-    /// Sets the number of frames this stick position was held.
-    pub fn set_frame_duration(&mut self, frame_duration: u32) {
-        self.frame_duration = frame_duration;
-    }
-}
-
-/// Two [`StickInput`] values are equal if their `x` and `y` positions match,
-/// regardless of frame duration.
-impl PartialEq for StickInput {
-    fn eq(&self, other: &Self) -> bool {
-        self.x == other.x && self.y == other.y
+    pub fn set_y(&mut self, y: u8) -> Result<(), StickInputError> {
+        if y > 14 {
+            Err(StickInputError::InvalidStickInput)
+        } else {
+            self.y = y;
+            Ok(())
+        }
     }
 }
 
-/// Compares a [`StickInput`] against a `[i8; 2]` array of `[x, y]`.
-impl PartialEq<[i8; 2]> for StickInput {
-    fn eq(&self, other: &[i8; 2]) -> bool {
-        self.x == other[0] && self.y == other[1]
-    }
-}
-
-/// Parses a [`StickInput`] from a 2-byte slice.
-///
-/// # Errors
-///
-/// Returns [`StickInputError::InvalidStickInput`] if either axis value exceeds 14.
-impl TryFrom<&[u8]> for StickInput {
+impl TryFrom<u8> for StickInput {
     type Error = StickInputError;
 
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let x = (value[0] & 0xF0) >> 4;
-        let y = value[0] & 0x0F;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        let x = (value & 0xF0) >> 4;
+        let y = value & 0x0F;
 
-        if x > 14 || y > 14 {
-            return Err(StickInputError::InvalidStickInput);
-        }
-
-        // store x and y as ranging from -7 to +7, as that's more intuitive for left/right or up/down
-        let x = x as i8 - 7;
-        let y = y as i8 - 7;
-
-        let frame_duration = value[1] as u32;
-
-        Ok(Self {
-            x,
-            y,
-            frame_duration,
-        })
+        Self::new(x, y)
     }
 }

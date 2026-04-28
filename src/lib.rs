@@ -181,7 +181,7 @@ impl Ghost {
 
         let mut buf = Vec::from(self.header().raw_data());
 
-        buf.extend_from_slice(self.input_data().raw_data());
+        buf.extend_from_slice(&self.input_data().raw_data());
 
         let header_len = 0x88;
         let new_input_data_end = header_len + self.input_data().raw_data().len();
@@ -263,27 +263,27 @@ impl Ghost {
         Ok(())
     }
 
-    /// Compresses the input data using Yaz1 encoding and sets the compression flag in the header.
+    /// Sets compression flag in `InputData` and the compression flag in the header.
     ///
     /// Does nothing if the input data is already compressed.
     pub fn compress_input_data(&mut self) {
-        if self.input_data().is_compressed() {
+        if self.input_data().compressed() {
             return;
         }
 
-        self.input_data_mut().compress();
+        self.input_data_mut().set_compressed(true);
         self.header_mut().set_compressed(true);
     }
 
-    /// Decompresses the input data and clears the compression flag in the header.
+    /// Clears compression flag in `InputData` and clears the compression flag in the header.
     ///
     /// Does nothing if the input data is not compressed.
     pub fn decompress_input_data(&mut self) {
-        if !self.input_data().is_compressed() {
+        if !self.input_data().compressed() {
             return;
         }
 
-        self.input_data_mut().decompress();
+        self.input_data_mut().set_compressed(false);
         self.header_mut().set_compressed(false);
     }
 
@@ -338,7 +338,7 @@ impl Ghost {
     /// checksum of the current header and input data bytes.
     pub fn verify_base_crc32(&self) -> bool {
         let mut data = Vec::from(self.header().raw_data());
-        data.extend_from_slice(self.input_data().raw_data());
+        data.extend_from_slice(&self.input_data().raw_data());
         self.base_crc32 == crc32(&data)
     }
 

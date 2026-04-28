@@ -1,12 +1,13 @@
-use crate::header::controller::Controller;
-use crate::input_data::dpad_input::{DPadButton, DPadInput};
-use crate::input_data::face_input::{FaceButton, FaceInput};
-use crate::input_data::input::Input;
-use crate::input_data::stick_input::StickInput;
+use crate::input_data::{
+    controller_input::ControllerInput,
+    dpad_button::{DPadButton, DPadButtonError},
+    face_button::{FaceButton, FaceButtonError, FaceButtons},
+    stick_input::{StickInput, StickInputError},
+};
 
-pub mod dpad_input;
-pub mod face_input;
-pub mod input;
+pub mod controller_input;
+pub mod dpad_button;
+pub mod face_button;
 pub mod stick_input;
 
 /// Errors that can occur while parsing [`InputData`].
@@ -18,42 +19,20 @@ pub enum InputDataError {
     /// Input data is malformed.
     #[error("Input data is malformed")]
     InputDataMalformed,
-    /// A face input entry could not be parsed.
-    #[error("Face Input Error: {0}")]
-    FaceInputError(#[from] face_input::FaceInputError),
-    /// A D-pad input entry could not be parsed.
-    #[error("DPad Input Error: {0}")]
-    DPadInputError(#[from] dpad_input::DPadInputError),
-    /// A stick input entry could not be parsed.
+    /// Face Button Error.
+    #[error("Face Button Error: {0}")]
+    FaceButtonError(#[from] FaceButtonError),
+    /// Stick Input Error.
     #[error("Stick Input Error: {0}")]
-    StickInputError(#[from] stick_input::StickInputError),
+    StickInputError(#[from] StickInputError),
+    /// DPad Button Error.
+    #[error("Stick Input Error: {0}")]
+    DPadButtonError(#[from] DPadButtonError),
 }
-
-/// The controller input stream from a Mario Kart Wii RKG ghost file.
-///
-/// Stores the raw bytes (compressed or decompressed) alongside three decoded
-/// run-length encoded input streams: face buttons, analog stick, and D-pad.
-/// Adjacent identical entries across byte boundaries are merged during parsing
-/// so that each entry in the decoded vectors represents a single contiguous
-/// hold period.
-///
-/// The binary layout is documented at
-/// <https://wiki.tockdom.com/wiki/RKG_(File_Format)#Controller_Input_Data>.
+#[derive(Debug, Clone, PartialEq)]
 pub struct InputData {
-    /// The raw input data bytes as they appear in the file (may be Yaz1 compressed).
-    raw_data: Vec<u8>,
-    /// The number of face input entries as recorded in the stream header.
-    face_input_count: u16,
-    /// The number of stick input entries as recorded in the stream header.
-    stick_input_count: u16,
-    /// The number of D-pad input entries as recorded in the stream header.
-    dpad_input_count: u16,
-    /// The decoded and merged face button input stream.
-    face_inputs: Vec<FaceInput>,
-    /// The decoded and merged analog stick input stream.
-    stick_inputs: Vec<StickInput>,
-    /// The decoded D-pad input stream.
-    dpad_inputs: Vec<DPadInput>,
+    controller_inputs: Vec<ControllerInput>,
+    compressed: bool,
 }
 
 impl InputData {
@@ -73,271 +52,169 @@ impl InputData {
             return Err(InputDataError::InputDataLengthTooShort);
         }
 
-        let mut raw_data = Vec::from(input_data);
-
-        let input_data = if input_data[4..8] == [0x59, 0x61, 0x7A, 0x31] {
+        let compressed;
+        let input_data = if input_data[4..8] == *b"Yaz1" {
             // YAZ1 header, decompress
+            compressed = true;
             yaz1_decompress(&input_data[4..]).unwrap()
         } else {
-            raw_data.resize(0x2774, 0x00);
+            compressed = false;
             Vec::from(input_data)
         };
 
-        let face_input_count = u16::from_be_bytes([input_data[0], input_data[1]]);
-        let stick_input_count = u16::from_be_bytes([input_data[2], input_data[3]]);
-        let dpad_input_count = u16::from_be_bytes([input_data[4], input_data[5]]);
-        // bytes 6-7: padding
+        let read_u16 = |i: usize| u16::from_be_bytes(input_data[i..i + 2].try_into().unwrap());
+        let face_button_count = read_u16(0x00);
+        let stick_input_count = read_u16(0x02);
+        let dpad_button_count = read_u16(0x04);
+        // bytes 0x06-0x07: padding
 
-        if (input_data.len() as u64)
-            < ((face_input_count as u64 + stick_input_count as u64 + dpad_input_count as u64) * 2)
-                + 8
+        if (input_data.len() as u16)
+            < ((face_button_count + stick_input_count + dpad_button_count) * 2) + 0x08
         {
             return Err(InputDataError::InputDataMalformed);
         }
 
-        let mut current_byte = 8;
-        let mut face_inputs: Vec<FaceInput> = Vec::with_capacity(face_input_count as usize);
-        while current_byte < 8 + face_input_count * 2 {
-            let idx = current_byte as usize;
-            let input = &input_data[idx..idx + 2];
-            face_inputs.push(FaceInput::try_from(input)?);
-            current_byte += 2;
-        }
+        let offset = 0x08;
+        let face_button_array = &input_data[offset..offset + (face_button_count as usize * 2)];
 
-        current_byte = 8 + face_input_count * 2;
-        let mut stick_inputs: Vec<StickInput> = Vec::with_capacity(stick_input_count as usize);
-        while current_byte < 8 + (face_input_count + stick_input_count) * 2 {
-            let idx = current_byte as usize;
-            let input = &input_data[idx..idx + 2];
-            stick_inputs.push(StickInput::try_from(input)?);
-            current_byte += 2;
-        }
+        let offset = offset + (face_button_count as usize * 2);
+        let stick_input_array = &input_data[offset..offset + (stick_input_count as usize * 2)];
 
-        current_byte = 8 + (face_input_count + stick_input_count) * 2;
-        let mut dpad_inputs: Vec<DPadInput> = Vec::with_capacity(dpad_input_count as usize);
-        while current_byte < 8 + (face_input_count + stick_input_count + dpad_input_count) * 2 {
-            let idx = current_byte as usize;
-            let input = &input_data[idx..idx + 2];
-            dpad_inputs.push(DPadInput::try_from(input)?);
-            current_byte += 2;
-        }
+        let offset = offset + (stick_input_count as usize * 2);
+        let dpad_button_array = &input_data[offset..offset + (dpad_button_count as usize * 2)];
 
-        // Combine adjacent inputs when the same button is held across multiple bytes
-        // (each input byte has a 255-frame limit, so buttons held longer need additional bytes)
-        for index in (0..face_inputs.len() - 1).rev() {
-            if face_inputs[index] == face_inputs[index + 1] {
-                let f1 = face_inputs[index].frame_duration();
-                let f2 = face_inputs[index + 1].frame_duration();
-                face_inputs[index].set_frame_duration(f1 + f2);
-                face_inputs.remove(index + 1);
+        // Parse face entries, merging adjacent identical button bytes inline.
+        // Each pair is (button_byte, frame_count); entries held longer than 255 frames
+        // are split across consecutive pairs with the same button byte.
+        let mut face_entries: Vec<(u8, u32)> = Vec::new();
+        for chunk in face_button_array.chunks_exact(2) {
+            let buttons_byte = chunk[0];
+            let frames = chunk[1] as u32;
+            if face_entries.last().map(|e| e.0) == Some(buttons_byte) {
+                face_entries.last_mut().unwrap().1 += frames;
+            } else {
+                face_entries.push((buttons_byte, frames));
             }
         }
 
-        for index in (0..stick_inputs.len() - 1).rev() {
-            if stick_inputs[index] == stick_inputs[index + 1] {
-                let f1 = stick_inputs[index].frame_duration();
-                let f2 = stick_inputs[index + 1].frame_duration();
-                stick_inputs[index].set_frame_duration(f1 + f2);
-                stick_inputs.remove(index + 1);
+        // Parse stick entries with the same merge-adjacent strategy.
+        let mut stick_entries: Vec<(StickInput, u32)> = Vec::new();
+        for chunk in stick_input_array.chunks_exact(2) {
+            let stick = StickInput::try_from(chunk[0])?;
+            let frames = chunk[1] as u32;
+            if stick_entries.last().map(|e| e.0) == Some(stick) {
+                stick_entries.last_mut().unwrap().1 += frames;
+            } else {
+                stick_entries.push((stick, frames));
+            }
+        }
+
+        let mut dpad_entries: Vec<(DPadButton, u16)> = Vec::new();
+        for chunk in dpad_button_array.chunks_exact(2) {
+            let dpad = DPadButton::try_from(chunk[0])?;
+            let additional_frames: u16 = (chunk[0] & 0x0F).into();
+            // 0x0F bit mask used if this input state was held longer than 255 frames, gives amount of 255-frame intervals to add to frame duration
+            let frames = chunk[1] as u16 + additional_frames;
+            if dpad_entries.last().map(|e| e.0) == Some(dpad) {
+                dpad_entries.last_mut().unwrap().1 += frames;
+            } else {
+                dpad_entries.push((dpad, frames));
+            }
+        }
+
+        // Walk all three timelines simultaneously. At each step take the shortest of the
+        // three remaining spans, emit one ControllerInput, then advance whichever cursor(s)
+        // are exhausted. This splits entries only where the timelines diverge.
+        let mut controller_inputs: Vec<ControllerInput> = Vec::new();
+        let mut face_idx = 0;
+        let mut stick_idx = 0;
+        let mut dpad_idx = 0;
+        let mut face_rem = face_entries.first().map(|e| e.1).unwrap_or(0);
+        let mut stick_rem = stick_entries.first().map(|e| e.1).unwrap_or(0);
+        let mut dpad_rem = dpad_entries.first().map(|e| e.1 as u32).unwrap_or(0);
+
+        while face_idx < face_entries.len()
+            && stick_idx < stick_entries.len()
+            && dpad_idx < dpad_entries.len()
+        {
+            let frames = face_rem.min(stick_rem).min(dpad_rem);
+            let face_buttons = FaceButtons::try_from(face_entries[face_idx].0)?;
+            let stick = stick_entries[stick_idx].0;
+            let dpad = dpad_entries[dpad_idx].0;
+            controller_inputs.push(
+                ControllerInput::new(
+                    face_buttons.0.contains(&FaceButton::Accelerator),
+                    face_buttons.0.contains(&FaceButton::Brake),
+                    face_buttons.0.contains(&FaceButton::BrakeDrift),
+                    face_buttons.0.contains(&FaceButton::Drift),
+                    face_buttons.0.contains(&FaceButton::Item),
+                    face_buttons.0.contains(&FaceButton::Unknown),
+                    dpad,
+                    stick,
+                    frames
+                ));
+
+            face_rem -= frames;
+            stick_rem -= frames;
+            dpad_rem -= frames;
+
+            if face_rem == 0 {
+                face_idx += 1;
+                if face_idx < face_entries.len() {
+                    face_rem = face_entries[face_idx].1;
+                }
+            }
+            if stick_rem == 0 {
+                stick_idx += 1;
+                if stick_idx < stick_entries.len() {
+                    stick_rem = stick_entries[stick_idx].1;
+                }
+            }
+            if dpad_rem == 0 {
+                dpad_idx += 1;
+                if dpad_idx < dpad_entries.len() {
+                    dpad_rem = dpad_entries[dpad_idx].1 as u32;
+                }
             }
         }
 
         Ok(Self {
-            raw_data,
-            face_input_count,
-            stick_input_count,
-            dpad_input_count,
-            face_inputs,
-            stick_inputs,
-            dpad_inputs,
+            controller_inputs,
+            compressed,
         })
     }
 
     /// Returns an input state at a specified frame in the race.
     ///
     /// Returns `None` if the frame is 0 or otherwise out-of-range.
-    pub fn get_input_at_frame(&self, frame: u32) -> Option<Input> {
+    pub fn get_input_at_frame(&self, frame: u32) -> Option<ControllerInput> {
         if frame == 0 {
             return None;
         }
-
-        let mut face_idx = 0;
-        let mut stick_idx = 0;
-        let mut dpad_idx = 0;
-        let mut face_offset = 0u32;
-        let mut stick_offset = 0u32;
-        let mut dpad_offset = 0u32;
-        let mut frames_so_far = 0u32;
-
-        while face_idx < self.face_inputs.len()
-            || stick_idx < self.stick_inputs.len()
-            || dpad_idx < self.dpad_inputs.len()
-        {
-            let face = self.face_inputs.get(face_idx);
-            let stick = self.stick_inputs.get(stick_idx);
-            let dpad = self.dpad_inputs.get(dpad_idx);
-
-            let face_remaining = face
-                .map(|f| f.frame_duration() - face_offset)
-                .unwrap_or(u32::MAX);
-            let stick_remaining = stick
-                .map(|s| s.frame_duration() - stick_offset)
-                .unwrap_or(u32::MAX);
-            let dpad_remaining = dpad
-                .map(|d| d.frame_duration() - dpad_offset)
-                .unwrap_or(u32::MAX);
-
-            let duration = face_remaining.min(stick_remaining).min(dpad_remaining);
-
-            if duration == u32::MAX {
-                break;
-            }
-
-            frames_so_far += duration;
-
-            if frame <= frames_so_far {
-                return Some(Input::new(
-                    face.map(|f| f.buttons().clone()).unwrap_or_default(),
-                    stick.map(|s| s.x()).unwrap_or(0),
-                    stick.map(|s| s.y()).unwrap_or(0),
-                    dpad.map(|d| d.button()).unwrap_or(DPadButton::None),
-                    duration,
-                ));
-            }
-
-            face_offset += duration;
-            stick_offset += duration;
-            dpad_offset += duration;
-
-            if let Some(face) = face
-                && face_offset >= face.frame_duration()
-            {
-                face_idx += 1;
-                face_offset = 0;
-            }
-            if let Some(stick) = stick
-                && stick_offset >= stick.frame_duration()
-            {
-                stick_idx += 1;
-                stick_offset = 0;
-            }
-            if let Some(dpad) = dpad
-                && dpad_offset >= dpad.frame_duration()
-            {
-                dpad_idx += 1;
-                dpad_offset = 0;
+        let mut elapsed = 0u32;
+        for input in &self.controller_inputs {
+            elapsed += input.frame_duration();
+            if frame <= elapsed {
+                return Some(*input);
             }
         }
-
         None
     }
 
-    /// Returns the three input streams merged into a single frame-accurate sequence of [`Input`] values.
-    ///
-    /// The face, stick, and D-pad streams are interleaved by advancing through
-    /// all three simultaneously and emitting a new [`Input`] whenever any
-    /// stream transitions to its next entry. Each emitted [`Input`] covers
-    /// exactly the frames until the next transition across any stream.
-    pub fn inputs(&self) -> Vec<Input> {
-        let mut result = Vec::new();
-
-        // Track current position in each input stream
-        let mut face_idx = 0;
-        let mut stick_idx = 0;
-        let mut dpad_idx = 0;
-
-        // Track how many frames consumed from current input in each stream
-        let mut face_offset = 0u32;
-        let mut stick_offset = 0u32;
-        let mut dpad_offset = 0u32;
-
-        // Continue until all streams are exhausted
-        while face_idx < self.face_inputs.len()
-            || stick_idx < self.stick_inputs.len()
-            || dpad_idx < self.dpad_inputs.len()
-        {
-            // Get current input from each stream (or defaults if exhausted)
-            let face = self.face_inputs.get(face_idx);
-            let stick = self.stick_inputs.get(stick_idx);
-            let dpad = self.dpad_inputs.get(dpad_idx);
-
-            // Calculate remaining frames for current input in each stream
-            let face_remaining = face
-                .map(|f| f.frame_duration() - face_offset)
-                .unwrap_or(u32::MAX);
-            let stick_remaining = stick
-                .map(|s| s.frame_duration() - stick_offset)
-                .unwrap_or(u32::MAX);
-            let dpad_remaining = dpad
-                .map(|d| d.frame_duration() - dpad_offset)
-                .unwrap_or(u32::MAX);
-
-            // Find the minimum remaining frames (when next change occurs)
-            let duration = face_remaining.min(stick_remaining).min(dpad_remaining);
-
-            if duration == u32::MAX {
-                // if all streams exhausted
-                break;
-            }
-
-            // Create combined input for this duration
-            let combined = Input::new(
-                face.map(|f| f.buttons().clone()).unwrap_or_default(),
-                stick.map(|s| s.x()).unwrap_or(0),
-                stick.map(|s| s.y()).unwrap_or(0),
-                dpad.map(|d| d.button()).unwrap_or(DPadButton::None),
-                duration,
-            );
-            result.push(combined);
-
-            // Update offsets and advance indices where needed
-            face_offset += duration;
-            stick_offset += duration;
-            dpad_offset += duration;
-
-            if let Some(face) = face
-                && face_offset >= face.frame_duration()
-            {
-                face_idx += 1;
-                face_offset = 0;
-            }
-            if let Some(stick) = stick
-                && stick_offset >= stick.frame_duration()
-            {
-                stick_idx += 1;
-                stick_offset = 0;
-            }
-            if let Some(dpad) = dpad
-                && dpad_offset >= dpad.frame_duration()
-            {
-                dpad_idx += 1;
-                dpad_offset = 0;
-            }
-        }
-
-        result
-    }
-
-    /// Returns `true` if the face input stream contains an illegal drift or brake input.
-    ///
-    /// An input is illegal if drift is active without brake, or if brake and
-    /// accelerator are pressed simultaneously without drift when the previous
-    /// frame had accelerator but not brake (indicating a missing drift flag).
     pub fn contains_illegal_brake_or_drift_inputs(&self) -> bool {
-        for (idx, input) in self.face_inputs().iter().enumerate() {
-            let current_buttons = input.buttons();
-            if current_buttons.contains(&FaceButton::Drift)
-                && !current_buttons.contains(&FaceButton::Brake)
+        for (idx, current_input) in self.controller_inputs().iter().enumerate() {
+            if current_input.drift_flag()
+                && !current_input.brake()
             {
                 // Illegal drift input
                 return true;
             } else if idx > 0 {
-                let previous_buttons = self.face_inputs()[idx - 1].buttons();
-                if current_buttons.contains(&FaceButton::Brake)
-                    && current_buttons.contains(&FaceButton::Accelerator)
-                    && !current_buttons.contains(&FaceButton::Drift)
-                    && previous_buttons.contains(&FaceButton::Accelerator)
-                    && !previous_buttons.contains(&FaceButton::Brake)
+                let previous_input = self.controller_inputs()[idx - 1];
+                if current_input.brake()
+                    && current_input.accelerator()
+                    && !current_input.drift_flag()
+                    && previous_input.accelerator()
+                    && !previous_input.brake()
                 {
                     // Illegal brake input (drift flag isn't 1 when it should be)
                     return true;
@@ -347,139 +224,40 @@ impl InputData {
         false
     }
 
-    /// Returns `true` if the raw input data begins with a Yaz1 magic header at offset 4.
-    pub fn is_compressed(&self) -> bool {
-        self.raw_data[4..8] == [0x59, 0x61, 0x7A, 0x31]
+    pub fn raw_data(&self) -> Vec<u8> {
+        // TODO: calculate this from controller_inputs
+        Vec::from([0u8])
     }
 
-    /// Compresses the raw input data using Yaz1 encoding.
-    ///
-    /// Does nothing if the data is already compressed.
-    pub(crate) fn compress(&mut self) {
-        if !self.is_compressed() {
-            self.raw_data = yaz1_compress(&self.raw_data);
-        }
+    pub fn face_button_input_count(&self) -> u16 {
+        // TODO: calculate this from controller inputs
+        0u16
     }
 
-    /// Decompresses the raw input data from Yaz1 encoding.
-    ///
-    /// Does nothing if the data is not compressed.
-    pub(crate) fn decompress(&mut self) {
-        if self.is_compressed() {
-            self.raw_data = yaz1_decompress(&self.raw_data[4..]).unwrap();
-        }
-    }
-
-    /// Returns the raw input data bytes as they appear in the file.
-    pub fn raw_data(&self) -> &[u8] {
-        &self.raw_data
-    }
-
-    /// Returns `true` if the stick input stream contains any illegal stick position
-    /// for the given controller type. More info on illegal input ranges here:
-    /// <https://github.com/malleoz/mkw-replay?tab=readme-ov-file#regarding-input-ranges>
-    /// <https://youtu.be/KUjS7qWWu9c?t=489>
-    ///
-    /// The Wii Wheel has a fully unrestricted input range and is never considered to
-    /// have illegal inputs.
-    pub fn contains_illegal_stick_inputs(&self, controller: Controller) -> bool {
-        // Definition of illegal stick inputs [x, y]
-        const ILLEGAL_STICK_INPUTS: [[i8; 2]; 44] = [
-            // These inputs are illegal for GCN, CCP, and Nunchuk (24 total)
-            [-7, 7],
-            [-7, 6],
-            [-7, 5],
-            [-7, -7],
-            [-7, -6],
-            [-7, -5],
-            [-6, 7],
-            [-6, 6],
-            [-6, -7],
-            [-6, -6],
-            [-5, 7],
-            [-5, -7],
-            [7, 7],
-            [7, 6],
-            [7, 5],
-            [7, -7],
-            [7, -6],
-            [7, -5],
-            [6, 7],
-            [6, 6],
-            [6, -7],
-            [6, -6],
-            [5, 7],
-            [5, -7],
-            // Illegal stick inputs for specifically GCN/CCP (additional 20)
-            [-7, 4],
-            [-6, 5],
-            [-5, 6],
-            [-4, 7],
-            [-3, 7],
-            [3, 7],
-            [4, 7],
-            [4, 6],
-            [4, -7],
-            [5, 6],
-            [5, 5],
-            [5, -6],
-            [6, 5],
-            [6, 4],
-            [6, -5],
-            [7, 4],
-            [7, 3],
-            [7, 2],
-            [7, -3],
-            [7, -4],
-        ];
-
-        let illegal_stick_inputs = match controller {
-            Controller::Nunchuk => &ILLEGAL_STICK_INPUTS[..24],
-            Controller::Classic | Controller::Gamecube => &ILLEGAL_STICK_INPUTS,
-            Controller::WiiWheel => {
-                return false;
-            }
-        };
-
-        for current_stick_input in self.stick_inputs().iter() {
-            for illegal_stick_input in illegal_stick_inputs.iter() {
-                if current_stick_input == illegal_stick_input {
-                    return true;
-                }
-            }
-        }
-
-        false
-    }
-
-    /// Returns the decoded face button input stream.
-    pub fn face_inputs(&self) -> &[FaceInput] {
-        &self.face_inputs
-    }
-
-    /// Returns the decoded analog stick input stream.
-    pub fn stick_inputs(&self) -> &[StickInput] {
-        &self.stick_inputs
-    }
-
-    /// Returns the decoded D-pad input stream.
-    pub fn dpad_inputs(&self) -> &[DPadInput] {
-        &self.dpad_inputs
-    }
-
-    /// Returns the number of face input entries as recorded in the stream header.
-    pub fn face_input_count(&self) -> u16 {
-        self.face_input_count
-    }
-
-    /// Returns the number of stick input entries as recorded in the stream header.
     pub fn stick_input_count(&self) -> u16 {
-        self.stick_input_count
+        // TODO: calculate this from controller inputs
+        0u16
     }
 
-    /// Returns the number of D-pad input entries as recorded in the stream header.
-    pub fn dpad_input_count(&self) -> u16 {
-        self.dpad_input_count
+    pub fn dpad_button_input_count(&self) -> u16 {
+        // TODO: calculate this from controller inputs
+        0u16
+    }
+
+    pub fn controller_inputs(&self) -> &[ControllerInput] {
+        &self.controller_inputs
+    }
+
+    pub fn controller_inputs_mut(&mut self) -> &mut [ControllerInput] {
+        &mut self.controller_inputs
+    }
+
+    pub fn compressed(&self) -> bool {
+        self.compressed
+    }
+
+    pub fn set_compressed(&mut self, compressed: bool) {
+        self.compressed = compressed;
     }
 }
 
@@ -519,6 +297,151 @@ pub(crate) fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
     } else {
         None
     }
+}
+
+/// Compresses a byte slice using the Yaz1 encoding scheme.
+///
+/// Writes a 16-byte Yaz1 header (magic, uncompressed size, 8 bytes of padding),
+/// followed by the compressed payload. The result is padded so its length is a
+/// multiple of 4 (matching the original JS behavior: adds `len % 4` zero bytes).
+pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
+    // first remove padded 0s (decompressed input data is padded with 0s to 0x2774 bytes)
+    let mut trailing_bytes_to_remove = 0usize;
+    for idx in (0..src.len()).rev() {
+        if src[idx] == 0 {
+            trailing_bytes_to_remove += 1;
+        } else {
+            break;
+        }
+    }
+
+    let src = &src[0..src.len() - trailing_bytes_to_remove];
+
+
+    let mut dst = encode_yaz1(src);
+
+    let remainder = dst.len() % 4;
+    dst.resize(dst.len() + remainder, 0);
+
+    let mut compressed_data = Vec::new();
+    compressed_data.extend_from_slice(&((dst.len() + 8) as u32).to_be_bytes()); // size of compressed data
+    compressed_data.extend_from_slice(b"Yaz1");
+    compressed_data.extend_from_slice(&(src.len() as u32).to_be_bytes());
+    compressed_data.extend_from_slice(&[0u8; 8]); // padding
+    compressed_data.extend_from_slice(&dst);
+    compressed_data
+}
+
+fn encode_yaz1(src: &[u8]) -> Vec<u8> {
+    let size = src.len();
+    let mut state = NintendoEncState::new();
+    let mut dst_buf = [0u8; 24]; // 8 codes × 3 bytes maximum
+    let mut dst_pos = 0usize;
+    let mut src_pos = 0usize;
+    let mut valid_bit_count = 0u32;
+    let mut curr_code_byte = 0u8;
+    let mut output: Vec<u8> = Vec::new();
+
+    while src_pos < size {
+        let (num_bytes, match_pos) = state.encode(src, size, src_pos);
+
+        if num_bytes < 3 {
+            dst_buf[dst_pos] = src[src_pos];
+            dst_pos += 1;
+            src_pos += 1;
+            curr_code_byte |= 0x80u8 >> valid_bit_count;
+        } else {
+            let dist = src_pos - match_pos - 1;
+            let mut num_bytes = num_bytes;
+
+            if num_bytes >= 0x12 {
+                dst_buf[dst_pos] = (dist >> 8) as u8;
+                dst_pos += 1;
+                dst_buf[dst_pos] = (dist & 0xff) as u8;
+                dst_pos += 1;
+                if num_bytes > 0xff + 0x12 {
+                    num_bytes = 0xff + 0x12;
+                }
+                dst_buf[dst_pos] = (num_bytes - 0x12) as u8;
+                dst_pos += 1;
+            } else {
+                dst_buf[dst_pos] = (((num_bytes - 2) << 4) | (dist >> 8)) as u8;
+                dst_pos += 1;
+                dst_buf[dst_pos] = (dist & 0xff) as u8;
+                dst_pos += 1;
+            }
+            src_pos += num_bytes;
+        }
+
+        valid_bit_count += 1;
+        if valid_bit_count == 8 {
+            output.push(curr_code_byte);
+            output.extend_from_slice(&dst_buf[..dst_pos]);
+            curr_code_byte = 0;
+            valid_bit_count = 0;
+            dst_pos = 0;
+        }
+    }
+
+    if valid_bit_count > 0 {
+        output.push(curr_code_byte);
+        output.extend_from_slice(&dst_buf[..dst_pos]);
+    }
+
+    output
+}
+
+struct NintendoEncState {
+    prev_flag: bool,
+    stored_match_pos: usize,
+    stored_num_bytes: usize,
+}
+
+impl NintendoEncState {
+    fn new() -> Self {
+        Self { prev_flag: false, stored_match_pos: 0, stored_num_bytes: 0 }
+    }
+
+    fn encode(&mut self, src: &[u8], size: usize, pos: usize) -> (usize, usize) {
+        if self.prev_flag {
+            self.prev_flag = false;
+            return (self.stored_num_bytes, self.stored_match_pos);
+        }
+
+        let (mut num_bytes, match_pos) = simple_enc(src, size, pos);
+
+        if num_bytes >= 3 {
+            let (num_bytes1, match_pos1) = simple_enc(src, size, pos + 1);
+            self.stored_num_bytes = num_bytes1;
+            self.stored_match_pos = match_pos1;
+            if num_bytes1 >= num_bytes + 2 {
+                num_bytes = 1;
+                self.prev_flag = true;
+            }
+        }
+
+        (num_bytes, match_pos)
+    }
+}
+
+fn simple_enc(src: &[u8], size: usize, pos: usize) -> (usize, usize) {
+    let start_pos = pos.saturating_sub(0x1000);
+    let max_match = size - pos;
+    let mut num_bytes = 1usize;
+    let mut match_pos = 0usize;
+
+    for i in start_pos..pos {
+        let mut j = 0usize;
+        while j < max_match && src[i + j] == src[j + pos] {
+            j += 1;
+        }
+        if j > num_bytes {
+            num_bytes = j;
+            match_pos = i;
+        }
+    }
+
+    (num_bytes, match_pos)
 }
 
 /// Decompresses a single Yaz1 block starting at `offset` within `src`.
@@ -591,185 +514,4 @@ fn decompress_block(src: &[u8], offset: usize, uncompressed_size: usize) -> Opti
     }
 
     Some(dst)
-}
-
-/// Compresses raw input data using Yaz1 encoding.
-///
-/// Trailing zero bytes (used to pad decompressed data to `0x2774` bytes) are
-/// stripped before compression. The output includes a full Yaz1 file header
-/// containing the compressed size, the `Yaz1` magic, the uncompressed size,
-/// and 8 bytes of padding.
-///
-/// Adapted from <https://github.com/AtishaRibeiro/TT-Rec-Tools/blob/dev/ghostmanager/Scripts/YAZ1_comp.js>.
-pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
-    // first remove padded 0s (decompressed input data is padded with 0s to 0x2774 bytes)
-    let mut trailing_bytes_to_remove = 0usize;
-    for idx in (0..src.len()).rev() {
-        if src[idx] == 0 {
-            trailing_bytes_to_remove += 1;
-        } else {
-            break;
-        }
-    }
-
-    let src = &src[0..src.len() - trailing_bytes_to_remove];
-
-    let mut dst = Vec::new();
-    let src_size = src.len();
-    let mut src_pos = 0;
-    let mut prev_flag = false;
-    let mut prev_num_bytes = 0;
-    let mut prev_match_pos = 0;
-
-    let mut code_byte = 0u8;
-    let mut valid_bit_count = 0;
-    let mut chunk = Vec::with_capacity(24); // 8 codes * 3 bytes maximum
-
-    while src_pos < src_size {
-        let (num_bytes, match_pos) = nintendo_encode(
-            src,
-            src_size,
-            src_pos,
-            &mut prev_flag,
-            &mut prev_num_bytes,
-            &mut prev_match_pos,
-        );
-
-        if num_bytes < 3 {
-            // Straight copy
-            chunk.push(src[src_pos]);
-            src_pos += 1;
-            // Set flag for straight copy
-            code_byte |= 0x80 >> valid_bit_count;
-        } else {
-            // RLE part
-            let dist = src_pos - match_pos - 1;
-
-            if num_bytes >= 0x12 {
-                // 3 byte encoding
-                let byte1 = (dist >> 8) as u8;
-                let byte2 = (dist & 0xff) as u8;
-                chunk.push(byte1);
-                chunk.push(byte2);
-
-                // Maximum runlength for 3 byte encoding
-                let num_bytes = num_bytes.min(0xff + 0x12);
-                let byte3 = (num_bytes - 0x12) as u8;
-                chunk.push(byte3);
-            } else {
-                // 2 byte encoding
-                let byte1 = (((num_bytes - 2) << 4) | (dist >> 8)) as u8;
-                let byte2 = (dist & 0xff) as u8;
-                chunk.push(byte1);
-                chunk.push(byte2);
-            }
-            src_pos += num_bytes;
-        }
-
-        valid_bit_count += 1;
-
-        // Write eight codes
-        if valid_bit_count == 8 {
-            dst.push(code_byte);
-            dst.extend_from_slice(&chunk);
-
-            code_byte = 0;
-            valid_bit_count = 0;
-            chunk.clear();
-        }
-    }
-
-    // Write remaining codes
-    if valid_bit_count > 0 {
-        dst.push(code_byte);
-        dst.extend_from_slice(&chunk);
-    }
-
-    let mut compressed_data = Vec::new();
-
-    // Write Yaz1 header
-    compressed_data.extend_from_slice(&((dst.len() + 8) as u32).to_be_bytes()); // size of compressed data
-    compressed_data.extend_from_slice(b"Yaz1");
-    compressed_data.extend_from_slice(&(src_size as u32).to_be_bytes());
-    compressed_data.extend_from_slice(&[0u8; 8]); // padding
-    compressed_data.extend_from_slice(&dst);
-    compressed_data
-}
-
-/// Determines the best encoding for the byte at `pos` using the Nintendo Yaz1 heuristic.
-///
-/// If the previous call set a lookahead flag, the cached values from that call
-/// are returned immediately. Otherwise [`simple_encode`] is run at `pos` and
-/// at `pos + 1`; if the next position's match is 2 or more bytes longer, the
-/// lookahead flag is set and a literal copy is emitted for the current position.
-fn nintendo_encode(
-    src: &[u8],
-    size: usize,
-    pos: usize,
-    prev_flag: &mut bool,
-    prev_num_bytes: &mut usize,
-    prev_match_pos: &mut usize,
-) -> (usize, usize) {
-    // If prevFlag is set, use the previously calculated values
-    if *prev_flag {
-        *prev_flag = false;
-        return (*prev_num_bytes, *prev_match_pos);
-    }
-
-    *prev_flag = false;
-    let (num_bytes, match_pos) = simple_encode(src, size, pos);
-
-    // If this position is RLE encoded, compare to copying 1 byte and next position encoding
-    if num_bytes >= 3 {
-        let (num_bytes1, match_pos1) = simple_encode(src, size, pos + 1);
-        *prev_num_bytes = num_bytes1;
-        *prev_match_pos = match_pos1;
-
-        // If the next position encoding is +2 longer, choose it
-        if num_bytes1 >= num_bytes + 2 {
-            *prev_flag = true;
-            return (1, match_pos);
-        }
-    }
-
-    (num_bytes, match_pos)
-}
-
-/// Finds the longest match for `src[pos..]` within the preceding `0x1000`-byte
-/// window using a simple linear scan.
-///
-/// Returns `(num_bytes, match_pos)` where `num_bytes` is the length of the
-/// longest match found (1 if no match of length ≥ 3 was found) and
-/// `match_pos` is the starting offset of that match in `src`.
-fn simple_encode(src: &[u8], size: usize, pos: usize) -> (usize, usize) {
-    let mut start_pos = pos as i32 - 0x1000;
-    let mut num_bytes = 1;
-    let mut match_pos = 0;
-
-    if start_pos < 0 {
-        start_pos = 0;
-    }
-    let start_pos = start_pos as usize;
-
-    for i in start_pos..pos {
-        let mut j = 0;
-        // Match the JavaScript loop condition exactly: j < size-pos
-        while j < size - pos {
-            if src[i + j] != src[j + pos] {
-                break;
-            }
-            j += 1;
-        }
-
-        if j > num_bytes {
-            num_bytes = j;
-            match_pos = i;
-        }
-    }
-
-    if num_bytes == 2 {
-        num_bytes = 1;
-    }
-
-    (num_bytes, match_pos)
 }

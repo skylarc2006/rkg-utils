@@ -476,7 +476,7 @@ impl CTGPFooter {
     }
 
     /// Returns the region of the disc used when the ghost was set.
-    /// 
+    ///
     /// Returns `None` for ghosts recorded on footer version 1 or 2, which do not include this data.
     pub fn disc_region(&self) -> Option<Region> {
         self.disc_region
