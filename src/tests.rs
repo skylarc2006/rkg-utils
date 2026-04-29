@@ -179,7 +179,7 @@ fn test_rkg_input_data() {
         .expect("Couldn't read bytes in file");
 
     let input_data =
-        InputData::new(&rkg_data[0x88..rkg_data.len() - 0xE0]).expect("Couldn't read input data");
+        InputData::new_from_bytes(&rkg_data[0x88..rkg_data.len() - 0xE0]).expect("Couldn't read input data");
 
     assert_eq!(input_data.face_button_input_count(), 0x18);
     assert_eq!(input_data.stick_input_count(), 0x037B);
@@ -343,9 +343,9 @@ fn test_ctgp_pause_vs_vanilla_input_timing() {
         .read_to_end(&mut vanilla_rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let pause_inputs = InputData::new(&pause_rkg_data[0x88..pause_rkg_data.len() - 0xE0])
+    let pause_inputs = InputData::new_from_bytes(&pause_rkg_data[0x88..pause_rkg_data.len() - 0xE0])
         .expect("Failed to read inputs from pause ghost");
-    let vanilla_inputs = InputData::new(&vanilla_rkg_data[0x88..vanilla_rkg_data.len() - 0x04])
+    let vanilla_inputs = InputData::new_from_bytes(&vanilla_rkg_data[0x88..vanilla_rkg_data.len() - 0x04])
         .expect("Failed to read inputs from vanilla ghost");
 
     assert_eq!(
@@ -363,7 +363,7 @@ fn illegal_drift_input_test() {
         .expect("Couldn't read bytes in file");
 
     let input_data =
-        InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
+        InputData::new_from_bytes(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
     assert!(input_data.contains_illegal_brake_or_drift_inputs());
 }
 
@@ -376,7 +376,7 @@ fn illegal_brake_input_test() {
         .expect("Couldn't read bytes in file");
 
     let input_data =
-        InputData::new(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
+        InputData::new_from_bytes(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
     assert!(input_data.contains_illegal_brake_or_drift_inputs());
 }
 
@@ -437,8 +437,8 @@ fn test_recompressed_input_data() {
     let decompressed_data = yaz1_decompress(&original_data[0x04..]).unwrap();
     let recompressed_data = yaz1_compress(&decompressed_data);
 
-    let original_input_data = InputData::new(&original_data).unwrap();
-    let recompressed_input_data = InputData::new(&recompressed_data).unwrap();
+    let original_input_data = InputData::new_from_bytes(&original_data).unwrap();
+    let recompressed_input_data = InputData::new_from_bytes(&recompressed_data).unwrap();
 
     assert_eq!(
         (&original_data.len() - 12) as u32,

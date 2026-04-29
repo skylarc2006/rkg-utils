@@ -149,7 +149,7 @@ impl Ghost {
             return Err(GhostError::DataLengthTooShort);
         }
 
-        let input_data = InputData::new(&bytes[0x88..0x88 + input_data_len])?;
+        let input_data = InputData::new_from_bytes(&bytes[0x88..0x88 + input_data_len])?;
 
         Ok(Self {
             raw_data: bytes.to_vec(),

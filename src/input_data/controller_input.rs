@@ -1,5 +1,12 @@
 use crate::input_data::{dpad_button::DPadButton, stick_input::StickInput};
 
+#[derive(thiserror::Error, Debug)]
+pub enum ControllerInputError {
+    /// Frame duration cannot be 0.
+    #[error("Invalid frame duration (cannot be 0).")]
+    FrameDurationTooShort,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ControllerInput {
     accelerator: bool,

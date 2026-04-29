@@ -36,6 +36,19 @@ pub struct InputData {
 }
 
 impl InputData {
+    /// Constructs input data from a `Vec<ControllerInput>` and a compressed flag.
+    /// 
+    /// Returns [`InputDataError::InputDataLengthTooShort`] if `controller_inputs` is empty.
+    pub fn new(controller_inputs: Vec<ControllerInput>, compressed: bool) -> Result<Self, InputDataError> {
+        if controller_inputs.is_empty() {
+            return Err(InputDataError::InputDataLengthTooShort)
+        }
+        Ok(Self { controller_inputs, compressed })
+    }
+
+
+
+
     /// Parses controller input data from raw RKG bytes starting at offset `0x88`.
     ///
     /// If the bytes beginning at offset 4 carry a `Yaz1` magic header, the
@@ -47,7 +60,7 @@ impl InputData {
     ///
     /// Returns an [`InputDataError`] variant if any individual input entry
     /// fails to parse.
-    pub fn new(input_data: &[u8]) -> Result<Self, InputDataError> {
+    pub fn new_from_bytes(input_data: &[u8]) -> Result<Self, InputDataError> {
         if input_data.len() < 0x08 {
             return Err(InputDataError::InputDataLengthTooShort);
         }
