@@ -266,27 +266,9 @@ impl Ghost {
     }
 
     /// Sets compression flag in `InputData` and the compression flag in the header.
-    ///
-    /// Does nothing if the input data is already compressed.
-    pub fn compress_input_data(&mut self) {
-        if self.input_data().compressed() {
-            return;
-        }
-
-        self.input_data_mut().set_compressed(true);
-        self.header_mut().set_compressed(true);
-    }
-
-    /// Clears compression flag in `InputData` and clears the compression flag in the header.
-    ///
-    /// Does nothing if the input data is not compressed.
-    pub fn decompress_input_data(&mut self) {
-        if !self.input_data().compressed() {
-            return;
-        }
-
-        self.input_data_mut().set_compressed(false);
-        self.header_mut().set_compressed(false);
+    pub fn set_input_data_compressed(&mut self, compressed: bool) {
+        self.input_data_mut().set_compressed(compressed);
+        self.header_mut().set_compressed(compressed);
     }
 
     /// Returns the raw file bytes.

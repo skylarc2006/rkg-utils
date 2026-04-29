@@ -745,7 +745,7 @@ fn write_to_ghost() {
         .header_mut()
         .set_date_set(Date::new(2018, 12, 25).unwrap());
     ghost.header_mut().set_controller(Controller::Gamecube);
-    ghost.decompress_input_data();
+    ghost.set_input_data_compressed(false);
     ghost.header_mut().set_ghost_type(GhostType::Friend23);
     ghost.header_mut().set_automatic_drift(false);
     ghost
