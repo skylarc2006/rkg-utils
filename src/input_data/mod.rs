@@ -318,8 +318,10 @@ impl InputData {
                 raw_data.push(button_byte);
                 raw_data.push(255);
             }
-            raw_data.push(button_byte);
-            raw_data.push((*frames % 255) as u8);
+            if *frames % 255 != 0 {
+                raw_data.push(button_byte);
+                raw_data.push((*frames % 255) as u8);
+            }
         }
 
         // Stick input array
@@ -338,8 +340,10 @@ impl InputData {
                 raw_data.push(stick_byte);
                 raw_data.push(255);
             }
-            raw_data.push(stick_byte);
-            raw_data.push((*frames % 255) as u8);
+            if *frames % 255 != 0 {
+                raw_data.push(stick_byte);
+                raw_data.push((*frames % 255) as u8);
+            }
         }
 
         // DPad input array
@@ -358,8 +362,10 @@ impl InputData {
                 let word = (nibble << 12) | 0xFFF;
                 raw_data.extend_from_slice(&word.to_be_bytes());
             }
-            let word = (nibble << 12) | (*frames % 4095) as u16;
-            raw_data.extend_from_slice(&word.to_be_bytes());
+            if *frames % 4095 != 0 {
+                let word = (nibble << 12) | (*frames % 4095) as u16;
+                raw_data.extend_from_slice(&word.to_be_bytes());
+            }
         }
 
         if self.compressed() {
@@ -384,11 +390,11 @@ impl InputData {
             } else if current_input.face_buttons_equal_to(self.controller_inputs[idx - 1]) {
                 current_face_input_frames += current_input.frame_duration();
             } else {
-                face_button_input_count += (current_face_input_frames / 255 + 1) as u16;
+                face_button_input_count += ((current_face_input_frames + 254) / 255) as u16;
                 current_face_input_frames = current_input.frame_duration();
             }
         }
-        face_button_input_count += (current_face_input_frames / 255 + 1) as u16;
+        face_button_input_count += ((current_face_input_frames + 254) / 255) as u16;
         face_button_input_count
     }
 
@@ -406,11 +412,11 @@ impl InputData {
             } else if current_input.stick() == self.controller_inputs[idx - 1].stick() {
                 current_stick_input_frames += current_input.frame_duration();
             } else {
-                stick_input_count += (current_stick_input_frames / 255 + 1) as u16;
+                stick_input_count += ((current_stick_input_frames + 254) / 255) as u16;
                 current_stick_input_frames = current_input.frame_duration();
             }
         }
-        stick_input_count += (current_stick_input_frames / 255 + 1) as u16;
+        stick_input_count += ((current_stick_input_frames + 254) / 255) as u16;
         stick_input_count
     }
 
@@ -428,11 +434,11 @@ impl InputData {
             } else if current_input.dpad() == self.controller_inputs[idx - 1].dpad() {
                 current_dpad_input_frames += current_input.frame_duration();
             } else {
-                dpad_button_input_count += (current_dpad_input_frames / 4095 + 1) as u16;
+                dpad_button_input_count += ((current_dpad_input_frames + 4094) / 4095) as u16;
                 current_dpad_input_frames = current_input.frame_duration();
             }
         }
-        dpad_button_input_count += (current_dpad_input_frames / 4095 + 1) as u16;
+        dpad_button_input_count += ((current_dpad_input_frames + 4094) / 4095) as u16;
         dpad_button_input_count
     }
 
