@@ -1,5 +1,6 @@
 use crate::input_data::{dpad_button::DPadButton, stick_input::StickInput};
 
+/// Represents the errors that can go wrong while parsing a `ControllerInput`.
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerInputError {
     /// Frame duration cannot be 0.
@@ -7,6 +8,7 @@ pub enum ControllerInputError {
     FrameDurationTooShort,
 }
 
+/// Represents a controller input state.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ControllerInput {
     accelerator: bool,

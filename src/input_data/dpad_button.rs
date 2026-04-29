@@ -6,6 +6,7 @@ pub enum DPadButtonError {
     NonExistentDPadButton,
 }
 
+/// Represents every possible DPad input.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum DPadButton {
     None,

@@ -29,6 +29,10 @@ pub enum InputDataError {
     #[error("DPad Button Error: {0}")]
     DPadButtonError(#[from] DPadButtonError),
 }
+
+/// Decoded controller input sequence for a single race, stored as a list of
+/// [`ControllerInput`] runs where each run represents a contiguous span of
+/// identical inputs lasting `frame_duration` frames.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InputData {
     controller_inputs: Vec<ControllerInput>,
@@ -37,17 +41,20 @@ pub struct InputData {
 
 impl InputData {
     /// Constructs input data from a `Vec<ControllerInput>` and a compressed flag.
-    /// 
+    ///
     /// Returns [`InputDataError::InputDataLengthTooShort`] if `controller_inputs` is empty.
-    pub fn new(controller_inputs: Vec<ControllerInput>, compressed: bool) -> Result<Self, InputDataError> {
+    pub fn new(
+        controller_inputs: Vec<ControllerInput>,
+        compressed: bool,
+    ) -> Result<Self, InputDataError> {
         if controller_inputs.is_empty() {
-            return Err(InputDataError::InputDataLengthTooShort)
+            return Err(InputDataError::InputDataLengthTooShort);
         }
-        Ok(Self { controller_inputs, compressed })
+        Ok(Self {
+            controller_inputs,
+            compressed,
+        })
     }
-
-
-
 
     /// Parses controller input data from raw RKG bytes starting at offset `0x88`.
     ///
@@ -88,29 +95,34 @@ impl InputData {
         }
 
         let offset = 0x08;
-        let face_button_array = &input_data[offset..offset + (face_button_input_count as usize * 2)];
+        let face_button_array =
+            &input_data[offset..offset + (face_button_input_count as usize * 2)];
 
         let offset = offset + (face_button_input_count as usize * 2);
         let stick_input_array = &input_data[offset..offset + (stick_input_count as usize * 2)];
 
         let offset = offset + (stick_input_count as usize * 2);
-        let dpad_button_array = &input_data[offset..offset + (dpad_button_input_count as usize * 2)];
+        let dpad_button_array =
+            &input_data[offset..offset + (dpad_button_input_count as usize * 2)];
 
-        let mut face_button_inputs: Vec<(FaceButtons, u32)> = Vec::with_capacity(face_button_input_count as usize);
+        let mut face_button_inputs: Vec<(FaceButtons, u32)> =
+            Vec::with_capacity(face_button_input_count as usize);
         for chunk in face_button_array.chunks_exact(2).into_iter() {
             let face_buttons = FaceButtons::try_from(chunk[0])?;
             let frame_duration = chunk[1] as u32;
             face_button_inputs.push((face_buttons, frame_duration));
         }
-        
-        let mut stick_inputs: Vec<(StickInput, u32)> = Vec::with_capacity(stick_input_count as usize);
+
+        let mut stick_inputs: Vec<(StickInput, u32)> =
+            Vec::with_capacity(stick_input_count as usize);
         for chunk in stick_input_array.chunks_exact(2).into_iter() {
             let stick_input = StickInput::try_from(chunk[0])?;
             let frame_duration = chunk[1] as u32;
             stick_inputs.push((stick_input, frame_duration));
         }
-        
-        let mut dpad_button_inputs: Vec<(DPadButton, u32)> = Vec::with_capacity(dpad_button_input_count as usize);
+
+        let mut dpad_button_inputs: Vec<(DPadButton, u32)> =
+            Vec::with_capacity(dpad_button_input_count as usize);
         for chunk in dpad_button_array.chunks_exact(2).into_iter() {
             let dpad_button = DPadButton::try_from(chunk[0])?;
             let frame_duration = (u16::from_be_bytes([chunk[0], chunk[1]]) & 0xFFF) as u32;
@@ -168,15 +180,9 @@ impl InputData {
             let dpad = dpad_button_inputs.get(dpad_idx);
 
             // Calculate remaining frames for current input in each stream
-            let face_remaining = face
-                .map(|f| f.1 - face_offset)
-                .unwrap_or(u32::MAX);
-            let stick_remaining = stick
-                .map(|s| s.1 - stick_offset)
-                .unwrap_or(u32::MAX);
-            let dpad_remaining = dpad
-                .map(|d| d.1 - dpad_offset)
-                .unwrap_or(u32::MAX);
+            let face_remaining = face.map(|f| f.1 - face_offset).unwrap_or(u32::MAX);
+            let stick_remaining = stick.map(|s| s.1 - stick_offset).unwrap_or(u32::MAX);
+            let dpad_remaining = dpad.map(|d| d.1 - dpad_offset).unwrap_or(u32::MAX);
 
             // Find the minimum remaining frames (when next change occurs)
             let duration = face_remaining.min(stick_remaining).min(dpad_remaining);
@@ -251,6 +257,12 @@ impl InputData {
         None
     }
 
+    /// Returns `true` if any input in the sequence is illegal under normal race conditions.
+    ///
+    /// Two conditions are checked: a drift flag set without the brake button held,
+    /// and a brake + accelerator combination where the drift flag is absent despite
+    /// the previous frame having accelerator but no brake (indicating the game should
+    /// have set the drift flag automatically).
     pub fn contains_illegal_brake_or_drift_inputs(&self) -> bool {
         for (idx, current_input) in self.controller_inputs().iter().enumerate() {
             if current_input.drift_flag() && !current_input.brake() {
@@ -272,9 +284,17 @@ impl InputData {
         false
     }
 
+    /// Serializes the input data back to the binary format used in an RKG file.
+    ///
+    /// Produces a 6-byte header (face, stick, and dpad entry counts as big-endian
+    /// `u16`s, followed by 2 padding bytes), then the face button, stick, and dpad
+    /// arrays in sequence. Each run longer than the per-stream maximum (255 frames
+    /// for face/stick, 4095 for dpad) is split into multiple entries. If
+    /// `compressed` is set the result is Yaz1-compressed; otherwise it is
+    /// zero-padded to `0x2774` bytes.
     pub fn raw_data(&self) -> Vec<u8> {
         let mut raw_data = Vec::new();
-        
+
         // Input data header
         raw_data.extend_from_slice(&self.face_button_input_count().to_be_bytes());
         raw_data.extend_from_slice(&self.stick_input_count().to_be_bytes());
@@ -350,6 +370,11 @@ impl InputData {
         }
     }
 
+    /// Returns the number of face button entries that [`raw_data`](Self::raw_data) will write.
+    ///
+    /// Each contiguous run of identical face button state is split into
+    /// ceiling(`frames` / 255) entries because the per-entry frame count is a
+    /// single byte.
     pub fn face_button_input_count(&self) -> u16 {
         let mut current_face_input_frames = 0u32;
         let mut face_button_input_count = 0u16;
@@ -367,6 +392,11 @@ impl InputData {
         face_button_input_count
     }
 
+    /// Returns the number of stick input entries that [`raw_data`](Self::raw_data) will write.
+    ///
+    /// Each contiguous run of identical stick state is split into
+    /// ceiling(`frames` / 255) entries because the per-entry frame count is a
+    /// single byte.
     pub fn stick_input_count(&self) -> u16 {
         let mut current_stick_input_frames = 0u32;
         let mut stick_input_count = 0u16;
@@ -384,6 +414,11 @@ impl InputData {
         stick_input_count
     }
 
+    /// Returns the number of dpad button entries that [`raw_data`](Self::raw_data) will write.
+    ///
+    /// Each contiguous run of identical dpad state is split into
+    /// ceiling(`frames` / 4095) entries because the per-entry frame count is a
+    /// 12-bit field.
     pub fn dpad_button_input_count(&self) -> u16 {
         let mut current_dpad_input_frames = 0u32;
         let mut dpad_button_input_count = 0u16;
@@ -401,18 +436,22 @@ impl InputData {
         dpad_button_input_count
     }
 
+    /// Returns the controller input runs as a slice.
     pub fn controller_inputs(&self) -> &[ControllerInput] {
         &self.controller_inputs
     }
 
+    /// Returns a mutable slice of the controller input runs.
     pub fn controller_inputs_mut(&mut self) -> &mut [ControllerInput] {
         &mut self.controller_inputs
     }
 
+    /// Returns `true` if [`raw_data`](Self::raw_data) should Yaz1-compress its output.
     pub fn compressed(&self) -> bool {
         self.compressed
     }
 
+    /// Sets whether [`raw_data`](Self::raw_data) should Yaz1-compress its output.
     pub fn set_compressed(&mut self, compressed: bool) {
         self.compressed = compressed;
     }
@@ -420,12 +459,24 @@ impl InputData {
 
 fn to_face_buttons(input: &ControllerInput) -> FaceButtons {
     let mut buttons = Vec::new();
-    if input.accelerator() { buttons.push(FaceButton::Accelerator); }
-    if input.brake() { buttons.push(FaceButton::Brake); }
-    if input.drift_flag() { buttons.push(FaceButton::Drift); }
-    if input.brake_drift() { buttons.push(FaceButton::BrakeDrift); }
-    if input.item() { buttons.push(FaceButton::Item); }
-    if input.unknown_face_button() { buttons.push(FaceButton::Unknown); }
+    if input.accelerator() {
+        buttons.push(FaceButton::Accelerator);
+    }
+    if input.brake() {
+        buttons.push(FaceButton::Brake);
+    }
+    if input.drift_flag() {
+        buttons.push(FaceButton::Drift);
+    }
+    if input.brake_drift() {
+        buttons.push(FaceButton::BrakeDrift);
+    }
+    if input.item() {
+        buttons.push(FaceButton::Item);
+    }
+    if input.unknown_face_button() {
+        buttons.push(FaceButton::Unknown);
+    }
     FaceButtons(buttons)
 }
 

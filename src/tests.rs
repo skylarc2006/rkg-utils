@@ -178,8 +178,8 @@ fn test_rkg_input_data() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let input_data =
-        InputData::new_from_bytes(&rkg_data[0x88..rkg_data.len() - 0xE0]).expect("Couldn't read input data");
+    let input_data = InputData::new_from_bytes(&rkg_data[0x88..rkg_data.len() - 0xE0])
+        .expect("Couldn't read input data");
 
     assert_eq!(input_data.face_button_input_count(), 0x18);
     assert_eq!(input_data.stick_input_count(), 0x037B);
@@ -343,10 +343,12 @@ fn test_ctgp_pause_vs_vanilla_input_timing() {
         .read_to_end(&mut vanilla_rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let pause_inputs = InputData::new_from_bytes(&pause_rkg_data[0x88..pause_rkg_data.len() - 0xE0])
-        .expect("Failed to read inputs from pause ghost");
-    let vanilla_inputs = InputData::new_from_bytes(&vanilla_rkg_data[0x88..vanilla_rkg_data.len() - 0x04])
-        .expect("Failed to read inputs from vanilla ghost");
+    let pause_inputs =
+        InputData::new_from_bytes(&pause_rkg_data[0x88..pause_rkg_data.len() - 0xE0])
+            .expect("Failed to read inputs from pause ghost");
+    let vanilla_inputs =
+        InputData::new_from_bytes(&vanilla_rkg_data[0x88..vanilla_rkg_data.len() - 0x04])
+            .expect("Failed to read inputs from vanilla ghost");
 
     assert_eq!(
         pause_inputs.controller_inputs(),
@@ -362,8 +364,8 @@ fn illegal_drift_input_test() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let input_data =
-        InputData::new_from_bytes(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
+    let input_data = InputData::new_from_bytes(&rkg_data[0x88..rkg_data.len() - 0x04])
+        .expect("Failed to read input data");
     assert!(input_data.contains_illegal_brake_or_drift_inputs());
 }
 
@@ -375,8 +377,8 @@ fn illegal_brake_input_test() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let input_data =
-        InputData::new_from_bytes(&rkg_data[0x88..rkg_data.len() - 0x04]).expect("Failed to read input data");
+    let input_data = InputData::new_from_bytes(&rkg_data[0x88..rkg_data.len() - 0x04])
+        .expect("Failed to read input data");
     assert!(input_data.contains_illegal_brake_or_drift_inputs());
 }
 

@@ -18,6 +18,9 @@ pub struct StickInput {
 }
 
 impl StickInput {
+    /// Constructs a new `StickInput`.
+    ///
+    /// Returns [`StickInputError::InvalidStickInput`] if either the x or y position exceed 14.
     pub fn new(x: u8, y: u8) -> Result<Self, StickInputError> {
         if x > 14 || y > 14 {
             Err(StickInputError::InvalidStickInput)
