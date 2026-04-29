@@ -17,9 +17,23 @@ pub enum DPadButton {
     Unknown,
 }
 
+impl DPadButton {
+    pub(crate) fn to_nibble(self) -> u8 {
+        match self {
+            DPadButton::None => 0,
+            DPadButton::Up => 1,
+            DPadButton::Down => 2,
+            DPadButton::Left => 3,
+            DPadButton::Right => 4,
+            DPadButton::Unknown => 8,
+        }
+    }
+}
+
 impl TryFrom<u8> for DPadButton {
     type Error = DPadButtonError;
 
+    /// Expects full DPad button byte
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         if value & 0x80 == 1 {
             return Ok(DPadButton::Unknown);

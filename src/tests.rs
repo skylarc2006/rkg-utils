@@ -348,7 +348,10 @@ fn test_ctgp_pause_vs_vanilla_input_timing() {
     let vanilla_inputs = InputData::new(&vanilla_rkg_data[0x88..vanilla_rkg_data.len() - 0x04])
         .expect("Failed to read inputs from vanilla ghost");
 
-    assert_eq!(pause_inputs.controller_inputs(), vanilla_inputs.controller_inputs());
+    assert_eq!(
+        pause_inputs.controller_inputs(),
+        vanilla_inputs.controller_inputs()
+    );
 }
 
 #[test]
@@ -447,7 +450,7 @@ fn test_recompressed_input_data() {
         ])
     );
     assert_eq!(
-        (recompressed_data.len() - 12) as u32,
+        (recompressed_data.len() - 4) as u32,
         u32::from_be_bytes([
             recompressed_data[0],
             recompressed_data[1],
@@ -595,7 +598,9 @@ fn test_full_ghost() {
 
     for controller_input in ghost.input_data().controller_inputs() {
         assert!(
-            !controller_input.stick().is_impossible(ghost.header().controller())
+            !controller_input
+                .stick()
+                .is_impossible(ghost.header().controller())
         );
     }
 

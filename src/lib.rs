@@ -240,6 +240,8 @@ impl Ghost {
         let len = self.raw_data.len();
         let crc32 = crc32(&self.raw_data[..len - 0x04]);
         self.raw_data[len - 0x04..].copy_from_slice(&crc32.to_be_bytes());
+        self.file_crc32 = crc32;
+        self.base_crc32 = base_crc32;
 
         let sha1 = compute_sha1_hex(&self.raw_data);
         if let Some(FooterType::CTGPFooter(ctgp_footer)) = self.footer_mut() {

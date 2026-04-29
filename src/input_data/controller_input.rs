@@ -1,7 +1,4 @@
-use crate::input_data::{
-    dpad_button::DPadButton,
-    stick_input::StickInput,
-};
+use crate::input_data::{dpad_button::DPadButton, stick_input::StickInput};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ControllerInput {
@@ -41,6 +38,15 @@ impl ControllerInput {
             stick,
             frame_duration,
         }
+    }
+
+    /// Returns true if both controller inputs have identical face button configurations.
+    pub fn face_buttons_equal_to(&self, other: ControllerInput) -> bool {
+        self.accelerator() == other.accelerator()
+            && self.brake() == other.brake()
+            && self.drift_flag() == other.drift_flag()
+            && self.item() == other.item()
+            && self.unknown_face_button() == other.unknown_face_button()
     }
 
     pub fn accelerator(&self) -> bool {
@@ -83,6 +89,7 @@ impl ControllerInput {
         self.item = value;
     }
 
+    /// Unknown face input; mask 0xF0 in a button byte.
     pub fn unknown_face_button(&self) -> bool {
         self.unknown_face_button
     }

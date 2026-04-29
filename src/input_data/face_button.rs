@@ -22,7 +22,9 @@ pub(crate) enum FaceButton {
     Unknown,
 }
 
+#[derive(Clone, Debug, PartialEq, Default)]
 pub(crate) struct FaceButtons(pub Vec<FaceButton>);
+
 impl TryFrom<u8> for FaceButtons {
     type Error = FaceButtonError;
 
@@ -59,5 +61,22 @@ impl TryFrom<u8> for FaceButtons {
         }
 
         Ok(FaceButtons(buttons))
+    }
+}
+
+impl FaceButtons {
+    pub(crate) fn to_byte(&self) -> u8 {
+        let mut byte = 0u8;
+        for button in &self.0 {
+            byte |= match button {
+                FaceButton::Accelerator => 0x01,
+                FaceButton::Brake => 0x02,
+                FaceButton::Item => 0x04,
+                FaceButton::Drift => 0x08,
+                FaceButton::BrakeDrift => 0x10,
+                FaceButton::Unknown => 0x20,
+            };
+        }
+        byte
     }
 }

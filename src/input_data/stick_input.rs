@@ -11,7 +11,7 @@ pub enum StickInputError {
 /// A single encoded analog stick input entry from a Mario Kart Wii ghost file.
 ///
 /// Both axes are encoded in a single byte as 4-bit unsigned values (0–14).
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct StickInput {
     x: u8,
     y: u8,
@@ -92,9 +92,6 @@ impl StickInput {
         }
 
         false
-
-
-
     }
 
     pub fn x(&self) -> u8 {
@@ -121,6 +118,12 @@ impl StickInput {
             self.y = y;
             Ok(())
         }
+    }
+}
+
+impl StickInput {
+    pub(crate) fn to_byte(self) -> u8 {
+        (self.x << 4) | self.y
     }
 }
 

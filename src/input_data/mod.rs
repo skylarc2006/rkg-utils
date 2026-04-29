@@ -26,7 +26,7 @@ pub enum InputDataError {
     #[error("Stick Input Error: {0}")]
     StickInputError(#[from] StickInputError),
     /// DPad Button Error.
-    #[error("Stick Input Error: {0}")]
+    #[error("DPad Button Error: {0}")]
     DPadButtonError(#[from] DPadButtonError),
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -63,118 +63,155 @@ impl InputData {
         };
 
         let read_u16 = |i: usize| u16::from_be_bytes(input_data[i..i + 2].try_into().unwrap());
-        let face_button_count = read_u16(0x00);
+        let face_button_input_count = read_u16(0x00);
         let stick_input_count = read_u16(0x02);
-        let dpad_button_count = read_u16(0x04);
+        let dpad_button_input_count = read_u16(0x04);
         // bytes 0x06-0x07: padding
 
         if (input_data.len() as u16)
-            < ((face_button_count + stick_input_count + dpad_button_count) * 2) + 0x08
+            < ((face_button_input_count + stick_input_count + dpad_button_input_count) * 2) + 0x08
         {
             return Err(InputDataError::InputDataMalformed);
         }
 
         let offset = 0x08;
-        let face_button_array = &input_data[offset..offset + (face_button_count as usize * 2)];
+        let face_button_array = &input_data[offset..offset + (face_button_input_count as usize * 2)];
 
-        let offset = offset + (face_button_count as usize * 2);
+        let offset = offset + (face_button_input_count as usize * 2);
         let stick_input_array = &input_data[offset..offset + (stick_input_count as usize * 2)];
 
         let offset = offset + (stick_input_count as usize * 2);
-        let dpad_button_array = &input_data[offset..offset + (dpad_button_count as usize * 2)];
+        let dpad_button_array = &input_data[offset..offset + (dpad_button_input_count as usize * 2)];
 
-        // Parse face entries, merging adjacent identical button bytes inline.
-        // Each pair is (button_byte, frame_count); entries held longer than 255 frames
-        // are split across consecutive pairs with the same button byte.
-        let mut face_entries: Vec<(u8, u32)> = Vec::new();
-        for chunk in face_button_array.chunks_exact(2) {
-            let buttons_byte = chunk[0];
-            let frames = chunk[1] as u32;
-            if face_entries.last().map(|e| e.0) == Some(buttons_byte) {
-                face_entries.last_mut().unwrap().1 += frames;
-            } else {
-                face_entries.push((buttons_byte, frames));
+        let mut face_button_inputs: Vec<(FaceButtons, u32)> = Vec::with_capacity(face_button_input_count as usize);
+        for chunk in face_button_array.chunks_exact(2).into_iter() {
+            let face_buttons = FaceButtons::try_from(chunk[0])?;
+            let frame_duration = chunk[1] as u32;
+            face_button_inputs.push((face_buttons, frame_duration));
+        }
+        
+        let mut stick_inputs: Vec<(StickInput, u32)> = Vec::with_capacity(stick_input_count as usize);
+        for chunk in stick_input_array.chunks_exact(2).into_iter() {
+            let stick_input = StickInput::try_from(chunk[0])?;
+            let frame_duration = chunk[1] as u32;
+            stick_inputs.push((stick_input, frame_duration));
+        }
+        
+        let mut dpad_button_inputs: Vec<(DPadButton, u32)> = Vec::with_capacity(dpad_button_input_count as usize);
+        for chunk in dpad_button_array.chunks_exact(2).into_iter() {
+            let dpad_button = DPadButton::try_from(chunk[0])?;
+            let frame_duration = (u16::from_be_bytes([chunk[0], chunk[1]]) & 0xFFF) as u32;
+            dpad_button_inputs.push((dpad_button, frame_duration));
+        }
+
+        // Combine adjacent inputs when the same button is held across multiple bytes
+        for idx in (0..face_button_inputs.len() - 1).rev() {
+            if face_button_inputs[idx].0 == face_button_inputs[idx + 1].0 {
+                let f1 = face_button_inputs[idx].1;
+                let f2 = face_button_inputs[idx + 1].1;
+                face_button_inputs[idx].1 = f1 + f2;
+                face_button_inputs.remove(idx + 1);
             }
         }
 
-        // Parse stick entries with the same merge-adjacent strategy.
-        let mut stick_entries: Vec<(StickInput, u32)> = Vec::new();
-        for chunk in stick_input_array.chunks_exact(2) {
-            let stick = StickInput::try_from(chunk[0])?;
-            let frames = chunk[1] as u32;
-            if stick_entries.last().map(|e| e.0) == Some(stick) {
-                stick_entries.last_mut().unwrap().1 += frames;
-            } else {
-                stick_entries.push((stick, frames));
+        for idx in (0..stick_inputs.len() - 1).rev() {
+            if stick_inputs[idx].0 == stick_inputs[idx + 1].0 {
+                let f1 = stick_inputs[idx].1;
+                let f2 = stick_inputs[idx + 1].1;
+                stick_inputs[idx].1 = f1 + f2;
+                stick_inputs.remove(idx + 1);
             }
         }
 
-        let mut dpad_entries: Vec<(DPadButton, u16)> = Vec::new();
-        for chunk in dpad_button_array.chunks_exact(2) {
-            let dpad = DPadButton::try_from(chunk[0])?;
-            let additional_frames: u16 = (chunk[0] & 0x0F).into();
-            // 0x0F bit mask used if this input state was held longer than 255 frames, gives amount of 255-frame intervals to add to frame duration
-            let frames = chunk[1] as u16 + additional_frames;
-            if dpad_entries.last().map(|e| e.0) == Some(dpad) {
-                dpad_entries.last_mut().unwrap().1 += frames;
-            } else {
-                dpad_entries.push((dpad, frames));
+        for idx in (0..dpad_button_inputs.len() - 1).rev() {
+            if dpad_button_inputs[idx].0 == dpad_button_inputs[idx + 1].0 {
+                let f1 = dpad_button_inputs[idx].1;
+                let f2 = dpad_button_inputs[idx + 1].1;
+                dpad_button_inputs[idx].1 = f1 + f2;
+                dpad_button_inputs.remove(idx + 1);
             }
         }
 
-        // Walk all three timelines simultaneously. At each step take the shortest of the
-        // three remaining spans, emit one ControllerInput, then advance whichever cursor(s)
-        // are exhausted. This splits entries only where the timelines diverge.
-        let mut controller_inputs: Vec<ControllerInput> = Vec::new();
+        let mut controller_inputs = Vec::new();
+
+        // Track current position in each input stream
         let mut face_idx = 0;
         let mut stick_idx = 0;
         let mut dpad_idx = 0;
-        let mut face_rem = face_entries.first().map(|e| e.1).unwrap_or(0);
-        let mut stick_rem = stick_entries.first().map(|e| e.1).unwrap_or(0);
-        let mut dpad_rem = dpad_entries.first().map(|e| e.1 as u32).unwrap_or(0);
 
-        while face_idx < face_entries.len()
-            && stick_idx < stick_entries.len()
-            && dpad_idx < dpad_entries.len()
+        // Track how many frames consumed from current input in each stream
+        let mut face_offset = 0u32;
+        let mut stick_offset = 0u32;
+        let mut dpad_offset = 0u32;
+
+        // Continue until all streams are exhausted
+        while face_idx < face_button_inputs.len()
+            || stick_idx < stick_inputs.len()
+            || dpad_idx < dpad_button_inputs.len()
         {
-            let frames = face_rem.min(stick_rem).min(dpad_rem);
-            let face_buttons = FaceButtons::try_from(face_entries[face_idx].0)?;
-            let stick = stick_entries[stick_idx].0;
-            let dpad = dpad_entries[dpad_idx].0;
-            controller_inputs.push(
-                ControllerInput::new(
-                    face_buttons.0.contains(&FaceButton::Accelerator),
-                    face_buttons.0.contains(&FaceButton::Brake),
-                    face_buttons.0.contains(&FaceButton::BrakeDrift),
-                    face_buttons.0.contains(&FaceButton::Drift),
-                    face_buttons.0.contains(&FaceButton::Item),
-                    face_buttons.0.contains(&FaceButton::Unknown),
-                    dpad,
-                    stick,
-                    frames
-                ));
+            // Get current input from each stream (or defaults if exhausted)
+            let face = face_button_inputs.get(face_idx);
+            let stick = stick_inputs.get(stick_idx);
+            let dpad = dpad_button_inputs.get(dpad_idx);
 
-            face_rem -= frames;
-            stick_rem -= frames;
-            dpad_rem -= frames;
+            // Calculate remaining frames for current input in each stream
+            let face_remaining = face
+                .map(|f| f.1 - face_offset)
+                .unwrap_or(u32::MAX);
+            let stick_remaining = stick
+                .map(|s| s.1 - stick_offset)
+                .unwrap_or(u32::MAX);
+            let dpad_remaining = dpad
+                .map(|d| d.1 - dpad_offset)
+                .unwrap_or(u32::MAX);
 
-            if face_rem == 0 {
+            // Find the minimum remaining frames (when next change occurs)
+            let duration = face_remaining.min(stick_remaining).min(dpad_remaining);
+
+            if duration == u32::MAX {
+                // if all streams exhausted
+                break;
+            }
+
+            let FaceButtons(face_buttons) = face.map(|f| f.0.clone()).unwrap_or_default();
+
+            // Create combined input for this duration
+            let combined = ControllerInput::new(
+                face_buttons.contains(&FaceButton::Accelerator),
+                face_buttons.contains(&FaceButton::Brake),
+                face_buttons.contains(&FaceButton::BrakeDrift),
+                face_buttons.contains(&FaceButton::Drift),
+                face_buttons.contains(&FaceButton::Item),
+                face_buttons.contains(&FaceButton::Unknown),
+                dpad.map(|d| d.0).unwrap_or(DPadButton::None),
+                stick.map(|s| s.0).unwrap_or_default(),
+                duration,
+            );
+
+            controller_inputs.push(combined);
+
+            // Update offsets and advance indices where needed
+            face_offset += duration;
+            stick_offset += duration;
+            dpad_offset += duration;
+
+            if let Some(face) = face
+                && face_offset >= face.1
+            {
                 face_idx += 1;
-                if face_idx < face_entries.len() {
-                    face_rem = face_entries[face_idx].1;
-                }
+                face_offset = 0;
             }
-            if stick_rem == 0 {
+            if let Some(stick) = stick
+                && stick_offset >= stick.1
+            {
                 stick_idx += 1;
-                if stick_idx < stick_entries.len() {
-                    stick_rem = stick_entries[stick_idx].1;
-                }
+                stick_offset = 0;
             }
-            if dpad_rem == 0 {
+            if let Some(dpad) = dpad
+                && dpad_offset >= dpad.1
+            {
                 dpad_idx += 1;
-                if dpad_idx < dpad_entries.len() {
-                    dpad_rem = dpad_entries[dpad_idx].1 as u32;
-                }
+                dpad_offset = 0;
             }
         }
 
@@ -203,9 +240,7 @@ impl InputData {
 
     pub fn contains_illegal_brake_or_drift_inputs(&self) -> bool {
         for (idx, current_input) in self.controller_inputs().iter().enumerate() {
-            if current_input.drift_flag()
-                && !current_input.brake()
-            {
+            if current_input.drift_flag() && !current_input.brake() {
                 // Illegal drift input
                 return true;
             } else if idx > 0 {
@@ -225,23 +260,132 @@ impl InputData {
     }
 
     pub fn raw_data(&self) -> Vec<u8> {
-        // TODO: calculate this from controller_inputs
-        Vec::from([0u8])
+        let mut raw_data = Vec::new();
+        
+        // Input data header
+        raw_data.extend_from_slice(&self.face_button_input_count().to_be_bytes());
+        raw_data.extend_from_slice(&self.stick_input_count().to_be_bytes());
+        raw_data.extend_from_slice(&self.dpad_button_input_count().to_be_bytes());
+        raw_data.extend_from_slice(&0u16.to_be_bytes());
+
+        // Face button array
+        // Derive vector of (FaceButtons, u32 [frames]) from controller inputs
+        let controller_inputs = &self.controller_inputs;
+        let mut face_button_inputs: Vec<(FaceButtons, u32)> = Vec::new();
+        for (idx, input) in controller_inputs.iter().enumerate() {
+            if idx > 0 && input.face_buttons_equal_to(controller_inputs[idx - 1]) {
+                face_button_inputs.last_mut().unwrap().1 += input.frame_duration();
+            } else {
+                face_button_inputs.push((to_face_buttons(input), input.frame_duration()));
+            }
+        }
+        for (face_buttons, frames) in &face_button_inputs {
+            let button_byte = face_buttons.to_byte();
+            for _ in 0..(*frames / 255) {
+                raw_data.push(button_byte);
+                raw_data.push(255);
+            }
+            raw_data.push(button_byte);
+            raw_data.push((*frames % 255) as u8);
+        }
+
+        // Stick input array
+        // Derive vector of (StickInput, u32 [frames]) from controller inputs
+        let mut stick_inputs: Vec<(StickInput, u32)> = Vec::new();
+        for (idx, input) in controller_inputs.iter().enumerate() {
+            if idx > 0 && input.stick() == controller_inputs[idx - 1].stick() {
+                stick_inputs.last_mut().unwrap().1 += input.frame_duration();
+            } else {
+                stick_inputs.push((input.stick(), input.frame_duration()));
+            }
+        }
+        for (stick_input, frames) in &stick_inputs {
+            let stick_byte = stick_input.to_byte();
+            for _ in 0..(*frames / 255) {
+                raw_data.push(stick_byte);
+                raw_data.push(255);
+            }
+            raw_data.push(stick_byte);
+            raw_data.push((*frames % 255) as u8);
+        }
+
+        // DPad input array
+        // Derive vector of (DPadButton, u32 [frames]) from controller inputs
+        let mut dpad_button_inputs: Vec<(DPadButton, u32)> = Vec::new();
+        for (idx, input) in controller_inputs.iter().enumerate() {
+            if idx > 0 && input.dpad() == controller_inputs[idx - 1].dpad() {
+                dpad_button_inputs.last_mut().unwrap().1 += input.frame_duration();
+            } else {
+                dpad_button_inputs.push((input.dpad(), input.frame_duration()));
+            }
+        }
+        for (dpad_button, frames) in &dpad_button_inputs {
+            let nibble = dpad_button.to_nibble() as u16;
+            for _ in 0..(*frames / 4095) {
+                let word = (nibble << 12) | 0xFFF;
+                raw_data.extend_from_slice(&word.to_be_bytes());
+            }
+            let word = (nibble << 12) | (*frames % 4095) as u16;
+            raw_data.extend_from_slice(&word.to_be_bytes());
+        }
+
+        if self.compressed() {
+            yaz1_compress(&raw_data)
+        } else {
+            raw_data.resize(0x2774, 0x00);
+            raw_data
+        }
     }
 
     pub fn face_button_input_count(&self) -> u16 {
-        // TODO: calculate this from controller inputs
-        0u16
+        let mut current_face_input_frames = 0u32;
+        let mut face_button_input_count = 0u16;
+        for (idx, current_input) in self.controller_inputs().iter().enumerate() {
+            if idx == 0 {
+                current_face_input_frames += current_input.frame_duration();
+            } else if current_input.face_buttons_equal_to(self.controller_inputs[idx - 1]) {
+                current_face_input_frames += current_input.frame_duration();
+            } else {
+                face_button_input_count += (current_face_input_frames / 255 + 1) as u16;
+                current_face_input_frames = current_input.frame_duration();
+            }
+        }
+        face_button_input_count += (current_face_input_frames / 255 + 1) as u16;
+        face_button_input_count
     }
 
     pub fn stick_input_count(&self) -> u16 {
-        // TODO: calculate this from controller inputs
-        0u16
+        let mut current_stick_input_frames = 0u32;
+        let mut stick_input_count = 0u16;
+        for (idx, current_input) in self.controller_inputs().iter().enumerate() {
+            if idx == 0 {
+                current_stick_input_frames += current_input.frame_duration();
+            } else if current_input.stick() == self.controller_inputs[idx - 1].stick() {
+                current_stick_input_frames += current_input.frame_duration();
+            } else {
+                stick_input_count += (current_stick_input_frames / 255 + 1) as u16;
+                current_stick_input_frames = current_input.frame_duration();
+            }
+        }
+        stick_input_count += (current_stick_input_frames / 255 + 1) as u16;
+        stick_input_count
     }
 
     pub fn dpad_button_input_count(&self) -> u16 {
-        // TODO: calculate this from controller inputs
-        0u16
+        let mut current_dpad_input_frames = 0u32;
+        let mut dpad_button_input_count = 0u16;
+        for (idx, current_input) in self.controller_inputs().iter().enumerate() {
+            if idx == 0 {
+                current_dpad_input_frames += current_input.frame_duration();
+            } else if current_input.dpad() == self.controller_inputs[idx - 1].dpad() {
+                current_dpad_input_frames += current_input.frame_duration();
+            } else {
+                dpad_button_input_count += (current_dpad_input_frames / 4095 + 1) as u16;
+                current_dpad_input_frames = current_input.frame_duration();
+            }
+        }
+        dpad_button_input_count += (current_dpad_input_frames / 4095 + 1) as u16;
+        dpad_button_input_count
     }
 
     pub fn controller_inputs(&self) -> &[ControllerInput] {
@@ -259,6 +403,17 @@ impl InputData {
     pub fn set_compressed(&mut self, compressed: bool) {
         self.compressed = compressed;
     }
+}
+
+fn to_face_buttons(input: &ControllerInput) -> FaceButtons {
+    let mut buttons = Vec::new();
+    if input.accelerator() { buttons.push(FaceButton::Accelerator); }
+    if input.brake() { buttons.push(FaceButton::Brake); }
+    if input.drift_flag() { buttons.push(FaceButton::Drift); }
+    if input.brake_drift() { buttons.push(FaceButton::BrakeDrift); }
+    if input.item() { buttons.push(FaceButton::Item); }
+    if input.unknown_face_button() { buttons.push(FaceButton::Unknown); }
+    FaceButtons(buttons)
 }
 
 /// Decompresses a Yaz1-encoded byte slice into raw input data.
@@ -317,14 +472,13 @@ pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
 
     let src = &src[0..src.len() - trailing_bytes_to_remove];
 
-
     let mut dst = encode_yaz1(src);
 
     let remainder = dst.len() % 4;
     dst.resize(dst.len() + remainder, 0);
 
     let mut compressed_data = Vec::new();
-    compressed_data.extend_from_slice(&((dst.len() + 8) as u32).to_be_bytes()); // size of compressed data
+    compressed_data.extend_from_slice(&((dst.len() + 16) as u32).to_be_bytes()); // size of Yaz1 section (magic + uncomp_size + padding + compressed)
     compressed_data.extend_from_slice(b"Yaz1");
     compressed_data.extend_from_slice(&(src.len() as u32).to_be_bytes());
     compressed_data.extend_from_slice(&[0u8; 8]); // padding
@@ -399,7 +553,11 @@ struct NintendoEncState {
 
 impl NintendoEncState {
     fn new() -> Self {
-        Self { prev_flag: false, stored_match_pos: 0, stored_num_bytes: 0 }
+        Self {
+            prev_flag: false,
+            stored_match_pos: 0,
+            stored_num_bytes: 0,
+        }
     }
 
     fn encode(&mut self, src: &[u8], size: usize, pos: usize) -> (usize, usize) {
