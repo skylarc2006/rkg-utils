@@ -96,3 +96,18 @@ impl FromByteHandler for Birthday {
         Self::new(handler.copy_byte(0) & 0x0F, handler.copy_byte(1) >> 3)
     }
 }
+
+/// Serializes a [`Birthday`] into its raw two-byte representation.
+///
+/// The bit layout is `0bXXMMMMDD DDDXXXXX`, where `M` is the month (4 bits),
+/// `D` is the day (5 bits), and `X` bits are other surrounding data,
+/// set to 0 in the resulting return value to allow bitwise ORing with the surrounding data.
+/// An unset birthday produces `[0, 0]`.
+impl From<Birthday> for [u8; 2] {
+    fn from(value: Birthday) -> Self {
+        match (value.month(), value.day()) {
+            (Some(month), Some(day)) => [(month << 2) | (day >> 3), (day & 0b111) << 5],
+            _ => [0u8; 2],
+        }
+    }
+}

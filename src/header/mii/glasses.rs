@@ -4,6 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the glasses customization options of a Mii,
 /// including glasses type, color, size, and vertical position.
+// TODO: Implement From<Glasses> for [u8; 2], convert to raw byte representation
 #[derive(Clone, Copy)]
 pub struct Glasses {
     /// Vertical position of the glasses (0–20).

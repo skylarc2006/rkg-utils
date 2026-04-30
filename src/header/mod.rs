@@ -88,6 +88,7 @@ pub enum HeaderError {
 /// Holds all metadata decoded from the RKGD file header, along with a copy of
 /// the raw bytes kept in sync with every setter. The layout is documented at
 /// <https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header>.
+// TODO: Implement new() where the raw data is calculated from byte representation of each field.
 pub struct Header {
     /// The raw 136-byte header block, kept in sync with all parsed fields.
     raw_data: [u8; 0x88],
@@ -135,7 +136,7 @@ impl Header {
     pub fn new_from_path<P: AsRef<std::path::Path>>(p: P) -> Result<Self, HeaderError> {
         let mut rkg_data = [0u8; 0x88];
         std::fs::File::open(p)?.read_exact(&mut rkg_data)?;
-        Self::new(&rkg_data)
+        Self::new_from_bytes(&rkg_data)
     }
 
     /// Parses a [`Header`] from a 136-byte (`0x88`) slice.
@@ -146,7 +147,7 @@ impl Header {
     /// `0x88` bytes long. Returns [`HeaderError::NotRKGD`] if the first four
     /// bytes are not the `RKGD` magic. Returns other [`HeaderError`] variants
     /// if any individual field fails to parse.
-    pub fn new(header_data: &[u8]) -> Result<Self, HeaderError> {
+    pub fn new_from_bytes(header_data: &[u8]) -> Result<Self, HeaderError> {
         if header_data.len() != 0x88 {
             return Err(HeaderError::NotCorrectSize);
         }
@@ -198,7 +199,7 @@ impl Header {
 
         let location = location.unwrap_or_default();
 
-        let mii = Mii::new(&header_data[0x3C..0x3C + 0x4A])?;
+        let mii = Mii::new_from_bytes(&header_data[0x3C..0x3C + 0x4A])?;
 
         let mii_crc16 = ByteHandler::try_from(&header_data[0x86..=0x87])?.copy_word(0);
 

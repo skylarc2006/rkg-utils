@@ -152,6 +152,64 @@ pub struct Mii {
 }
 
 impl Mii {
+    /// Creates a [`Mii`] from its components as arguments.
+    // TODO: Create `raw_data` from combining raw byte conversions of each element
+    pub fn new(
+        is_girl: bool,
+        birthday: Birthday,
+        favorite_color: FavoriteColor,
+        is_favorite: bool,
+        name: String,
+        build: Build,
+        mii_type: MiiType,
+        creation_date: NaiveDateTime,
+        system_id: u32,
+        head: Head,
+        mingle_off: bool,
+        downloaded: bool,
+        hair: Hair,
+        eyebrows: Eyebrows,
+        eyes: Eyes,
+        nose: Nose,
+        lips: Lips,
+        glasses: Glasses,
+        facial_hair: FacialHair,
+        mole: Mole,
+        creator_name: String,
+    ) -> Self {
+        let mii_id_prefix = (u8::from(mii_type) as u32) << 29;
+        let creation_date_timestamp = timestamp_from_creation_date(creation_date) & 0x1FFFFFFF;
+        let mii_id = mii_id_prefix | creation_date_timestamp;
+        let raw_data = [0u8; 0x4A];
+
+        Self {
+            raw_data,
+            is_modified: false,
+            is_girl,
+            birthday,
+            favorite_color,
+            is_favorite,
+            name,
+            build,
+            mii_type,
+            creation_date,
+            mii_id,
+            system_id,
+            head,
+            mingle_off,
+            downloaded,
+            hair,
+            eyebrows,
+            eyes,
+            nose,
+            lips,
+            glasses,
+            facial_hair,
+            mole,
+            creator_name,
+        }
+    }
+
     /// Parses a [`Mii`] from a 74-byte (`0x4A`) data block.
     ///
     /// Accepts any type that can be converted into `[u8; 0x4A]`, such as a
@@ -162,7 +220,7 @@ impl Mii {
     /// Returns [`MiiError::InvalidLength`] if the input cannot be converted to
     /// exactly `0x4A` bytes. Returns other [`MiiError`] variants if any
     /// individual field fails to parse.
-    pub fn new(mii_data: impl TryInto<[u8; 0x4A]>) -> Result<Self, MiiError> {
+    pub fn new_from_bytes(mii_data: impl TryInto<[u8; 0x4A]>) -> Result<Self, MiiError> {
         let raw_data = mii_data.try_into().map_err(|_| MiiError::InvalidLength)?;
 
         let bytes = ByteHandler::try_from(&raw_data[0..=1])?;
@@ -255,7 +313,7 @@ impl Mii {
             return Err(MiiError::InvalidLength);
         }
 
-        Self::new(&data[..0x4A])
+        Self::new_from_bytes(&data[..0x4A])
     }
 
     /// Writes the Mii's raw data to a file, creating or truncating it as needed.

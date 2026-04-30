@@ -106,3 +106,12 @@ impl FromByteHandler for Build {
         Self::new(handler.copy_byte(0), handler.copy_byte(1))
     }
 }
+
+/// Converts a [`Build`] to its raw byte representation.
+/// `0bHHHHHHHH WWWWWWWW`, where:
+/// H = height, W = weight
+impl From<Build> for [u8; 2] {
+    fn from(value: Build) -> Self {
+        [value.height(), value.weight()]
+    }
+}

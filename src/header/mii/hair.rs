@@ -101,6 +101,23 @@ impl FromByteHandler for Hair {
     }
 }
 
+/// Serializes a [`Hair`] into its raw two-byte representation.
+///
+/// The bit layout is `0bTTTTTTTC CCFXXXXX`, where `T` is the hair type (7 bits),
+/// `C` is the hair color (3 bits), `F` is the flipped hair flag (1 bit), and `X` bits are outside data (0'd out in the return value).
+impl From<Hair> for [u8; 2] {
+    fn from(value: Hair) -> Self {
+        let hair_type = u8::from(value.hair_type());
+        let hair_color = u8::from(value.hair_color());
+        let flipped = value.is_flipped() as u8;
+
+        [
+            (hair_type << 1) | (hair_color >> 2),
+            ((hair_color & 0x03) << 6) | (flipped << 5),
+        ]
+    }
+}
+
 /// Hair color options available in the Mii editor.
 ///
 /// This palette is also shared by eyebrows and facial hair.

@@ -9,6 +9,7 @@ use crate::{
 ///
 /// All positional and size values are validated against the ranges permitted
 /// by the Mii data format on construction.
+// TODO: Implement From<Eyebrows> for [u8; 4], convert to raw byte representation
 #[derive(Clone, Copy)]
 pub struct Eyebrows {
     /// Eyebrow rotation (0–11).

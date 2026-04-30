@@ -33,6 +33,7 @@ pub enum InputDataError {
 /// Decoded controller input sequence for a single race, stored as a list of
 /// [`ControllerInput`] runs where each run represents a contiguous span of
 /// identical inputs lasting `frame_duration` frames.
+// TODO: Look over and spot any bugs with this implementation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InputData {
     controller_inputs: Vec<ControllerInput>,

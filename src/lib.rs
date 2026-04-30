@@ -71,6 +71,7 @@ pub enum GhostError {
 /// operations update the parsed fields; call [`update_raw_data`](Ghost::update_raw_data)
 /// (or [`save_to_file`](Ghost::save_to_file), which calls it implicitly) to
 /// flush all changes back into the raw byte buffer before writing.
+// TODO: implement new() where the arguments are a Header and InputData.
 pub struct Ghost {
     /// The complete raw file bytes, kept in sync by [`update_raw_data`](Ghost::update_raw_data).
     raw_data: Vec<u8>,
@@ -98,7 +99,7 @@ impl Ghost {
     pub fn new_from_file<T: AsRef<std::path::Path>>(path: T) -> Result<Self, GhostError> {
         let mut buf = Vec::with_capacity(0x100);
         std::fs::File::open(path)?.read_to_end(&mut buf)?;
-        Self::new(&buf)
+        Self::new_from_bytes(&buf)
     }
 
     /// Parses a [`Ghost`] from a byte slice.
@@ -113,12 +114,12 @@ impl Ghost {
     /// `0x90` bytes OR input data is shorter than the expected input data size.
     /// Returns other [`GhostError`] variants if any field fails
     /// to parse.
-    pub fn new(bytes: &[u8]) -> Result<Self, GhostError> {
+    pub fn new_from_bytes(bytes: &[u8]) -> Result<Self, GhostError> {
         if bytes.len() < 0x90 {
             return Err(GhostError::DataLengthTooShort);
         }
 
-        let header = Header::new(&bytes[..0x88])?;
+        let header = Header::new_from_bytes(&bytes[..0x88])?;
 
         let file_crc32 = u32::from_be_bytes(bytes[bytes.len() - 0x04..].try_into()?);
         let mut base_crc32 = file_crc32;
@@ -176,7 +177,7 @@ impl Ghost {
     /// [`GhostError::CTGPFooterError`] if the SHA-1 field cannot be written.
     pub fn update_raw_data(&mut self) -> Result<(), GhostError> {
         let mii_bytes = self.header().mii().raw_data().to_vec();
-        self.header_mut().set_mii(Mii::new(mii_bytes)?);
+        self.header_mut().set_mii(Mii::new_from_bytes(mii_bytes)?);
         self.header_mut().fix_mii_crc16();
 
         let mut buf = Vec::from(self.header().raw_data());

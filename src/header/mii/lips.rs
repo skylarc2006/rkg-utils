@@ -4,6 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the lip customization options of a Mii,
 /// including lip style, color, size, and vertical position.
+// TODO: Implement From<Lips> for [u8; 2], convert to raw byte representation
 #[derive(Clone, Copy)]
 pub struct Lips {
     /// Vertical position of the lips (0–18).

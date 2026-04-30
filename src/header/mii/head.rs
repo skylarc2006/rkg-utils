@@ -109,6 +109,23 @@ impl FromByteHandler for Head {
     }
 }
 
+/// Serializes a [`Head`] into its raw two-byte representation.
+///
+/// The bit layout is `0bTTTSSSFF FFXXXXXX`, where `T` is the face shape (3 bits),
+/// `S` is the skin tone (3 bits), `F` is the face features (4 bits), and `X` bits are outside data (0'd out in the return value).
+impl From<Head> for [u8; 2] {
+    fn from(value: Head) -> Self {
+        let face_shape = u8::from(value.shape());
+        let skin_tone = u8::from(value.skin_tone());
+        let face_features = u8::from(value.face_features());
+
+        [
+            (face_shape << 5) | (skin_tone << 2) | (face_features >> 2),
+            (face_features & 0x03) << 6,
+        ]
+    }
+}
+
 /// Face/head shape options available in the Mii editor.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum HeadShape {

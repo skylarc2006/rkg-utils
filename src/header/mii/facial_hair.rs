@@ -7,6 +7,7 @@ use crate::{
 
 /// Represents the facial hair customization options of a Mii,
 /// including beard type, mustache type, color, and mustache size and position.
+// TODO: Implement From<FacialHair> for [u8; 2], convert to raw byte representation
 #[derive(Clone, Copy)]
 pub struct FacialHair {
     /// Beard shape/style.

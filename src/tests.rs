@@ -390,7 +390,7 @@ fn test_nine_laps() {
         .read_to_end(&mut rkg_data)
         .expect("Couldn't read bytes in file");
 
-    let header = Header::new(&rkg_data[..0x88]).expect("Couldn't read header");
+    let header = Header::new_from_bytes(&rkg_data[..0x88]).expect("Couldn't read header");
 
     for (index, lap) in header.lap_split_times().iter().enumerate() {
         println!("Lap {}: {}", index + 1, lap.to_string());
@@ -809,7 +809,7 @@ fn write_to_ghost() {
 
     // new ghost asserts
     ghost.update_raw_data().unwrap();
-    let mut ghost = Ghost::new(&ghost.raw_data).unwrap();
+    let mut ghost = Ghost::new_from_bytes(&ghost.raw_data).unwrap();
 
     // General ghost info
     assert_eq!(ghost.header().finish_time().minutes(), 1);
