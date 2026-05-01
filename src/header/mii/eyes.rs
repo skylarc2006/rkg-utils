@@ -6,7 +6,6 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 ///
 /// All positional and size values are validated against the ranges permitted
 /// by the Mii data format on construction.
-// TODO: Implement From<Eyes> for [u8; 4], convert to raw byte representation
 #[derive(Clone, Copy)]
 pub struct Eyes {
     /// Eye rotation (0–7).
@@ -162,6 +161,28 @@ impl Eyes {
     /// Sets the eye shape/style.
     pub fn set_eye_type(&mut self, eye_type: EyeType) {
         self.eye_type = eye_type;
+    }
+}
+
+/// Converts [`Eyes`] to its raw byte representation.
+/// `0bTTTTTTRR RRRYYYYY CCCSSSSX XXXUUUUU`, where:
+/// T = eye type (5 bits), R = rotation (5 bits), Y = eyes Y position (5 bits),
+/// C = eye color (3 bits), S = size (4 bits), X = eyes X position (4 bits), U = unused (0).
+impl From<Eyes> for [u8; 4] {
+    fn from(value: Eyes) -> Self {
+        let eye_type = u8::from(value.eye_type());
+        let rotation = value.rotation();
+        let y = value.y();
+        let eye_color = u8::from(value.eye_color());
+        let size = value.size();
+        let x = value.x();
+
+        [
+            (eye_type << 2) | (rotation >> 3),
+            (rotation << 5) | y,
+            (eye_color << 5) | (size << 1) | (x >> 3),
+            (x & 0x07) << 5,
+        ]
     }
 }
 

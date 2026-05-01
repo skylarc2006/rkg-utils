@@ -7,7 +7,6 @@ use crate::{
 
 /// Represents the facial hair customization options of a Mii,
 /// including beard type, mustache type, color, and mustache size and position.
-// TODO: Implement From<FacialHair> for [u8; 2], convert to raw byte representation
 #[derive(Clone, Copy)]
 pub struct FacialHair {
     /// Beard shape/style.
@@ -124,6 +123,25 @@ impl FacialHair {
         }
         self.mustache_y = mustache_y;
         Ok(())
+    }
+}
+
+/// Converts [`FacialHair`] to its raw-data representation.
+/// `0bMMBBCCCS SSSYYYYY`, where:
+/// M = mustache type (2 bits), B = beard type (2 bits), C = color (3 bits),
+/// S = size (4 bits), Y = y position (5 bits)
+impl From<FacialHair> for [u8; 2] {
+    fn from(value: FacialHair) -> Self {
+        let mustache_type = u8::from(value.mustache_type());
+        let beard_type = u8::from(value.beard_type());
+        let color = u8::from(value.color());
+        let size = value.mustache_size();
+        let y = value.mustache_y();
+
+        [
+            (mustache_type << 6) | (beard_type << 4) | (color << 1) | (size >> 3),
+            ((size & 0x07) << 5) | y,
+        ]
     }
 }
 
