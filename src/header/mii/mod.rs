@@ -153,7 +153,6 @@ pub struct Mii {
 
 impl Mii {
     /// Creates a [`Mii`] from its components as arguments.
-    // TODO: Create `raw_data` from combining raw byte conversions of each element
     pub fn new(
         is_girl: bool,
         birthday: Birthday,
@@ -180,10 +179,42 @@ impl Mii {
         let mii_id_prefix = (u8::from(mii_type) as u32) << 29;
         let creation_date_timestamp = timestamp_from_creation_date(creation_date) & 0x1FFFFFFF;
         let mii_id = mii_id_prefix | creation_date_timestamp;
-        let raw_data = [0u8; 0x4A];
+        let mut raw_data = Vec::with_capacity(0x4A);
+
+        let mut mii_info_bytes = <[u8; 2]>::from(birthday);
+        mii_info_bytes[0] |= (is_girl as u8) << 6;
+        mii_info_bytes[1] |= u8::from(favorite_color) << 1;
+        mii_info_bytes[1] |= is_favorite as u8;
+
+        raw_data.extend_from_slice(&mii_info_bytes);
+        let mut name_bytes = [0u8; 0x14];
+        let name_utf16 = string_to_utf16be(&name);
+        name_bytes[..name_utf16.len()].copy_from_slice(&name_utf16);
+        raw_data.extend_from_slice(&name_bytes);
+        raw_data.extend_from_slice(&<[u8; 2]>::from(build));
+        raw_data.extend_from_slice(&mii_id.to_be_bytes());
+        raw_data.extend_from_slice(&system_id.to_be_bytes());
+
+        let mut head_bytes = <[u8; 2]>::from(head);
+        head_bytes[1] |= (mingle_off as u8) << 2;
+        head_bytes[1] |= downloaded as u8;
+        raw_data.extend_from_slice(&head_bytes);
+
+        raw_data.extend_from_slice(&<[u8; 2]>::from(hair));
+        raw_data.extend_from_slice(&<[u8; 4]>::from(eyebrows));
+        raw_data.extend_from_slice(&<[u8; 4]>::from(eyes));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(nose));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(lips));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(glasses));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(facial_hair));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(mole));
+        let mut creator_name_bytes = [0u8; 0x14];
+        let creator_utf16 = string_to_utf16be(&creator_name);
+        creator_name_bytes[..creator_utf16.len()].copy_from_slice(&creator_utf16);
+        raw_data.extend_from_slice(&creator_name_bytes);
 
         Self {
-            raw_data,
+            raw_data: raw_data.try_into().unwrap(),
             is_modified: false,
             is_girl,
             birthday,
