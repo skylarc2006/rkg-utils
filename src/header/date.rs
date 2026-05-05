@@ -45,6 +45,10 @@ impl Date {
     /// Returns [`DateError::DayInvalid`] if `day` exceeds the maximum for the given
     /// month, accounting for leap years in February.
     pub fn new(year: u16, month: u8, day: u8) -> Result<Self, DateError> {
+        if year < 2000 {
+            return Err(DateError::YearInvalid);
+        }
+
         let year = (year - 2000) as u8;
 
         if year > 35 {
@@ -77,6 +81,28 @@ impl Date {
     /// Returns the day of the month.
     pub fn day(&self) -> u8 {
         self.day
+    }
+}
+
+/// Converts a [`Date`] to its raw-data format.
+/// The bytes are packed as follows:
+/// ```text
+/// Byte 1: XXXXYYYY
+/// Byte 2: YYYMMMMD
+/// Byte 3: DDDDXXXX
+/// ```
+/// where `Y` = year bits, `M` = month bits, and `D` = day bits.
+impl From<Date> for [u8; 3] {
+    fn from(value: Date) -> Self {
+        let year = (value.year() - 2000) as u8;
+        let month = value.month();
+        let day = value.day();
+
+        [
+            year >> 3,
+            ((year & 0x07) << 5) | (month << 1) | (day >> 4),
+            (day & 0x0F) << 4,
+        ]
     }
 }
 

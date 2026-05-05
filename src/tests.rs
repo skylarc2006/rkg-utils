@@ -1,20 +1,11 @@
 use chrono::NaiveDateTime;
 
 use crate::{
-    Ghost,
-    footer::{
+    Ghost, GhostError, crc::{crc16, crc32}, footer::{
         FooterType,
         ctgp_footer::{CTGPFooter, region::Region},
-    },
-    header::{
-        Header,
-        combo::{Combo, character::Character, vehicle::Vehicle},
-        controller::Controller,
-        date::Date,
-        ghost_type::GhostType,
-        in_game_time::InGameTime,
-        location::{Location, constants::*},
-        mii::{
+    }, header::{
+        Header, HeaderError, combo::{Combo, ComboError, character::Character, vehicle::Vehicle}, controller::Controller, date::{Date, DateError}, ghost_type::{GhostType, GhostTypeError}, in_game_time::{InGameTime, InGameTimeError}, location::{Location, constants::*}, mii::{
             Mii,
             birthday::Birthday,
             build::Build,
@@ -29,10 +20,8 @@ use crate::{
             mii_type::MiiType,
             mole::Mole,
             nose::{Nose, NoseType},
-        },
-        slot_id::SlotId,
-    },
-    input_data::{InputData, yaz1_compress, yaz1_decompress},
+        }, slot_id::{SlotId, SlotIdError}, transmission_mod::TransmissionMod
+    }, input_data::{InputData, InputDataError, controller_input::ControllerInput, dpad_button::DPadButton, stick_input::{StickInput, StickInputError}, yaz1_compress, yaz1_decompress}, write_bits
 };
 use std::io::Read;
 
@@ -133,7 +122,6 @@ fn test_rkg_header() {
     assert_eq!(header.mii().creator_name(), "JC");
 
     assert_eq!(header.mii_crc16(), 0x06F4);
-    assert!(header.verify_mii_crc16());
 }
 
 #[test]
@@ -588,7 +576,6 @@ fn test_full_ghost() {
     assert_eq!(ghost.header().mii().creator_name(), "JC");
 
     assert_eq!(ghost.header().mii_crc16(), 0x06F4);
-    assert!(ghost.header().verify_mii_crc16());
 
     // Input data
     assert_eq!(ghost.input_data().face_button_input_count(), 0x18);
@@ -731,12 +718,11 @@ fn write_to_ghost() {
     assert_eq!(ghost.header().mii().creator_name(), "JC");
 
     assert_eq!(ghost.header().mii_crc16(), 0x06F4);
-    assert!(ghost.header().verify_mii_crc16());
 
     // modify fields
     ghost
         .header_mut()
-        .set_finish_time(InGameTime::new(1, 37, 999));
+        .set_finish_time(InGameTime::new(1, 37, 999).unwrap());
     ghost.header_mut().set_slot_id(SlotId::DryDryRuins);
     ghost
         .header_mut()
@@ -750,13 +736,13 @@ fn write_to_ghost() {
     ghost.header_mut().set_automatic_drift(false);
     ghost
         .header_mut()
-        .set_lap_split_time(0, InGameTime::new(0, 6, 741));
+        .set_lap_split_time(0, InGameTime::new(0, 6, 741).unwrap());
     ghost
         .header_mut()
-        .set_lap_split_time(1, InGameTime::new(0, 42, 069));
+        .set_lap_split_time(1, InGameTime::new(0, 42, 069).unwrap());
     ghost
         .header_mut()
-        .set_lap_split_time(2, InGameTime::new(0, 21, 910));
+        .set_lap_split_time(2, InGameTime::new(0, 21, 910).unwrap());
     ghost.header_mut().set_location(
         Location::find(
             u8::from(Country::UnitedStates),
@@ -809,7 +795,7 @@ fn write_to_ghost() {
 
     // new ghost asserts
     ghost.update_raw_data().unwrap();
-    let mut ghost = Ghost::new_from_bytes(&ghost.raw_data).unwrap();
+    let mut ghost = Ghost::new_from_bytes(&ghost.raw_data()).unwrap();
 
     // General ghost info
     assert_eq!(ghost.header().finish_time().minutes(), 1);
@@ -931,8 +917,6 @@ fn write_to_ghost() {
 
     assert_eq!(ghost.header().mii().creator_name(), "IDIOT");
 
-    assert!(ghost.header().verify_mii_crc16());
-
     let _ = ghost
         .save_to_file("./test_ghosts/JC_transformed_ghost.rkg")
         .unwrap();
@@ -1031,7 +1015,6 @@ fn test_sp_footer() {
         println!("Set in mirror mode? {}", set_in_mirror);
     }
 
-    assert!(ghost.verify_file_crc32());
 }
 
 #[test]
@@ -1052,4 +1035,1111 @@ fn input_at_frame_test() {
     let frame = 256;
     println!("Input at frame {}:", frame);
     println!("{:#?}", ghost.input_data().get_input_at_frame(frame))
+}
+
+/*
+#[test]
+fn ninrankings_ghost_collection() {
+    let mut parsed_ghost_count = 0u32;
+    let total_ghost_count = 81003u32;
+    for entry in std::fs::read_dir("./test_ghosts/ninrankings_ghost_collection").unwrap() {
+        if Ghost::new_from_file(entry.as_ref().unwrap().path()).is_ok() {
+            parsed_ghost_count += 1;
+        }
+    }
+    println!("{parsed_ghost_count} out of {total_ghost_count} files are syntactically valid ghost files.");
+}
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// In depth tests
+// ===== CRC Tests =====
+
+#[test]
+fn crc16_known_vector() {
+    // CRC-16 CCITT XModem: "123456789" = 0x31C3
+    assert_eq!(crc16(b"123456789"), 0x31C3);
+}
+
+#[test]
+fn crc16_empty() {
+    assert_eq!(crc16(b""), 0x0000);
+}
+
+#[test]
+fn crc16_single_byte() {
+    // deterministic, same input should always be same output
+    let a = crc16(b"A");
+    let b = crc16(b"A");
+    assert_eq!(a, b);
+    assert_ne!(a, crc16(b"B"));
+}
+
+#[test]
+fn crc32_known_vector() {
+    // Standard CRC-32: "123456789" = 0xCBF43926
+    assert_eq!(crc32(b"123456789"), 0xCBF43926);
+}
+
+#[test]
+fn crc32_empty() {
+    assert_eq!(crc32(b""), 0x00000000);
+}
+
+#[test]
+fn crc32_deterministic() {
+    let a = crc32(b"MarioKartWii");
+    let b = crc32(b"MarioKartWii");
+    assert_eq!(a, b);
+    assert_ne!(a, crc32(b"MarioKartWi"));
+}
+
+// ===== write_bits Tests =====
+
+#[test]
+fn write_bits_full_byte() {
+    let mut buf = [0u8; 1];
+    write_bits(&mut buf, 0, 0, 8, 0xAB);
+    assert_eq!(buf[0], 0xAB);
+}
+
+#[test]
+fn write_bits_upper_nibble() {
+    // bit_offset=0, width=4: writes into the upper nibble
+    let mut buf = [0u8; 1];
+    write_bits(&mut buf, 0, 0, 4, 0xF);
+    assert_eq!(buf[0], 0xF0);
+}
+
+#[test]
+fn write_bits_lower_nibble() {
+    // bit_offset=4, width=4: writes into the lower nibble
+    let mut buf = [0u8; 1];
+    write_bits(&mut buf, 0, 4, 4, 0xF);
+    assert_eq!(buf[0], 0x0F);
+}
+
+#[test]
+fn write_bits_cross_byte() {
+    // 8 bits starting at bit 4 of byte 0 spans into byte 1
+    let mut buf = [0u8; 2];
+    write_bits(&mut buf, 0, 4, 8, 0xAB);
+    assert_eq!(buf[0], 0x0A);
+    assert_eq!(buf[1], 0xB0);
+}
+
+#[test]
+fn write_bits_preserves_surrounding() {
+    // Upper nibble should not be disturbed when writing to lower nibble
+    let mut buf = [0xF0u8; 1];
+    write_bits(&mut buf, 0, 4, 4, 0x0);
+    assert_eq!(buf[0], 0xF0);
+}
+
+#[test]
+fn write_bits_overwrites_with_zero() {
+    let mut buf = [0xFFu8; 1];
+    write_bits(&mut buf, 0, 0, 4, 0x0);
+    assert_eq!(buf[0], 0x0F); // upper nibble cleared, lower preserved
+}
+
+// ===== InGameTime Tests =====
+
+#[test]
+fn in_game_time_new_valid() {
+    let t = InGameTime::new(1, 3, 904).unwrap();
+    assert_eq!(t.minutes(), 1);
+    assert_eq!(t.seconds(), 3);
+    assert_eq!(t.milliseconds(), 904);
+}
+
+#[test]
+fn in_game_time_new_zero() {
+    let t = InGameTime::new(0, 0, 0).unwrap();
+    assert_eq!(t.igt_to_millis(), 0);
+}
+
+#[test]
+fn in_game_time_new_max_storable() {
+    assert!(InGameTime::new(127, 127, 1023).is_ok());
+}
+
+#[test]
+fn in_game_time_minutes_overflow() {
+    assert!(matches!(
+        InGameTime::new(128, 0, 0),
+        Err(InGameTimeError::InGameTimeElementTooLarge)
+    ));
+}
+
+#[test]
+fn in_game_time_seconds_overflow() {
+    assert!(matches!(
+        InGameTime::new(0, 128, 0),
+        Err(InGameTimeError::InGameTimeElementTooLarge)
+    ));
+}
+
+#[test]
+fn in_game_time_milliseconds_overflow() {
+    assert!(matches!(
+        InGameTime::new(0, 0, 1024),
+        Err(InGameTimeError::InGameTimeElementTooLarge)
+    ));
+}
+
+#[test]
+fn in_game_time_is_valid_in_bounds() {
+    assert!(InGameTime::new(99, 59, 999).unwrap().is_valid());
+    assert!(InGameTime::new(0, 0, 0).unwrap().is_valid());
+}
+
+#[test]
+fn in_game_time_is_valid_out_of_bounds() {
+    // Storable but not semantically valid in-game
+    assert!(!InGameTime::new(100, 0, 0).unwrap().is_valid());
+    assert!(!InGameTime::new(0, 60, 0).unwrap().is_valid());
+    assert!(!InGameTime::new(0, 0, 1000).unwrap().is_valid());
+}
+
+#[test]
+fn in_game_time_default_is_valid() {
+    assert!(InGameTime::default().is_valid());
+}
+
+#[test]
+fn in_game_time_display() {
+    assert_eq!(InGameTime::new(1, 3, 904).unwrap().to_string(), "01:03.904");
+    assert_eq!(InGameTime::new(0, 0, 0).unwrap().to_string(), "00:00.000");
+    assert_eq!(InGameTime::new(99, 59, 999).unwrap().to_string(), "99:59.999");
+}
+
+#[test]
+fn in_game_time_add_no_carry() {
+    let a = InGameTime::new(0, 25, 540).unwrap();
+    let b = InGameTime::new(0, 19, 127).unwrap();
+    let sum = a + b;
+    assert_eq!(sum.minutes(), 0);
+    assert_eq!(sum.seconds(), 44);
+    assert_eq!(sum.milliseconds(), 667);
+}
+
+#[test]
+fn in_game_time_add_with_carry() {
+    let a = InGameTime::new(0, 59, 600).unwrap();
+    let b = InGameTime::new(0, 0, 500).unwrap();
+    let sum = a + b;
+    assert_eq!(sum.minutes(), 1);
+    assert_eq!(sum.seconds(), 0);
+    assert_eq!(sum.milliseconds(), 100);
+}
+
+#[test]
+fn in_game_time_sum_lap_splits() {
+    let laps = [
+        InGameTime::new(0, 25, 540).unwrap(),
+        InGameTime::new(0, 19, 127).unwrap(),
+        InGameTime::new(0, 19, 237).unwrap(),
+    ];
+    let total: InGameTime = laps.iter().copied().sum();
+    // 25540 + 19127 + 19237 = 63904 ms = 1:03.904
+    assert_eq!(total.to_string(), "01:03.904");
+}
+
+#[test]
+fn in_game_time_igt_to_millis() {
+    assert_eq!(InGameTime::new(1, 3, 904).unwrap().igt_to_millis(), 63904);
+    assert_eq!(InGameTime::new(0, 0, 0).unwrap().igt_to_millis(), 0);
+}
+
+#[test]
+fn in_game_time_from_milliseconds_persists() {
+    let original = InGameTime::new(1, 23, 456).unwrap();
+    let millis = original.igt_to_millis();
+    let reconstructed = InGameTime::from_milliseconds(millis).unwrap();
+    assert_eq!(reconstructed.minutes(), 1);
+    assert_eq!(reconstructed.seconds(), 23);
+    assert_eq!(reconstructed.milliseconds(), 456);
+}
+
+#[test]
+fn in_game_time_raw_bytes_persists() {
+    let original = InGameTime::new(1, 23, 456).unwrap();
+    let bytes: [u8; 3] = original.into();
+    // Re-encode via write_bits approach and check the 3-byte layout
+    // minutes(7) + seconds(7) + ms(10) = 24 bits = 3 bytes
+    let minutes = (bytes[0] >> 1) as u8;
+    let seconds_high = bytes[0] & 0x01;
+    let seconds = ((seconds_high << 6) | (bytes[1] >> 2)) as u8;
+    let ms = (((bytes[1] & 0x03) as u16) << 8) | bytes[2] as u16;
+    assert_eq!(minutes, 1);
+    assert_eq!(seconds, 23);
+    assert_eq!(ms, 456);
+}
+
+// ===== Date Tests =====
+
+#[test]
+fn date_new_valid() {
+    let d = Date::new(2025, 11, 12).unwrap();
+    assert_eq!(d.year(), 2025);
+    assert_eq!(d.month(), 11);
+    assert_eq!(d.day(), 12);
+}
+
+#[test]
+fn date_year_boundary_min() {
+    assert!(Date::new(2000, 1, 1).is_ok());
+}
+
+#[test]
+fn date_year_boundary_max() {
+    assert!(Date::new(2035, 12, 31).is_ok());
+}
+
+#[test]
+fn date_year_too_low() {
+    assert!(matches!(Date::new(1999, 1, 1), Err(DateError::YearInvalid)));
+}
+
+#[test]
+fn date_year_too_high() {
+    assert!(matches!(Date::new(2036, 1, 1), Err(DateError::YearInvalid)));
+}
+
+#[test]
+fn date_month_zero() {
+    assert!(matches!(Date::new(2025, 0, 1), Err(DateError::MonthInvalid)));
+}
+
+#[test]
+fn date_month_thirteen() {
+    assert!(matches!(Date::new(2025, 13, 1), Err(DateError::MonthInvalid)));
+}
+
+#[test]
+fn date_day_31_valid_month() {
+    assert!(Date::new(2025, 1, 31).is_ok());
+    assert!(Date::new(2025, 3, 31).is_ok());
+}
+
+#[test]
+fn date_day_31_invalid_month() {
+    assert!(matches!(Date::new(2025, 4, 31), Err(DateError::DayInvalid)));
+    assert!(matches!(Date::new(2025, 6, 31), Err(DateError::DayInvalid)));
+    assert!(matches!(Date::new(2025, 11, 31), Err(DateError::DayInvalid)));
+}
+
+#[test]
+fn date_february_leap_year() {
+    // 2024 - 2000 = 24, 24 % 4 == 0: leap year
+    assert!(Date::new(2024, 2, 29).is_ok());
+    assert!(matches!(Date::new(2024, 2, 30), Err(DateError::DayInvalid)));
+}
+
+#[test]
+fn date_february_non_leap_year() {
+    // 2025 - 2000 = 25, 25 % 4 != 0: not a leap year
+    assert!(Date::new(2025, 2, 28).is_ok());
+    assert!(matches!(Date::new(2025, 2, 29), Err(DateError::DayInvalid)));
+}
+
+#[test]
+fn date_year_2000_leap() {
+    // 2000 - 2000 = 0, 0 % 4 == 0 && 2000 % 400 == 0: leap year
+    assert!(Date::new(2000, 2, 29).is_ok());
+}
+
+#[test]
+fn date_display() {
+    assert_eq!(Date::new(2025, 11, 12).unwrap().to_string(), "2025-11-12");
+    assert_eq!(Date::new(2000, 1, 1).unwrap().to_string(), "2000-01-01");
+}
+
+#[test]
+fn date_equality() {
+    assert_eq!(Date::new(2025, 11, 12).unwrap(), Date::new(2025, 11, 12).unwrap());
+    assert_ne!(Date::new(2025, 11, 12).unwrap(), Date::new(2025, 11, 13).unwrap());
+}
+
+// ===== SlotId Tests =====
+
+#[test]
+fn slot_id_luigi_circuit() {
+    let id = SlotId::LuigiCircuit;
+    assert_eq!(SlotId::try_from(u8::from(id)).unwrap(), id);
+}
+
+#[test]
+fn slot_id_mario_circuit() {
+    assert_eq!(u8::from(SlotId::MarioCircuit), 0x00);
+    assert_eq!(SlotId::try_from(0x00u8).unwrap(), SlotId::MarioCircuit);
+}
+
+#[test]
+fn slot_id_galaxy_colosseum() {
+    assert_eq!(u8::from(SlotId::GalaxyColosseum), 0xC9);
+    assert_eq!(SlotId::try_from(0xC9u8).unwrap(), SlotId::GalaxyColosseum);
+}
+
+#[test]
+fn slot_id_all_battle_arenas() {
+    let arenas = [
+        SlotId::BlockPlaza,
+        SlotId::DelfinoPier,
+        SlotId::FunkyStadium,
+        SlotId::ChainChompWheel,
+        SlotId::ThwompDesert,
+    ];
+    for slot in arenas {
+        assert_eq!(SlotId::try_from(u8::from(slot)).unwrap(), slot);
+    }
+}
+
+#[test]
+fn slot_id_invalid_byte() {
+    assert!(matches!(
+        SlotId::try_from(0xFF),
+        Err(SlotIdError::NonExistentSlotId)
+    ));
+    assert!(SlotId::try_from(0x99).is_err());
+}
+
+#[test]
+fn slot_id_display() {
+    assert_eq!(SlotId::LuigiCircuit.to_string(), "Luigi Circuit");
+    assert_eq!(SlotId::MapleTreeway.to_string(), "Maple Treeway");
+    assert_eq!(SlotId::GCNDKMountain.to_string(), "GCN DK Mountain");
+    assert_eq!(SlotId::GalaxyColosseum.to_string(), "Galaxy Colosseum");
+}
+
+// ===== Controller Tests =====
+
+#[test]
+fn controller_all() {
+    for (byte, ctrl) in [
+        (0u8, Controller::WiiWheel),
+        (1, Controller::Nunchuk),
+        (2, Controller::Classic),
+        (3, Controller::Gamecube),
+    ] {
+        assert_eq!(u8::from(ctrl), byte);
+        assert_eq!(Controller::try_from(byte).unwrap(), ctrl);
+    }
+}
+
+#[test]
+fn controller_invalid_byte() {
+    assert!(Controller::try_from(4).is_err());
+    assert!(Controller::try_from(255).is_err());
+}
+
+#[test]
+fn controller_display() {
+    assert_eq!(Controller::WiiWheel.to_string(), "Wii Wheel");
+    assert_eq!(Controller::Nunchuk.to_string(), "Nunchuk");
+    assert_eq!(Controller::Classic.to_string(), "Classic");
+    assert_eq!(Controller::Gamecube.to_string(), "Gamecube");
+}
+
+// ===== GhostType Tests =====
+
+#[test]
+fn ghost_type_player_best() {
+    assert_eq!(u8::from(GhostType::PlayerBest), 0x01);
+    assert_eq!(GhostType::try_from(0x01u8).unwrap(), GhostType::PlayerBest);
+}
+
+#[test]
+fn ghost_type_expert_staff() {
+    assert_eq!(u8::from(GhostType::ExpertStaff), 0x26);
+    assert_eq!(GhostType::try_from(0x26u8).unwrap(), GhostType::ExpertStaff);
+}
+
+#[test]
+fn ghost_type_friend() {
+    // Friend1 = 0x07, Friend30 = 0x24
+    assert_eq!(u8::from(GhostType::Friend1), 0x07);
+    assert_eq!(GhostType::try_from(0x07u8).unwrap(), GhostType::Friend1);
+    assert_eq!(u8::from(GhostType::Friend30), 0x24);
+    assert_eq!(GhostType::try_from(0x24u8).unwrap(), GhostType::Friend30);
+}
+
+#[test]
+fn ghost_type_zero_invalid() {
+    assert!(matches!(
+        GhostType::try_from(0x00u8),
+        Err(GhostTypeError::NonexistentGhostType)
+    ));
+}
+
+#[test]
+fn ghost_type_out_of_range() {
+    assert!(GhostType::try_from(0x27u8).is_err());
+    assert!(GhostType::try_from(0xFFu8).is_err());
+}
+
+// ===== TransmissionMod Tests =====
+
+#[test]
+fn transmission_mod_all() {
+    for (byte, tm) in [
+        (0u8, TransmissionMod::Vanilla),
+        (1, TransmissionMod::AllInside),
+        (2, TransmissionMod::AllBikeInside),
+        (3, TransmissionMod::AllOutside),
+    ] {
+        assert_eq!(u8::from(tm), byte);
+        assert_eq!(TransmissionMod::try_from(byte).unwrap(), tm);
+    }
+}
+
+#[test]
+fn transmission_mod_invalid_byte() {
+    assert!(TransmissionMod::try_from(4).is_err());
+}
+
+#[test]
+fn transmission_mod_display() {
+    assert_eq!(TransmissionMod::Vanilla.to_string(), "Vanilla");
+    assert_eq!(TransmissionMod::AllInside.to_string(), "All Inside");
+    assert_eq!(TransmissionMod::AllBikeInside.to_string(), "All Bikes Inside");
+    assert_eq!(TransmissionMod::AllOutside.to_string(), "All Outside");
+}
+
+// ===== Combo Tests =====
+
+#[test]
+fn combo_valid_heavy() {
+    let combo = Combo::new(Vehicle::WarioBike, Character::KingBoo).unwrap();
+    assert_eq!(combo.character(), Character::KingBoo);
+    assert_eq!(combo.vehicle(), Vehicle::WarioBike);
+}
+
+#[test]
+fn combo_valid_small() {
+    assert!(Combo::new(Vehicle::BulletBike, Character::BabyMario).is_ok());
+}
+
+#[test]
+fn combo_valid_medium() {
+    assert!(Combo::new(Vehicle::MachBike, Character::Mario).is_ok());
+}
+
+#[test]
+fn combo_incongruent_heavy_vehicle_medium_character() {
+    assert!(matches!(
+        Combo::new(Vehicle::WarioBike, Character::Mario),
+        Err(ComboError::IncongruentWeightClasses)
+    ));
+}
+
+#[test]
+fn combo_incongruent_small_vehicle_heavy_character() {
+    assert!(matches!(
+        Combo::new(Vehicle::BulletBike, Character::KingBoo),
+        Err(ComboError::IncongruentWeightClasses)
+    ));
+}
+
+#[test]
+fn combo_display() {
+    let combo = Combo::new(Vehicle::WarioBike, Character::KingBoo).unwrap();
+    assert_eq!(combo.to_string(), "King Boo on Wario Bike");
+}
+
+// ===== StickInput Tests =====
+
+#[test]
+fn stick_input_new_valid() {
+    let s = StickInput::new(7, 7).unwrap();
+    assert_eq!(s.x(), 7);
+    assert_eq!(s.y(), 7);
+}
+
+#[test]
+fn stick_input_boundary() {
+    assert!(StickInput::new(0, 0).is_ok());
+    assert!(StickInput::new(14, 14).is_ok());
+}
+
+#[test]
+fn stick_input_x_too_large() {
+    assert!(matches!(
+        StickInput::new(15, 7),
+        Err(StickInputError::InvalidStickInput)
+    ));
+}
+
+#[test]
+fn stick_input_y_too_large() {
+    assert!(matches!(
+        StickInput::new(7, 15),
+        Err(StickInputError::InvalidStickInput)
+    ));
+}
+
+#[test]
+fn stick_input_try_from_byte_persists() {
+    let original = StickInput::new(5, 9).unwrap();
+    let byte = original.to_byte();
+    let decoded = StickInput::try_from(byte).unwrap();
+    assert_eq!(decoded.x(), 5);
+    assert_eq!(decoded.y(), 9);
+}
+
+#[test]
+fn stick_input_byte_encoding() {
+    // x is high nibble, y is low nibble
+    let s = StickInput::new(0xA, 0xB).unwrap();
+    assert_eq!(s.to_byte(), 0xAB);
+}
+
+#[test]
+fn stick_input_try_from_invalid_byte() {
+    // 0xFF: x = 0xF = 15 > 14
+    assert!(StickInput::try_from(0xFF).is_err());
+}
+
+#[test]
+fn stick_input_center_never_impossible() {
+    let center = StickInput::new(7, 7).unwrap();
+    for ctrl in [Controller::WiiWheel, Controller::Nunchuk, Controller::Classic, Controller::Gamecube] {
+        assert!(!center.is_impossible(ctrl), "Center should be legal for {ctrl}");
+    }
+}
+
+#[test]
+fn stick_input_corner_impossible_nunchuk_classic_gcn() {
+    // [0, 0] is in the first 24 illegal inputs (shared by all non-WiiWheel)
+    let corner = StickInput::new(0, 0).unwrap();
+    assert!(corner.is_impossible(Controller::Nunchuk));
+    assert!(corner.is_impossible(Controller::Classic));
+    assert!(corner.is_impossible(Controller::Gamecube));
+    assert!(!corner.is_impossible(Controller::WiiWheel));
+}
+
+#[test]
+fn stick_input_gcn_only_illegal() {
+    // [0, 11] is in the GCN/Classic-only block (index 24+)
+    let s = StickInput::new(0, 11).unwrap();
+    assert!(!s.is_impossible(Controller::Nunchuk));
+    assert!(s.is_impossible(Controller::Classic));
+    assert!(s.is_impossible(Controller::Gamecube));
+    assert!(!s.is_impossible(Controller::WiiWheel));
+}
+
+#[test]
+fn stick_input_wii_wheel_never_impossible() {
+    // WiiWheel has no illegal stick inputs at all
+    let corner = StickInput::new(0, 14).unwrap();
+    assert!(!corner.is_impossible(Controller::WiiWheel));
+}
+
+// ===== DPadButton Tests =====
+
+#[test]
+fn dpad_button_none() {
+    assert_eq!(DPadButton::try_from(0x00u8).unwrap(), DPadButton::None);
+}
+
+#[test]
+fn dpad_button_directions() {
+    assert_eq!(DPadButton::try_from(0x10u8).unwrap(), DPadButton::Up);
+    assert_eq!(DPadButton::try_from(0x20u8).unwrap(), DPadButton::Down);
+    assert_eq!(DPadButton::try_from(0x30u8).unwrap(), DPadButton::Left);
+    assert_eq!(DPadButton::try_from(0x40u8).unwrap(), DPadButton::Right);
+}
+
+#[test]
+fn dpad_button_invalid() {
+    // (0x50 & 0x70) >> 4 = 5 which is not a valid direction
+    assert!(DPadButton::try_from(0x50u8).is_err());
+}
+
+// ===== ControllerInput Tests =====
+
+#[test]
+fn controller_input_new_and_getters() {
+    let stick = StickInput::new(7, 7).unwrap();
+    let input = ControllerInput::new(true, false, false, true, false, false, DPadButton::Up, stick, 5);
+    assert!(input.accelerator());
+    assert!(!input.brake());
+    assert!(!input.brake_drift());
+    assert!(input.drift_flag());
+    assert!(!input.item());
+    assert!(!input.unknown_face_button());
+    assert_eq!(input.dpad(), DPadButton::Up);
+    assert_eq!(input.stick(), stick);
+    assert_eq!(input.frame_duration(), 5);
+}
+
+#[test]
+fn controller_input_face_buttons_equal() {
+    let stick = StickInput::new(7, 7).unwrap();
+    let a = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 1);
+    let b = ControllerInput::new(true, false, false, false, false, false, DPadButton::Up, stick, 5);
+    assert!(a.face_buttons_equal_to(b)); // dpad and duration don't affect face equality
+}
+
+// ===== InputData Tests =====
+
+#[test]
+fn input_data_empty_error() {
+    assert!(matches!(
+        InputData::new(vec![], false),
+        Err(InputDataError::InputDataLengthTooShort)
+    ));
+}
+
+#[test]
+fn input_data_single_input_uncompressed() {
+    let stick = StickInput::new(7, 7).unwrap();
+    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 100);
+    let data = InputData::new(vec![input], false).unwrap();
+    assert_eq!(data.controller_inputs().len(), 1);
+    assert!(!data.compressed());
+    assert_eq!(data.face_button_input_count(), 1);
+    assert_eq!(data.stick_input_count(), 1);
+    assert_eq!(data.dpad_button_input_count(), 1);
+}
+
+#[test]
+fn input_data_too_short_bytes() {
+    assert!(matches!(
+        InputData::new_from_bytes(&[0u8; 4]),
+        Err(InputDataError::InputDataLengthTooShort)
+    ));
+}
+
+#[test]
+fn input_data_get_input_at_frame_zero_none() {
+    let stick = StickInput::new(7, 7).unwrap();
+    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 10);
+    let data = InputData::new(vec![input], false).unwrap();
+    assert!(data.get_input_at_frame(0).is_none());
+}
+
+#[test]
+fn input_data_get_input_at_frame_valid() {
+    let stick = StickInput::new(7, 7).unwrap();
+    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 10);
+    let data = InputData::new(vec![input], false).unwrap();
+    assert!(data.get_input_at_frame(1).is_some());
+    assert!(data.get_input_at_frame(10).is_some());
+    assert!(data.get_input_at_frame(11).is_none());
+}
+
+#[test]
+fn input_data_from_jc_lc_compressed() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let input_data = ghost.input_data();
+    assert_eq!(input_data.face_button_input_count(), 0x18);
+    assert_eq!(input_data.stick_input_count(), 0x037B);
+    assert_eq!(input_data.dpad_button_input_count(), 0x09);
+    assert_eq!(input_data.controller_inputs().len(), 907);
+    assert!(input_data.compressed());
+    assert!(!input_data.contains_illegal_brake_or_drift_inputs());
+}
+
+#[test]
+fn input_data_illegal_brake_input() {
+    let ghost = Ghost::new_from_file("./test_ghosts/illegal_brake_input.rkg").unwrap();
+    assert!(ghost.input_data().contains_illegal_brake_or_drift_inputs());
+}
+
+#[test]
+fn input_data_illegal_drift_input() {
+    let ghost = Ghost::new_from_file("./test_ghosts/illegal_drift_input.rkg").unwrap();
+    assert!(ghost.input_data().contains_illegal_brake_or_drift_inputs());
+}
+
+#[test]
+fn input_data_raw_data_reparse() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let original_inputs = ghost.input_data().controller_inputs().to_vec();
+    let raw = ghost.input_data().raw_data();
+    let reparsed = InputData::new_from_bytes(&raw).unwrap();
+    assert_eq!(reparsed.controller_inputs(), original_inputs.as_slice());
+}
+
+#[test]
+fn input_data_set_compressed() {
+    let stick = StickInput::new(7, 7).unwrap();
+    let input = ControllerInput::new(false, false, false, false, false, false, DPadButton::None, stick, 50);
+    let mut data = InputData::new(vec![input], false).unwrap();
+    assert!(!data.compressed());
+    data.set_compressed(true);
+    assert!(data.compressed());
+}
+
+// ===== FooterType Tests =====
+
+#[test]
+fn footer_type_unknown_raw_data() {
+    let bytes = vec![0xDE, 0xAD, 0xBE, 0xEF];
+    let footer = FooterType::Unknown(bytes.clone());
+    assert!(footer.is_unknown());
+    assert!(!footer.is_ctgp());
+    assert!(!footer.is_sp());
+    assert_eq!(footer.raw_data(), bytes.as_slice());
+}
+
+#[test]
+fn footer_type_ctgp_detected() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let footer = ghost.footer().unwrap();
+    assert!(footer.is_ctgp());
+    assert!(!footer.is_sp());
+    assert!(!footer.is_unknown());
+}
+
+#[test]
+fn footer_type_sp_detected() {
+    let ghost = Ghost::new_from_file("./test_ghosts/spv5.rkg").unwrap();
+    let footer = ghost.footer().unwrap();
+    assert!(footer.is_sp());
+    assert!(!footer.is_ctgp());
+    assert!(!footer.is_unknown());
+}
+
+#[test]
+fn footer_type_none_for_vanilla_ghost() {
+    // JC_LC.rkg is the uncompressed vanilla ghost without a CTGP/SP footer
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC.rkg").unwrap();
+    // It may or may not have a footer; just ensure it doesn't panic
+    let f = ghost.footer();
+    assert!(f.is_none());
+}
+
+// ===== Header Tests =====
+
+#[test]
+fn header_not_rkgd_error() {
+    let mut bytes = [0u8; 0x88];
+    bytes[0..4].copy_from_slice(b"XXXX");
+    assert!(matches!(
+        Header::new_from_bytes(&bytes),
+        Err(HeaderError::NotRKGD)
+    ));
+}
+
+#[test]
+fn header_wrong_size_error() {
+    let bytes = [0u8; 0x87];
+    assert!(matches!(
+        Header::new_from_bytes(&bytes),
+        Err(HeaderError::NotCorrectSize)
+    ));
+}
+
+#[test]
+fn header_from_jc_lc_compressed() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    assert_eq!(header.finish_time().to_string(), "01:03.904");
+    assert_eq!(header.slot_id(), SlotId::LuigiCircuit);
+    assert_eq!(header.lap_count(), 3);
+    assert!(header.is_compressed());
+    assert!(header.is_automatic_drift());
+    assert_eq!(header.controller(), Controller::Classic);
+    assert_eq!(header.ghost_type(), GhostType::ExpertStaff);
+    assert_eq!(header.transmission_mod(), TransmissionMod::Vanilla);
+    assert_eq!(header.decompressed_input_data_length(), 1856);
+    assert_eq!(header.location().country(), Country::NotSet);
+}
+
+#[test]
+fn header_raw_data_persists() {
+    let mut raw = [0u8; 0x88];
+    std::fs::File::open("./test_ghosts/JC_LC_Compressed.rkg")
+        .unwrap()
+        .read_exact(&mut raw)
+        .unwrap();
+    let header = Header::new_from_bytes(&raw).unwrap();
+    assert_eq!(header.raw_data(), raw);
+}
+
+#[test]
+fn header_mii_crc16_computed() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    // CRC16 of the embedded Mii raw data matches stored value
+    assert_eq!(header.mii_crc16(), 0x06F4);
+    // Calling twice gives same result (computed from mii, not stored)
+    assert_eq!(header.mii_crc16(), header.mii_crc16());
+}
+
+#[test]
+fn header_lap_split_times_count() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    assert_eq!(header.lap_split_times().len(), 3);
+}
+
+#[test]
+fn header_lap_split_times_values() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    assert_eq!(header.lap_split_time(0).unwrap().to_string(), "00:25.540");
+    assert_eq!(header.lap_split_time(1).unwrap().to_string(), "00:19.127");
+    assert_eq!(header.lap_split_time(2).unwrap().to_string(), "00:19.237");
+}
+
+#[test]
+fn header_lap_split_time_out_of_bounds() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    assert!(matches!(
+        header.lap_split_time(3),
+        Err(HeaderError::LapSplitIndexError)
+    ));
+}
+
+#[test]
+fn header_lap_splits_sum_to_finish_time() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let total: InGameTime = header.lap_split_times().iter().copied().sum();
+    assert_eq!(total.igt_to_millis(), header.finish_time().igt_to_millis());
+}
+
+#[test]
+fn header_9_laps() {
+    let header = Header::new_from_path("./test_ghosts/9laps_test.rkg").unwrap();
+    assert_eq!(header.lap_count(), 9);
+    assert_eq!(header.lap_split_times().len(), 9);
+}
+
+#[test]
+fn header_setter_finish_time_persists_in_raw() {
+    let mut header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let new_time = InGameTime::new(2, 0, 0).unwrap();
+    header.set_finish_time(new_time);
+    assert_eq!(header.finish_time().to_string(), "02:00.000");
+    let reparsed = Header::new_from_bytes(&header.raw_data()).unwrap();
+    assert_eq!(reparsed.finish_time().to_string(), "02:00.000");
+}
+
+#[test]
+fn header_setter_slot_id_persists_in_raw() {
+    let mut header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    header.set_slot_id(SlotId::RainbowRoad);
+    assert_eq!(header.slot_id(), SlotId::RainbowRoad);
+    let reparsed = Header::new_from_bytes(&header.raw_data()).unwrap();
+    assert_eq!(reparsed.slot_id(), SlotId::RainbowRoad);
+}
+
+#[test]
+fn header_setter_controller_persists_in_raw() {
+    let mut header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    header.set_controller(Controller::WiiWheel);
+    assert_eq!(header.controller(), Controller::WiiWheel);
+    let reparsed = Header::new_from_bytes(&header.raw_data()).unwrap();
+    assert_eq!(reparsed.controller(), Controller::WiiWheel);
+}
+
+#[test]
+fn header_setter_ghost_type_persists_in_raw() {
+    let mut header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    header.set_ghost_type(GhostType::WorldRecord);
+    let reparsed = Header::new_from_bytes(&header.raw_data()).unwrap();
+    assert_eq!(reparsed.ghost_type(), GhostType::WorldRecord);
+}
+
+#[test]
+fn header_setter_automatic_drift_persists_in_raw() {
+    let mut header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    header.set_automatic_drift(false);
+    let reparsed = Header::new_from_bytes(&header.raw_data()).unwrap();
+    assert!(!reparsed.is_automatic_drift());
+}
+
+#[test]
+fn header_setter_lap_split_time_persists_in_raw() {
+    let mut header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let new_time = InGameTime::new(0, 20, 0).unwrap();
+    header.set_lap_split_time(0, new_time);
+    let reparsed = Header::new_from_bytes(&header.raw_data()).unwrap();
+    assert_eq!(reparsed.lap_split_time(0).unwrap().to_string(), "00:20.000");
+}
+
+#[test]
+fn header_set_lap_split_oob_is_noop() {
+    let mut header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let original_time = header.lap_split_time(0).unwrap().igt_to_millis();
+    header.set_lap_split_time(99, InGameTime::new(0, 1, 0).unwrap());
+    assert_eq!(header.lap_split_time(0).unwrap().igt_to_millis(), original_time);
+}
+
+// ===== Ghost Tests =====
+
+#[test]
+fn ghost_too_short_error() {
+    assert!(matches!(
+        Ghost::new_from_bytes(&[0u8; 0x8F]),
+        Err(GhostError::DataLengthTooShort)
+    ));
+}
+
+#[test]
+fn ghost_from_file_ctgp() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    assert!(ghost.footer().is_some());
+    assert!(ghost.footer().unwrap().is_ctgp());
+    assert!(ghost.should_preserve_external_footer());
+}
+
+#[test]
+fn ghost_from_file_sp() {
+    let ghost = Ghost::new_from_file("./test_ghosts/spv5.rkg").unwrap();
+    assert!(ghost.footer().is_some());
+    assert!(ghost.footer().unwrap().is_sp());
+}
+
+#[test]
+fn ghost_new_no_footer() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let stick = StickInput::new(7, 7).unwrap();
+    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 100);
+    let input_data = InputData::new(vec![input], false).unwrap();
+    let ghost = Ghost::new(header, input_data);
+    assert!(ghost.footer().is_none());
+    assert!(!ghost.should_preserve_external_footer());
+}
+
+#[test]
+fn ghost_new_syncs_compression_true() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let stick = StickInput::new(7, 7).unwrap();
+    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 100);
+    let input_data = InputData::new(vec![input], true).unwrap();
+    let ghost = Ghost::new(header, input_data);
+    assert!(ghost.header().is_compressed());
+}
+
+#[test]
+fn ghost_new_syncs_compression_false() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let stick = StickInput::new(7, 7).unwrap();
+    let input = ControllerInput::new(false, false, false, false, false, false, DPadButton::None, stick, 100);
+    let input_data = InputData::new(vec![input], false).unwrap();
+    let ghost = Ghost::new(header, input_data);
+    assert!(!ghost.header().is_compressed());
+}
+
+#[test]
+fn ghost_new_decompressed_length_correct() {
+    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let stick = StickInput::new(7, 7).unwrap();
+    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 100);
+    let input_data = InputData::new(vec![input], false).unwrap();
+
+    let face = input_data.face_button_input_count();
+    let stick_count = input_data.stick_input_count();
+    let dpad = input_data.dpad_button_input_count();
+    let expected_len = 8u16 + face * 2 + stick_count * 2 + dpad * 2;
+
+    let ghost = Ghost::new(header, input_data);
+    assert_eq!(ghost.header().decompressed_input_data_length(), expected_len);
+}
+
+#[test]
+fn ghost_file_crc32_valid() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let raw = ghost.raw_data();
+    let expected = crc32(&raw[..raw.len() - 4]);
+    assert_eq!(ghost.file_crc32(), expected);
+}
+
+#[test]
+fn ghost_base_crc32_is_prefix_crc() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let mut buf = Vec::from(ghost.header().raw_data());
+    buf.extend_from_slice(&ghost.input_data().raw_data());
+    assert_eq!(ghost.base_crc32(), crc32(&buf));
+}
+
+#[test]
+fn ghost_raw_data_last_4_bytes_are_file_crc32() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let raw = ghost.raw_data();
+    let stored = u32::from_be_bytes(raw[raw.len() - 4..].try_into().unwrap());
+    assert_eq!(stored, ghost.file_crc32());
+}
+
+#[test]
+fn ghost_raw_data_reparse_identical() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let raw = ghost.raw_data();
+    let reparsed = Ghost::new_from_bytes(&raw).unwrap();
+    assert_eq!(reparsed.header().finish_time().to_string(), "01:03.904");
+    assert_eq!(reparsed.header().slot_id(), SlotId::LuigiCircuit);
+    assert_eq!(reparsed.header().lap_count(), 3);
+    assert_eq!(
+        reparsed.input_data().controller_inputs().len(),
+        ghost.input_data().controller_inputs().len()
+    );
+}
+
+#[test]
+fn ghost_zero_finish_time() {
+    let ghost = Ghost::new_from_file("./test_ghosts/0m00s000.rkg").unwrap();
+    assert_eq!(ghost.header().finish_time().to_string(), "00:00.000");
+}
+
+#[test]
+fn ghost_preserve_footer_affects_raw_data_size() {
+    let mut ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let raw_with_footer = ghost.raw_data();
+    ghost.set_should_preserve_external_footer(false);
+    let raw_without_footer = ghost.raw_data();
+    // Footer is present, so with-footer should be larger
+    assert!(raw_with_footer.len() > raw_without_footer.len());
+}
+
+#[test]
+fn ghost_set_input_data_compressed_syncs_header() {
+    let mut ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    assert!(ghost.header().is_compressed());
+    ghost.set_input_data_compressed(false);
+    assert!(!ghost.header().is_compressed());
+    assert!(!ghost.input_data().compressed());
+}
+
+#[test]
+fn ghost_9_laps() {
+    let ghost = Ghost::new_from_file("./test_ghosts/9laps_test.rkg").unwrap();
+    assert_eq!(ghost.header().lap_count(), 9);
+    assert_eq!(ghost.header().lap_split_times().len(), 9);
+}
+
+// ===== Location Tests =====
+
+#[test]
+fn location_default_is_not_set() {
+    let loc = Location::default();
+    assert_eq!(loc.country(), Country::NotSet);
+}
+
+#[test]
+fn location_find_does_not_panic_on_unknown() {
+    let _ = Location::find(0xFE, 0xFE, Some(Version::Vanilla));
+    let _ = Location::find(0x00, 0x00, None);
+}
+
+#[test]
+fn location_find_exact_vanilla_not_set() {
+    // NotSet (0xFF, 0xFF) - just check it doesn't panic
+    let _ = Location::find_exact(0xFF, 0xFF, Version::Vanilla);
 }

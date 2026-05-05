@@ -31,6 +31,21 @@ impl Combo {
     }
 }
 
+/// Converts a [`Combo`] to its raw-data representation.
+/// `0bVVVVVVCC CCCCXXXX`, where:
+/// V = vehicle id, C = character id, X = other data (0'd in the return value).
+impl From<Combo> for [u8; 2] {
+    fn from(value: Combo) -> Self {
+        let vehicle_id = u8::from(value.vehicle());
+        let character_id = u8::from(value.character());
+
+        [
+            (vehicle_id << 2) | (character_id >> 4),
+            (character_id & 0x0F) << 4,
+        ]
+    }
+}
+
 /// Formats the combo as `"{character} on {vehicle}"` (e.g. `"Mario on Mach Bike"`).
 impl Display for Combo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

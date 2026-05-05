@@ -1,3 +1,4 @@
+// TODO: eliminate the need for raw_data to be a struct member
 use crate::{
     byte_handler::{ByteHandler, FromByteHandler},
     footer::{ctgp_footer::exact_finish_time::ExactFinishTime, sp_footer::sp_version::SPVersion},

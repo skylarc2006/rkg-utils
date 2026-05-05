@@ -85,13 +85,11 @@ pub enum HeaderError {
 
 /// The parsed 136-byte (`0x88`) header of a Mario Kart Wii RKG ghost file.
 ///
-/// Holds all metadata decoded from the RKGD file header, along with a copy of
-/// the raw bytes kept in sync with every setter. The layout is documented at
+/// Holds all metadata decoded from the RKGD file header. The raw byte
+/// representation is computed on demand from the parsed fields via
+/// [`raw_data`](Header::raw_data). The layout is documented at
 /// <https://wiki.tockdom.com/wiki/RKG_(File_Format)#File_Header>.
-// TODO: Implement new() where the raw data is calculated from byte representation of each field.
 pub struct Header {
-    /// The raw 136-byte header block, kept in sync with all parsed fields.
-    raw_data: [u8; 0x88],
     /// The ghost's recorded finish time.
     finish_time: InGameTime,
     /// The course slot the ghost was recorded on.
@@ -120,11 +118,42 @@ pub struct Header {
     location: Location,
     /// The Mii character embedded in the ghost header.
     mii: Mii,
-    /// The CRC-16 checksum of the embedded Mii data (`0x3C`–`0x85` inclusive).
-    mii_crc16: u16,
 }
 
 impl Header {
+    /// Creates a [`Header`] from its components as arguments.
+    pub fn new(
+        finish_time: InGameTime,
+        slot_id: SlotId,
+        combo: Combo,
+        date_set: Date,
+        controller: Controller,
+        transmission_mod: TransmissionMod,
+        ghost_type: GhostType,
+        is_automatic_drift: bool,
+        lap_count: u8,
+        lap_split_times: [InGameTime; 11],
+        location: Location,
+        mii: Mii
+    ) -> Self {
+        Self {
+            finish_time,
+            slot_id,
+            combo,
+            date_set,
+            controller,
+            is_compressed: false,
+            transmission_mod,
+            ghost_type,
+            is_automatic_drift,
+            decompressed_input_data_length: 0,
+            lap_count,
+            lap_split_times,
+            location,
+            mii,
+        }
+    }
+
     /// Parses a [`Header`] from an RKG file at the given path.
     ///
     /// Only the first `0x88` bytes of the file are read.
@@ -201,10 +230,7 @@ impl Header {
 
         let mii = Mii::new_from_bytes(&header_data[0x3C..0x3C + 0x4A])?;
 
-        let mii_crc16 = ByteHandler::try_from(&header_data[0x86..=0x87])?.copy_word(0);
-
         Ok(Self {
-            raw_data: header_data.try_into().unwrap(),
             finish_time,
             slot_id,
             combo,
@@ -219,31 +245,48 @@ impl Header {
             lap_split_times,
             location,
             mii,
-            mii_crc16,
         })
     }
 
-    /// Returns `true` if the stored Mii CRC-16 matches a computed
-    /// checksum of the Mii bytes at offsets `0x3C`–`0x85`.
-    pub fn verify_mii_crc16(&self) -> bool {
-        crc16(&self.raw_data[0x3C..0x86]) == self.mii_crc16()
-    }
+    /// Returns the calculated raw 136-byte header block.
+    pub fn raw_data(&self) -> [u8; 0x88] {
+        let mut raw_data = [0u8; 0x88];
 
-    /// Recomputes the Mii CRC-16 from the current raw header bytes and writes
-    /// the updated value to both the parsed field and the raw buffer.
-    pub fn fix_mii_crc16(&mut self) {
-        self.mii_crc16 = crc16(&self.raw_data[0x3C..0x86]);
-        self.raw_data[0x86..0x88].copy_from_slice(&self.mii_crc16.to_be_bytes());
-    }
-
-    /// Returns the raw 136-byte header block.
-    pub fn raw_data(&self) -> &[u8; 0x88] {
-        &self.raw_data
-    }
-
-    /// Returns a mutable reference to the raw 136-byte header block.
-    pub fn raw_data_mut(&mut self) -> &mut [u8; 0x88] {
-        &mut self.raw_data
+        raw_data[0x00..0x04].copy_from_slice(b"RKGD");
+        write_in_game_time(&mut raw_data, 0x04, 0, &self.finish_time);
+        write_bits(&mut raw_data, 0x07, 0, 6, u8::from(self.slot_id) as u64);
+        write_bits(&mut raw_data, 0x08, 0, 6, u8::from(self.combo.vehicle()) as u64);
+        write_bits(&mut raw_data, 0x08, 6, 6, u8::from(self.combo.character()) as u64);
+        write_bits(&mut raw_data, 0x09, 4, 7, (self.date_set.year() - 2000) as u64);
+        write_bits(&mut raw_data, 0x0A, 3, 4, self.date_set.month() as u64);
+        write_bits(&mut raw_data, 0x0A, 7, 5, self.date_set.day() as u64);
+        write_bits(&mut raw_data, 0x0B, 4, 4, u8::from(self.controller) as u64);
+        write_bits(&mut raw_data, 0x0C, 4, 1, self.is_compressed as u64);
+        write_bits(&mut raw_data, 0x0C, 5, 2, u8::from(self.transmission_mod) as u64);
+        write_bits(&mut raw_data, 0x0C, 7, 7, u8::from(self.ghost_type) as u64);
+        write_bits(&mut raw_data, 0x0D, 6, 1, self.is_automatic_drift as u64);
+        raw_data[0x0E..0x10].copy_from_slice(&self.decompressed_input_data_length.to_be_bytes());
+        raw_data[0x10] = self.lap_count;
+        for idx in 0..11usize {
+            write_in_game_time(&mut raw_data, 0x11 + idx * 3, 0, &self.lap_split_times[idx]);
+        }
+        write_bits(&mut raw_data, 0x34, 0, 8, u8::from(self.location.country()) as u64);
+        let subregion_id = if self.location.country() != Country::NotSet {
+            u8::from(self.location.subregion()) as u64
+        } else {
+            0xFF
+        };
+        write_bits(&mut raw_data, 0x35, 0, 8, subregion_id);
+        
+        if self.location.country() == Country::NotSet {
+            // Write 0xFFFF to location code if country is not set
+            write_bits(&mut raw_data, 0x36, 0, 16, 0xFFFF);
+        }
+        
+        raw_data[0x3C..0x3C + 0x4A].copy_from_slice(self.mii.raw_data());
+        let mii_crc16 = crc16(self.mii.raw_data());
+        raw_data[0x86..0x88].copy_from_slice(&mii_crc16.to_be_bytes());
+        raw_data
     }
 
     /// Returns the ghost's recorded finish time.
@@ -251,10 +294,9 @@ impl Header {
         &self.finish_time
     }
 
-    /// Sets the finish time and updates the raw data accordingly.
+    /// Sets the finish time.
     pub fn set_finish_time(&mut self, finish_time: InGameTime) {
         self.finish_time = finish_time;
-        write_in_game_time(self.raw_data_mut(), 0x04, 0, &finish_time);
     }
 
     /// Returns the course slot the ghost was recorded on.
@@ -262,10 +304,9 @@ impl Header {
         self.slot_id
     }
 
-    /// Sets the course slot and updates the raw data accordingly.
+    /// Sets the course slot.
     pub fn set_slot_id(&mut self, slot_id: SlotId) {
         self.slot_id = slot_id;
-        write_bits(self.raw_data_mut(), 0x07, 0, 6, u8::from(slot_id) as u64);
     }
 
     /// Returns the character and vehicle combo used in the ghost.
@@ -273,23 +314,8 @@ impl Header {
         &self.combo
     }
 
-    /// Sets the character/vehicle combo and updates the raw data accordingly.
+    /// Sets the character/vehicle combo.
     pub fn set_combo(&mut self, combo: Combo) {
-        write_bits(
-            self.raw_data_mut(),
-            0x08,
-            0,
-            6,
-            u8::from(combo.vehicle()) as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x08,
-            6,
-            6,
-            u8::from(combo.character()) as u64,
-        );
-
         self.combo = combo;
     }
 
@@ -298,18 +324,8 @@ impl Header {
         &self.date_set
     }
 
-    /// Sets the ghost's date and updates the raw data accordingly.
+    /// Sets the ghost's date.
     pub fn set_date_set(&mut self, date_set: Date) {
-        write_bits(
-            self.raw_data_mut(),
-            0x09,
-            4,
-            7,
-            (date_set.year() - 2000) as u64,
-        );
-        write_bits(self.raw_data_mut(), 0x0A, 3, 4, date_set.month() as u64);
-        write_bits(self.raw_data_mut(), 0x0A, 7, 5, date_set.day() as u64);
-
         self.date_set = date_set;
     }
 
@@ -318,10 +334,9 @@ impl Header {
         self.controller
     }
 
-    /// Sets the controller and updates the raw data accordingly.
+    /// Sets the controller.
     pub fn set_controller(&mut self, controller: Controller) {
         self.controller = controller;
-        write_bits(self.raw_data_mut(), 0x0B, 4, 4, u8::from(controller) as u64);
     }
 
     /// Returns whether the ghost's input data is Yaz1 compressed.
@@ -329,13 +344,12 @@ impl Header {
         self.is_compressed
     }
 
-    /// Sets the compression flag and updates the raw data accordingly.
+    /// Sets the compression flag.
     ///
     /// This is `pub(crate)` because compression state should be managed by the
     /// RKG file layer, not set directly by callers.
     pub(crate) fn set_compressed(&mut self, is_compressed: bool) {
         self.is_compressed = is_compressed;
-        write_bits(self.raw_data_mut(), 0x0C, 4, 1, is_compressed as u64);
     }
 
     /// Returns the Retro Rewind (Pulsar) transmission override active for this ghost.
@@ -343,16 +357,9 @@ impl Header {
         self.transmission_mod
     }
 
-    /// Sets the transmission mod and updates the raw data accordingly.
+    /// Sets the transmission mod.
     pub fn set_transmission_mod(&mut self, transmission_mod: TransmissionMod) {
         self.transmission_mod = transmission_mod;
-        write_bits(
-            self.raw_data_mut(),
-            0x0C,
-            5,
-            2,
-            u8::from(transmission_mod) as u64,
-        );
     }
 
     /// Returns the ghost type of this ghost.
@@ -360,10 +367,9 @@ impl Header {
         self.ghost_type
     }
 
-    /// Sets the ghost type and updates the raw data accordingly.
+    /// Sets the ghost type.
     pub fn set_ghost_type(&mut self, ghost_type: GhostType) {
         self.ghost_type = ghost_type;
-        write_bits(self.raw_data_mut(), 0x0C, 7, 7, u8::from(ghost_type) as u64);
     }
 
     /// Returns whether automatic drift was used during the recorded run.
@@ -371,15 +377,22 @@ impl Header {
         self.is_automatic_drift
     }
 
-    /// Sets the automatic drift flag and updates the raw data accordingly.
+    /// Sets the automatic drift flag.
     pub fn set_automatic_drift(&mut self, is_automatic_drift: bool) {
         self.is_automatic_drift = is_automatic_drift;
-        write_bits(self.raw_data_mut(), 0x0D, 6, 1, is_automatic_drift as u64);
     }
 
     /// Returns the byte length of the input data block after decompression.
     pub fn decompressed_input_data_length(&self) -> u16 {
         self.decompressed_input_data_length
+    }
+
+    /// Sets the decompressed input data length.
+    ///
+    /// This is `pub(crate)` because the length is derived from [`InputData`](crate::input_data::InputData)
+    /// and should be managed by the RKG file layer.
+    pub(crate) fn set_decompressed_input_data_length(&mut self, len: u16) {
+        self.decompressed_input_data_length = len;
     }
 
     /// Returns the number of laps recorded in this ghost.
@@ -406,7 +419,7 @@ impl Header {
         Ok(self.lap_split_times[idx])
     }
 
-    /// Sets the lap split time at the given zero-based idx and updates the raw data accordingly.
+    /// Sets the lap split time at the given zero-based idx.
     ///
     /// Does nothing if `idx` is greater than or equal to [`lap_count`](Header::lap_count).
     pub fn set_lap_split_time(&mut self, idx: usize, lap_split_time: InGameTime) {
@@ -414,28 +427,6 @@ impl Header {
             return;
         }
         self.lap_split_times[idx] = lap_split_time;
-
-        write_bits(
-            self.raw_data_mut(),
-            0x11 + idx * 0x03,
-            0,
-            7,
-            lap_split_time.minutes() as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x11 + idx * 0x03,
-            7,
-            7,
-            lap_split_time.seconds() as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x12 + idx * 0x03,
-            6,
-            10,
-            lap_split_time.milliseconds() as u64,
-        );
     }
 
     /// Returns the player's geographic location when the ghost was set.
@@ -443,27 +434,8 @@ impl Header {
         &self.location
     }
 
-    /// Sets the player's location and updates the raw data accordingly.
-    ///
-    /// When the country is [`Country::NotSet`], the subregion byte is written
-    /// as `0xFF` (Not Set).
+    /// Sets the player's location.
     pub fn set_location(&mut self, location: Location) {
-        write_bits(
-            self.raw_data_mut(),
-            0x34,
-            0,
-            8,
-            u8::from(location.country()) as u64,
-        );
-
-        let subregion_id = if location.country() != Country::NotSet {
-            u8::from(location.subregion()) as u64
-        } else {
-            0xFF
-        };
-
-        write_bits(self.raw_data_mut(), 0x35, 0, 8, subregion_id);
-
         self.location = location;
     }
 
@@ -477,17 +449,14 @@ impl Header {
         &mut self.mii
     }
 
-    /// Replaces the embedded Mii, updates the raw header bytes at `0x3C`–`0x85`,
-    /// and recomputes the Mii CRC-16.
+    /// Replaces the embedded Mii.
     pub fn set_mii(&mut self, mii: Mii) {
-        self.mii_crc16 = crc16(mii.raw_data());
-        self.raw_data_mut()[0x3C..0x86].copy_from_slice(mii.raw_data());
         self.mii = mii;
     }
 
-    /// Returns the CRC-16 checksum of the embedded Mii data as stored in the header.
+    /// Returns the CRC-16 checksum of the embedded Mii data, computed on the fly.
     pub fn mii_crc16(&self) -> u16 {
-        self.mii_crc16
+        crc16(self.mii.raw_data())
     }
 
     /// Returns the transmission of the combo adjusted depending on transmission mod.

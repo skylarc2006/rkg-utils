@@ -5,6 +5,9 @@ use crate::byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler};
 /// Errors that can occur while deserializing an [`InGameTime`].
 #[derive(thiserror::Error, Debug)]
 pub enum InGameTimeError {
+    /// An in game time element is too large to store in ghost data.
+    #[error("In game time element too large (exceeds maximum amount which can be stored)")]
+    InGameTimeElementTooLarge,
     /// The input iterator did not contain enough bytes to extract a time value.
     #[error("Insufficiently Long Iterator")]
     InsufficientlyLongIterator,
@@ -36,27 +39,31 @@ pub struct InGameTime {
 impl InGameTime {
     /// Creates a new [`InGameTime`] from raw minutes, seconds, and milliseconds.
     ///
-    /// No range validation is performed; all combinations are accepted.
+    /// Returns [`InGameTimeError::InGameTimeElementTooLarge`] if one or more of the given arguments
+    /// is too large to fit inside its bit representation in a ghost file
+    /// (if minutes > 127, if seconds > 127, or if milliseconds > 1023).
     #[inline(always)]
-    pub fn new(minutes: u8, seconds: u8, milliseconds: u16) -> Self {
-        Self {
-            minutes,
-            seconds,
-            milliseconds,
+    pub fn new(minutes: u8, seconds: u8, milliseconds: u16) -> Result<Self, InGameTimeError> {
+        if minutes > 127 || seconds > 127 || milliseconds > 1023 {
+            Err(InGameTimeError::InGameTimeElementTooLarge)
+        } else {
+            Ok(Self {
+                minutes,
+                seconds,
+                milliseconds,
+            })
         }
     }
 
     /// Creates a new, valid [`InGameTime`] from milliseconds.
-    pub fn from_milliseconds(milliseconds: u32) -> Self {
+    /// 
+    /// Returns [`InGameTimeError::InGameTimeElementTooLarge`] if the resulting time has a minutes value over 127.
+    pub fn from_milliseconds(milliseconds: u32) -> Result<Self, InGameTimeError> {
         let millis = (milliseconds % 1000) as u16;
         let seconds = ((milliseconds / 1000) % 60) as u8;
         let minutes = ((milliseconds / 60000) % 60) as u8;
 
-        Self {
-            minutes,
-            seconds,
-            milliseconds: millis,
-        }
+        Self::new(minutes, seconds, millis)
     }
 
     /// Returns the minutes component of the time.
@@ -76,16 +83,40 @@ impl InGameTime {
 
     /// Returns `true` if the time falls within possible in-game bounds.
     ///
-    /// A time is considered technically valid when minutes ≤ 99, seconds ≤ 59,
-    /// and milliseconds ≤ 999. Times outside these bounds can appear in ghost
-    /// files but would not be achievable under standard race conditions.
-    pub fn is_technically_valid(self) -> bool {
-        self.minutes > 99 || self.seconds > 59 || self.milliseconds > 999
+    /// A time is considered valid when minutes ≤ 99, seconds ≤ 59,
+    /// and milliseconds ≤ 999. Ghost files that have a time outside of these
+    /// bounds crash Mario Kart Wii upon loading them either by racing or watching them.
+    pub fn is_valid(self) -> bool {
+        self.minutes <= 99 && self.seconds <= 59 && self.milliseconds <= 999
     }
 
     /// Converts the time to a total number of milliseconds.
     pub fn igt_to_millis(self) -> u32 {
         (self.milliseconds as u32) + (self.seconds as u32) * 1000 + (self.minutes as u32) * 60000
+    }
+}
+
+/// Converts a [`InGameTime`] to its raw-data representation.
+/// 
+/// The bits are laid out as follows, where `M` = minutes, `S` = seconds,
+/// and `C` = milliseconds:
+/// ```text
+/// Byte 1: MMMMMMMMS
+/// Byte 2: SSSSSSCC
+/// Byte 3: CCCCCCCC
+/// ```
+/// Minutes occupy 7 bits, seconds 7 bits, and milliseconds 10 bits.
+impl From<InGameTime> for [u8; 3] {
+    fn from(value: InGameTime) -> Self {
+        let minutes = value.minutes();
+        let seconds = value.seconds();
+        let milliseconds = value.milliseconds();
+
+        [
+            (minutes << 1) | (seconds >> 6),
+            ((seconds & 0x3F) << 2) | (milliseconds >> 8) as u8,
+            (milliseconds & 0xFF) as u8,
+        ]
     }
 }
 
@@ -145,7 +176,7 @@ impl std::ops::Add for InGameTime {
         let seconds = (total_seconds % 60) as u8;
         let minutes = (total_seconds / 60) as u8;
 
-        InGameTime::new(minutes, seconds, milliseconds)
+        InGameTime::new(minutes, seconds, milliseconds).unwrap_or_default()
     }
 }
 

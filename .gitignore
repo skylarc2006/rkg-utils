@@ -1,4 +1,5 @@
 /target
 /.vscode
 /test_ghosts/ctgp_ghost_collection
+/test_ghosts/ninrankings_ghost_collection
 /.claude

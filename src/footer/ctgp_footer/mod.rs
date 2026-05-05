@@ -1,3 +1,4 @@
+// TODO: eliminate the need for raw_data to be a struct member
 use crate::byte_handler::FromByteHandler;
 use crate::footer::ctgp_footer::region::Region;
 use crate::footer::ctgp_footer::{
@@ -341,7 +342,7 @@ impl CTGPFooter {
 
                 let milliseconds = (pause_timestamp_seconds * 1000.0) as u16;
 
-                pause_times.push(InGameTime::new(minutes, seconds, milliseconds));
+                pause_times.push(InGameTime::new(minutes, seconds, milliseconds)?);
             }
 
             elapsed_frames += input[1] as u32;

@@ -22,7 +22,7 @@ use sha1::{Digest, Sha1};
 use crate::{
     crc::crc32,
     footer::{FooterType, ctgp_footer::CTGPFooter, sp_footer::SPFooter},
-    header::{Header, mii::Mii},
+    header::Header,
     input_data::InputData,
 };
 
@@ -66,30 +66,41 @@ pub enum GhostError {
 
 /// A fully parsed Mario Kart Wii RKG ghost file.
 ///
-/// Holds the file header, decompressed or compressed input data, optional
-/// external footers (CTGP or SP), and CRC-32 checksums. All setter
-/// operations update the parsed fields; call [`update_raw_data`](Ghost::update_raw_data)
-/// (or [`save_to_file`](Ghost::save_to_file), which calls it implicitly) to
-/// flush all changes back into the raw byte buffer before writing.
-// TODO: implement new() where the arguments are a Header and InputData.
+/// Holds the file header, decompressed or compressed input data, and an optional
+/// external footer (CTGP or SP). All CRC values and the raw byte representation
+/// are computed on demand via their respective methods.
 pub struct Ghost {
-    /// The complete raw file bytes, kept in sync by [`update_raw_data`](Ghost::update_raw_data).
-    raw_data: Vec<u8>,
-    /// The parsed 136-byte RKG file header.
+    /// The parsed ghost header.
     header: Header,
     /// The ghost's controller input data (compressed or decompressed).
     input_data: InputData,
-    /// The CRC-32 of the header and input data only, excluding any external footer.
-    base_crc32: u32,
     /// The footer appended to the file, if present.
     footer: Option<FooterType>,
-    /// The file's crc 32
-    file_crc32: u32,
-    /// When `true`, any existing external footer is preserved when saving (including footer data from any mods that this crate doesn't support).
+    /// When `true`, any existing external footer is preserved when saving.
     should_preserve_external_footer: bool,
 }
 
 impl Ghost {
+    /// Creates a [`Ghost`] from a [`Header`] and [`InputData`].
+    ///
+    /// Sets `is_compressed` and `decompressed_input_data_length` on the header
+    /// to match the provided input data. No footer is attached and
+    /// `should_preserve_external_footer` is set to `false`.
+    pub fn new(mut header: Header, input_data: InputData) -> Self {
+        header.set_compressed(input_data.compressed());
+        let decompressed_len = 8u16
+            + input_data.face_button_input_count() * 2
+            + input_data.stick_input_count() * 2
+            + input_data.dpad_button_input_count() * 2;
+        header.set_decompressed_input_data_length(decompressed_len);
+        Self {
+            header,
+            input_data,
+            footer: None,
+            should_preserve_external_footer: false,
+        }
+    }
+
     /// Parses a [`Ghost`] from an RKG file at the given path.
     ///
     /// # Errors
@@ -104,41 +115,19 @@ impl Ghost {
 
     /// Parses a [`Ghost`] from a byte slice.
     ///
-    /// Detects and parses an optional CTGP or SP footer if present. The
-    /// base CRC-32 is read from just before the footer when one is found,
-    /// or from the last 4 bytes of the file otherwise.
+    /// Detects and parses an optional CTGP or SP footer if present.
     ///
     /// # Errors
     ///
     /// Returns [`GhostError::DataLengthTooShort`] if `bytes` is shorter than
     /// `0x90` bytes OR input data is shorter than the expected input data size.
-    /// Returns other [`GhostError`] variants if any field fails
-    /// to parse.
+    /// Returns other [`GhostError`] variants if any field fails to parse.
     pub fn new_from_bytes(bytes: &[u8]) -> Result<Self, GhostError> {
         if bytes.len() < 0x90 {
             return Err(GhostError::DataLengthTooShort);
         }
 
         let header = Header::new_from_bytes(&bytes[..0x88])?;
-
-        let file_crc32 = u32::from_be_bytes(bytes[bytes.len() - 0x04..].try_into()?);
-        let mut base_crc32 = file_crc32;
-
-        let footer = if let Ok(ctgp_footer) = CTGPFooter::new(bytes) {
-            let input_data_end_offset = bytes.len() - ctgp_footer.len() - 0x08;
-            base_crc32 = u32::from_be_bytes(
-                bytes[input_data_end_offset..input_data_end_offset + 0x04].try_into()?,
-            );
-            Some(FooterType::CTGPFooter(ctgp_footer))
-        } else if let Ok(sp_footer) = SPFooter::new(bytes) {
-            let input_data_end_offset = bytes.len() - sp_footer.len() - 0x08;
-            base_crc32 = u32::from_be_bytes(
-                bytes[input_data_end_offset..input_data_end_offset + 0x04].try_into()?,
-            );
-            Some(FooterType::SPFooter(sp_footer))
-        } else {
-            None
-        };
 
         let input_data_len = if bytes[0x8C..0x90] == *b"Yaz1" {
             u32::from_be_bytes(bytes[0x88..0x8C].try_into().unwrap()) as usize + 0x04
@@ -152,107 +141,42 @@ impl Ghost {
 
         let input_data = InputData::new_from_bytes(&bytes[0x88..0x88 + input_data_len])?;
 
+        let footer = if let Ok(ctgp_footer) = CTGPFooter::new(bytes) {
+            Some(FooterType::CTGPFooter(ctgp_footer))
+        } else if let Ok(sp_footer) = SPFooter::new(bytes) {
+            Some(FooterType::SPFooter(sp_footer))
+        } else {
+            let footer_start = 0x88 + input_data_len + 4;
+            let footer_end = bytes.len().saturating_sub(4);
+            if footer_start < footer_end {
+                Some(FooterType::Unknown(bytes[footer_start..footer_end].to_vec()))
+            } else {
+                None
+            }
+        };
+
         Ok(Self {
-            raw_data: bytes.to_vec(),
             header,
             input_data,
-            base_crc32,
             footer,
-            file_crc32,
             should_preserve_external_footer: true,
         })
     }
 
-    /// Flushes all parsed field modifications back into the raw byte buffer.
-    ///
-    /// This method recomputes the Mii CRC-16, rebuilds the raw buffer from the
-    /// current header and input data, resizes the buffer if the input data
-    /// length has changed, re-inserts any preserved external footer, and
-    /// finally recomputes both the base CRC-32 and the file-level CRC-32. The
-    /// CTGP footer SHA-1 field is also updated if a CTGP footer is present.
+    /// Updates the SHA-1 field in the CTGP footer, if one is present.
     ///
     /// # Errors
     ///
-    /// Returns [`GhostError::MiiError`] if the Mii data is invalid, or
-    /// [`GhostError::CTGPFooterError`] if the SHA-1 field cannot be written.
+    /// Returns [`GhostError::CTGPFooterError`] if the SHA-1 field cannot be written.
     pub fn update_raw_data(&mut self) -> Result<(), GhostError> {
-        let mii_bytes = self.header().mii().raw_data().to_vec();
-        self.header_mut().set_mii(Mii::new_from_bytes(mii_bytes)?);
-        self.header_mut().fix_mii_crc16();
-
-        let mut buf = Vec::from(self.header().raw_data());
-
-        buf.extend_from_slice(&self.input_data().raw_data());
-
-        let header_len = 0x88;
-        let new_input_data_end = header_len + self.input_data().raw_data().len();
-
-        // Find input data length of old data
-        let old_input_data_end = if self.raw_data[0x8C..0x90] == *b"Yaz1" {
-            u32::from_be_bytes(self.raw_data[0x88..0x8C].try_into().unwrap()) as usize
-        } else {
-            header_len + 0x2774
-        };
-
-        if new_input_data_end > old_input_data_end {
-            let diff = new_input_data_end - old_input_data_end;
-            let insert_pos = old_input_data_end;
-            self.raw_data
-                .splice(insert_pos..insert_pos, vec![0u8; diff]);
-        } else if new_input_data_end < old_input_data_end {
-            let diff = old_input_data_end - new_input_data_end;
-            let remove_end = old_input_data_end;
-            self.raw_data.drain(remove_end - diff..remove_end);
-        }
-
-        self.raw_data[..new_input_data_end].copy_from_slice(&buf[..new_input_data_end]);
-        let base_crc32 = crc32(&buf);
-
-        match (self.footer(), self.should_preserve_external_footer()) {
-            (Some(FooterType::CTGPFooter(ctgp_footer)), true) => {
-                buf.extend_from_slice(&base_crc32.to_be_bytes());
-                buf.extend_from_slice(ctgp_footer.raw_data());
-
-                let footer_len = ctgp_footer.len();
-                self.raw_data.drain(new_input_data_end..);
-                self.raw_data
-                    .extend_from_slice(&buf[buf.len() - footer_len - 0x04..]);
-                self.raw_data.extend_from_slice(&[0u8; 4]);
-            }
-            (Some(FooterType::SPFooter(sp_footer)), true) => {
-                buf.extend_from_slice(&base_crc32.to_be_bytes());
-                buf.extend_from_slice(sp_footer.raw_data());
-
-                let footer_len = sp_footer.len();
-                self.raw_data.drain(new_input_data_end..);
-                self.raw_data
-                    .extend_from_slice(&buf[buf.len() - footer_len - 0x04..]);
-                self.raw_data.extend_from_slice(&[0u8; 4]);
-            }
-            (_, true) if self.raw_data.len() >= new_input_data_end + 0x08 => {
-                self.raw_data.drain(new_input_data_end + 0x04..);
-            }
-            (_, false) if self.raw_data.len() >= new_input_data_end + 0x08 => self.raw_data
-                [new_input_data_end..new_input_data_end + 0x04]
-                .copy_from_slice(&base_crc32.to_be_bytes()),
-            _ => (),
-        }
-
-        let len = self.raw_data.len();
-        let crc32 = crc32(&self.raw_data[..len - 0x04]);
-        self.raw_data[len - 0x04..].copy_from_slice(&crc32.to_be_bytes());
-        self.file_crc32 = crc32;
-        self.base_crc32 = base_crc32;
-
-        let sha1 = compute_sha1_hex(&self.raw_data);
+        let sha1 = compute_sha1_hex(&self.raw_data());
         if let Some(FooterType::CTGPFooter(ctgp_footer)) = self.footer_mut() {
             ctgp_footer.set_ghost_sha1(&sha1)?;
         }
-
         Ok(())
     }
 
-    /// Flushes all modifications and writes the ghost to a file at the given path.
+    /// Flushes modifications and writes the ghost to a file at the given path.
     ///
     /// # Errors
     ///
@@ -261,8 +185,7 @@ impl Ghost {
     pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
         self.update_raw_data()?;
         let mut file = std::fs::File::create(path)?;
-        file.write_all(&self.raw_data)?;
-
+        file.write_all(&self.raw_data())?;
         Ok(())
     }
 
@@ -272,16 +195,22 @@ impl Ghost {
         self.header_mut().set_compressed(compressed);
     }
 
-    /// Returns the raw file bytes.
+    /// Returns the computed raw file bytes.
     ///
-    /// May not reflect recent modifications until [`update_raw_data`](Ghost::update_raw_data) is called.
-    pub fn raw_data(&self) -> &[u8] {
-        &self.raw_data
-    }
-
-    /// Returns a mutable reference to the raw file bytes.
-    pub fn raw_data_mut(&mut self) -> &mut [u8] {
-        &mut self.raw_data
+    /// The result always reflects the current state of all parsed fields.
+    pub fn raw_data(&self) -> Vec<u8> {
+        let mut buf = Vec::from(self.header.raw_data());
+        buf.extend_from_slice(&self.input_data.raw_data());
+        let base_crc32 = crc32(&buf);
+        buf.extend_from_slice(&base_crc32.to_be_bytes());
+        if self.should_preserve_external_footer {
+            if let Some(footer) = &self.footer {
+                buf.extend_from_slice(footer.raw_data());
+            }
+        }
+        let file_crc32 = crc32(&buf);
+        buf.extend_from_slice(&file_crc32.to_be_bytes());
+        buf
     }
 
     /// Returns the parsed RKG file header.
@@ -314,29 +243,17 @@ impl Ghost {
         self.footer.as_mut()
     }
 
-    /// Returns the CRC-32 of the header and input data, excluding any external footer.
+    /// Returns the CRC-32 of the header and input data, excluding any footer.
     pub fn base_crc32(&self) -> u32 {
-        self.base_crc32
-    }
-
-    /// Returns `true` if the stored base CRC-32 matches a freshly computed
-    /// checksum of the current header and input data bytes.
-    pub fn verify_base_crc32(&self) -> bool {
-        let mut data = Vec::from(self.header().raw_data());
-        data.extend_from_slice(&self.input_data().raw_data());
-        self.base_crc32 == crc32(&data)
+        let mut buf = Vec::from(self.header.raw_data());
+        buf.extend_from_slice(&self.input_data.raw_data());
+        crc32(&buf)
     }
 
     /// Returns the CRC-32 of the entire file excluding its final 4 bytes.
     pub fn file_crc32(&self) -> u32 {
-        self.file_crc32
-    }
-
-    /// Returns `true` if the stored file CRC-32 matches a freshly computed
-    /// checksum of the entire file excluding its final 4 bytes.
-    pub fn verify_file_crc32(&self) -> bool {
-        let len = self.raw_data().len();
-        self.file_crc32 == crc32(&self.raw_data()[..len - 0x04])
+        let raw = self.raw_data();
+        crc32(&raw[..raw.len() - 4])
     }
 
     /// Returns whether an existing external footer will be preserved when saving.
