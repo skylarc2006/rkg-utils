@@ -168,7 +168,7 @@ impl Ghost {
     /// # Errors
     ///
     /// Returns [`GhostError::CTGPFooterError`] if the SHA-1 field cannot be written.
-    pub fn update_raw_data(&mut self) -> Result<(), GhostError> {
+    pub fn update_ghost_sha1(&mut self) -> Result<(), GhostError> {
         let sha1 = compute_sha1_hex(&self.raw_data());
         if let Some(FooterType::CTGPFooter(ctgp_footer)) = self.footer_mut() {
             ctgp_footer.set_ghost_sha1(&sha1)?;
@@ -183,7 +183,7 @@ impl Ghost {
     /// Returns any error from [`update_raw_data`](Ghost::update_raw_data) or
     /// from file creation/writing.
     pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
-        self.update_raw_data()?;
+        self.update_ghost_sha1()?;
         let mut file = std::fs::File::create(path)?;
         file.write_all(&self.raw_data())?;
         Ok(())

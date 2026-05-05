@@ -794,7 +794,7 @@ fn write_to_ghost() {
     mii.set_creator_name("IDIOT");
 
     // new ghost asserts
-    ghost.update_raw_data().unwrap();
+    ghost.update_ghost_sha1().unwrap();
     let mut ghost = Ghost::new_from_bytes(&ghost.raw_data()).unwrap();
 
     // General ghost info
