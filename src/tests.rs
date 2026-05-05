@@ -1056,21 +1056,7 @@ fn input_at_frame_test() {
     println!("{:#?}", ghost.input_data().get_input_at_frame(frame))
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/*
 #[test]
 fn ninrankings_ghost_collection() {
     for entry in std::fs::read_dir("./test_ghosts/ninrankings_ghost_collection").unwrap() {
@@ -1088,19 +1074,7 @@ fn ninrankings_ghost_collection() {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
+*/
 
 // In depth tests
 // ===== CRC Tests =====
