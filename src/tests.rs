@@ -1,11 +1,21 @@
 use chrono::NaiveDateTime;
 
 use crate::{
-    Ghost, GhostError, crc::{crc16, crc32}, footer::{
+    Ghost, GhostError,
+    crc::{crc16, crc32},
+    footer::{
         FooterType,
         ctgp_footer::{CTGPFooter, region::Region},
-    }, header::{
-        Header, HeaderError, combo::{Combo, ComboError, character::Character, vehicle::Vehicle}, controller::Controller, date::{Date, DateError}, ghost_type::{GhostType, GhostTypeError}, in_game_time::{InGameTime, InGameTimeError}, location::{Location, constants::*}, mii::{
+    },
+    header::{
+        Header, HeaderError,
+        combo::{Combo, ComboError, character::Character, vehicle::Vehicle},
+        controller::Controller,
+        date::{Date, DateError},
+        ghost_type::{GhostType, GhostTypeError},
+        in_game_time::{InGameTime, InGameTimeError},
+        location::{Location, constants::*},
+        mii::{
             Mii,
             birthday::Birthday,
             build::Build,
@@ -20,8 +30,18 @@ use crate::{
             mii_type::MiiType,
             mole::Mole,
             nose::{Nose, NoseType},
-        }, slot_id::{SlotId, SlotIdError}, transmission_mod::TransmissionMod
-    }, input_data::{InputData, InputDataError, controller_input::ControllerInput, dpad_button::DPadButton, stick_input::{StickInput, StickInputError}, yaz1_compress, yaz1_decompress}, write_bits
+        },
+        slot_id::{SlotId, SlotIdError},
+        transmission_mod::TransmissionMod,
+    },
+    input_data::{
+        InputData, InputDataError,
+        controller_input::ControllerInput,
+        dpad_button::DPadButton,
+        stick_input::{StickInput, StickInputError},
+        yaz1_compress, yaz1_decompress,
+    },
+    write_bits,
 };
 use std::io::Read;
 
@@ -1014,7 +1034,6 @@ fn test_sp_footer() {
     if let Some(set_in_mirror) = sp_footer.set_in_mirror() {
         println!("Set in mirror mode? {}", set_in_mirror);
     }
-
 }
 
 #[test]
@@ -1037,23 +1056,38 @@ fn input_at_frame_test() {
     println!("{:#?}", ghost.input_data().get_input_at_frame(frame))
 }
 
-/*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[test]
 fn ninrankings_ghost_collection() {
-    let mut parsed_ghost_count = 0u32;
-    let total_ghost_count = 81003u32;
     for entry in std::fs::read_dir("./test_ghosts/ninrankings_ghost_collection").unwrap() {
-        if Ghost::new_from_file(entry.as_ref().unwrap().path()).is_ok() {
-            parsed_ghost_count += 1;
+        let ghost = Ghost::new_from_file(entry.as_ref().unwrap().path());
+
+        match ghost {
+            Err(e) => {
+                println!(
+                    "\nFailed on file {}",
+                    entry.as_ref().unwrap().file_name().to_str().unwrap()
+                );
+                println!("Error: {e}");
+            }
+            _ => (),
         }
     }
-    println!("{parsed_ghost_count} out of {total_ghost_count} files are syntactically valid ghost files.");
 }
-*/
-
-
-
-
 
 
 
@@ -1227,7 +1261,10 @@ fn in_game_time_default_is_valid() {
 fn in_game_time_display() {
     assert_eq!(InGameTime::new(1, 3, 904).unwrap().to_string(), "01:03.904");
     assert_eq!(InGameTime::new(0, 0, 0).unwrap().to_string(), "00:00.000");
-    assert_eq!(InGameTime::new(99, 59, 999).unwrap().to_string(), "99:59.999");
+    assert_eq!(
+        InGameTime::new(99, 59, 999).unwrap().to_string(),
+        "99:59.999"
+    );
 }
 
 #[test]
@@ -1325,12 +1362,18 @@ fn date_year_too_high() {
 
 #[test]
 fn date_month_zero() {
-    assert!(matches!(Date::new(2025, 0, 1), Err(DateError::MonthInvalid)));
+    assert!(matches!(
+        Date::new(2025, 0, 1),
+        Err(DateError::MonthInvalid)
+    ));
 }
 
 #[test]
 fn date_month_thirteen() {
-    assert!(matches!(Date::new(2025, 13, 1), Err(DateError::MonthInvalid)));
+    assert!(matches!(
+        Date::new(2025, 13, 1),
+        Err(DateError::MonthInvalid)
+    ));
 }
 
 #[test]
@@ -1343,7 +1386,10 @@ fn date_day_31_valid_month() {
 fn date_day_31_invalid_month() {
     assert!(matches!(Date::new(2025, 4, 31), Err(DateError::DayInvalid)));
     assert!(matches!(Date::new(2025, 6, 31), Err(DateError::DayInvalid)));
-    assert!(matches!(Date::new(2025, 11, 31), Err(DateError::DayInvalid)));
+    assert!(matches!(
+        Date::new(2025, 11, 31),
+        Err(DateError::DayInvalid)
+    ));
 }
 
 #[test]
@@ -1374,8 +1420,14 @@ fn date_display() {
 
 #[test]
 fn date_equality() {
-    assert_eq!(Date::new(2025, 11, 12).unwrap(), Date::new(2025, 11, 12).unwrap());
-    assert_ne!(Date::new(2025, 11, 12).unwrap(), Date::new(2025, 11, 13).unwrap());
+    assert_eq!(
+        Date::new(2025, 11, 12).unwrap(),
+        Date::new(2025, 11, 12).unwrap()
+    );
+    assert_ne!(
+        Date::new(2025, 11, 12).unwrap(),
+        Date::new(2025, 11, 13).unwrap()
+    );
 }
 
 // ===== SlotId Tests =====
@@ -1519,7 +1571,10 @@ fn transmission_mod_invalid_byte() {
 fn transmission_mod_display() {
     assert_eq!(TransmissionMod::Vanilla.to_string(), "Vanilla");
     assert_eq!(TransmissionMod::AllInside.to_string(), "All Inside");
-    assert_eq!(TransmissionMod::AllBikeInside.to_string(), "All Bikes Inside");
+    assert_eq!(
+        TransmissionMod::AllBikeInside.to_string(),
+        "All Bikes Inside"
+    );
     assert_eq!(TransmissionMod::AllOutside.to_string(), "All Outside");
 }
 
@@ -1620,8 +1675,16 @@ fn stick_input_try_from_invalid_byte() {
 #[test]
 fn stick_input_center_never_impossible() {
     let center = StickInput::new(7, 7).unwrap();
-    for ctrl in [Controller::WiiWheel, Controller::Nunchuk, Controller::Classic, Controller::Gamecube] {
-        assert!(!center.is_impossible(ctrl), "Center should be legal for {ctrl}");
+    for ctrl in [
+        Controller::WiiWheel,
+        Controller::Nunchuk,
+        Controller::Classic,
+        Controller::Gamecube,
+    ] {
+        assert!(
+            !center.is_impossible(ctrl),
+            "Center should be legal for {ctrl}"
+        );
     }
 }
 
@@ -1678,7 +1741,17 @@ fn dpad_button_invalid() {
 #[test]
 fn controller_input_new_and_getters() {
     let stick = StickInput::new(7, 7).unwrap();
-    let input = ControllerInput::new(true, false, false, true, false, false, DPadButton::Up, stick, 5);
+    let input = ControllerInput::new(
+        true,
+        false,
+        false,
+        true,
+        false,
+        false,
+        DPadButton::Up,
+        stick,
+        5,
+    );
     assert!(input.accelerator());
     assert!(!input.brake());
     assert!(!input.brake_drift());
@@ -1693,8 +1766,28 @@ fn controller_input_new_and_getters() {
 #[test]
 fn controller_input_face_buttons_equal() {
     let stick = StickInput::new(7, 7).unwrap();
-    let a = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 1);
-    let b = ControllerInput::new(true, false, false, false, false, false, DPadButton::Up, stick, 5);
+    let a = ControllerInput::new(
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::None,
+        stick,
+        1,
+    );
+    let b = ControllerInput::new(
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::Up,
+        stick,
+        5,
+    );
     assert!(a.face_buttons_equal_to(b)); // dpad and duration don't affect face equality
 }
 
@@ -1711,7 +1804,17 @@ fn input_data_empty_error() {
 #[test]
 fn input_data_single_input_uncompressed() {
     let stick = StickInput::new(7, 7).unwrap();
-    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 100);
+    let input = ControllerInput::new(
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::None,
+        stick,
+        100,
+    );
     let data = InputData::new(vec![input], false).unwrap();
     assert_eq!(data.controller_inputs().len(), 1);
     assert!(!data.compressed());
@@ -1731,7 +1834,17 @@ fn input_data_too_short_bytes() {
 #[test]
 fn input_data_get_input_at_frame_zero_none() {
     let stick = StickInput::new(7, 7).unwrap();
-    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 10);
+    let input = ControllerInput::new(
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::None,
+        stick,
+        10,
+    );
     let data = InputData::new(vec![input], false).unwrap();
     assert!(data.get_input_at_frame(0).is_none());
 }
@@ -1739,7 +1852,17 @@ fn input_data_get_input_at_frame_zero_none() {
 #[test]
 fn input_data_get_input_at_frame_valid() {
     let stick = StickInput::new(7, 7).unwrap();
-    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 10);
+    let input = ControllerInput::new(
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::None,
+        stick,
+        10,
+    );
     let data = InputData::new(vec![input], false).unwrap();
     assert!(data.get_input_at_frame(1).is_some());
     assert!(data.get_input_at_frame(10).is_some());
@@ -1782,7 +1905,17 @@ fn input_data_raw_data_reparse() {
 #[test]
 fn input_data_set_compressed() {
     let stick = StickInput::new(7, 7).unwrap();
-    let input = ControllerInput::new(false, false, false, false, false, false, DPadButton::None, stick, 50);
+    let input = ControllerInput::new(
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::None,
+        stick,
+        50,
+    );
     let mut data = InputData::new(vec![input], false).unwrap();
     assert!(!data.compressed());
     data.set_compressed(true);
@@ -1979,7 +2112,10 @@ fn header_set_lap_split_oob_is_noop() {
     let mut header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let original_time = header.lap_split_time(0).unwrap().igt_to_millis();
     header.set_lap_split_time(99, InGameTime::new(0, 1, 0).unwrap());
-    assert_eq!(header.lap_split_time(0).unwrap().igt_to_millis(), original_time);
+    assert_eq!(
+        header.lap_split_time(0).unwrap().igt_to_millis(),
+        original_time
+    );
 }
 
 // ===== Ghost Tests =====
@@ -2011,7 +2147,17 @@ fn ghost_from_file_sp() {
 fn ghost_new_no_footer() {
     let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let stick = StickInput::new(7, 7).unwrap();
-    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 100);
+    let input = ControllerInput::new(
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::None,
+        stick,
+        100,
+    );
     let input_data = InputData::new(vec![input], false).unwrap();
     let ghost = Ghost::new(header, input_data);
     assert!(ghost.footer().is_none());
@@ -2022,7 +2168,17 @@ fn ghost_new_no_footer() {
 fn ghost_new_syncs_compression_true() {
     let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let stick = StickInput::new(7, 7).unwrap();
-    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 100);
+    let input = ControllerInput::new(
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::None,
+        stick,
+        100,
+    );
     let input_data = InputData::new(vec![input], true).unwrap();
     let ghost = Ghost::new(header, input_data);
     assert!(ghost.header().is_compressed());
@@ -2032,7 +2188,17 @@ fn ghost_new_syncs_compression_true() {
 fn ghost_new_syncs_compression_false() {
     let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let stick = StickInput::new(7, 7).unwrap();
-    let input = ControllerInput::new(false, false, false, false, false, false, DPadButton::None, stick, 100);
+    let input = ControllerInput::new(
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::None,
+        stick,
+        100,
+    );
     let input_data = InputData::new(vec![input], false).unwrap();
     let ghost = Ghost::new(header, input_data);
     assert!(!ghost.header().is_compressed());
@@ -2042,7 +2208,17 @@ fn ghost_new_syncs_compression_false() {
 fn ghost_new_decompressed_length_correct() {
     let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let stick = StickInput::new(7, 7).unwrap();
-    let input = ControllerInput::new(true, false, false, false, false, false, DPadButton::None, stick, 100);
+    let input = ControllerInput::new(
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        DPadButton::None,
+        stick,
+        100,
+    );
     let input_data = InputData::new(vec![input], false).unwrap();
 
     let face = input_data.face_button_input_count();
@@ -2051,7 +2227,10 @@ fn ghost_new_decompressed_length_correct() {
     let expected_len = 8u16 + face * 2 + stick_count * 2 + dpad * 2;
 
     let ghost = Ghost::new(header, input_data);
-    assert_eq!(ghost.header().decompressed_input_data_length(), expected_len);
+    assert_eq!(
+        ghost.header().decompressed_input_data_length(),
+        expected_len
+    );
 }
 
 #[test]

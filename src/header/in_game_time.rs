@@ -56,7 +56,7 @@ impl InGameTime {
     }
 
     /// Creates a new, valid [`InGameTime`] from milliseconds.
-    /// 
+    ///
     /// Returns [`InGameTimeError::InGameTimeElementTooLarge`] if the resulting time has a minutes value over 127.
     pub fn from_milliseconds(milliseconds: u32) -> Result<Self, InGameTimeError> {
         let millis = (milliseconds % 1000) as u16;
@@ -97,7 +97,7 @@ impl InGameTime {
 }
 
 /// Converts a [`InGameTime`] to its raw-data representation.
-/// 
+///
 /// The bits are laid out as follows, where `M` = minutes, `S` = seconds,
 /// and `C` = milliseconds:
 /// ```text

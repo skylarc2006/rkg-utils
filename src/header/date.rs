@@ -3,7 +3,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 /// Errors that can occur while constructing a [`Date`].
 #[derive(thiserror::Error, Debug)]
 pub enum DateError {
-    /// The year is outside the valid range (2000–2035).
+    /// The year is outside the valid range (2000–2099).
     #[error("Year is invalid")]
     YearInvalid,
     /// The month is outside the valid range (1–12).
@@ -17,11 +17,11 @@ pub enum DateError {
     ByteHandlerError(#[from] ByteHandlerError),
 }
 
-/// All valid dates on the Wii. Year is a range between 0 and 35, symbolizing 2000 and 2035
+/// All valid dates on the Wii. Year is a range between 0 and 35, symbolizing 2000 and 2099
 /// respectively. Leap years are accounted for when validating February day counts.
 #[derive(Debug)]
 pub struct Date {
-    /// Year offset from 2000 (0–35), representing 2000–2035.
+    /// Year offset from 2000 (0–99), representing 2000–2099.
     year: u8,
     /// Month (1–12).
     month: u8,
@@ -34,13 +34,13 @@ impl Date {
     ///
     /// # Arguments
     ///
-    /// * `year` - The full calendar year (2000–2035).
+    /// * `year` - The full calendar year (2000–2099).
     /// * `month` - The month (1–12).
     /// * `day` - The day of the month, validated against the given month and year.
     ///
     /// # Errors
     ///
-    /// Returns [`DateError::YearInvalid`] if `year` is outside the range 2000–2035.
+    /// Returns [`DateError::YearInvalid`] if `year` is outside the range 2000–2099.
     /// Returns [`DateError::MonthInvalid`] if `month` is outside the range 1–12.
     /// Returns [`DateError::DayInvalid`] if `day` exceeds the maximum for the given
     /// month, accounting for leap years in February.
@@ -51,7 +51,7 @@ impl Date {
 
         let year = (year - 2000) as u8;
 
-        if year > 35 {
+        if year > 99 {
             return Err(DateError::YearInvalid);
         }
 
@@ -65,7 +65,7 @@ impl Date {
         }
     }
 
-    /// Returns the full calendar year (2000–2035).
+    /// Returns the full calendar year (2000–2099).
     ///
     /// The year is stored internally as an offset from 2000; this method adds
     /// 2000 to produce the full four-digit year.

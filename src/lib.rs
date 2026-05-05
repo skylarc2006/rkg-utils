@@ -149,7 +149,9 @@ impl Ghost {
             let footer_start = 0x88 + input_data_len + 4;
             let footer_end = bytes.len().saturating_sub(4);
             if footer_start < footer_end {
-                Some(FooterType::Unknown(bytes[footer_start..footer_end].to_vec()))
+                Some(FooterType::Unknown(
+                    bytes[footer_start..footer_end].to_vec(),
+                ))
             } else {
                 None
             }

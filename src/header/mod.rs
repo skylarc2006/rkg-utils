@@ -134,7 +134,7 @@ impl Header {
         lap_count: u8,
         lap_split_times: [InGameTime; 11],
         location: Location,
-        mii: Mii
+        mii: Mii,
     ) -> Self {
         Self {
             finish_time,
@@ -255,14 +255,38 @@ impl Header {
         raw_data[0x00..0x04].copy_from_slice(b"RKGD");
         write_in_game_time(&mut raw_data, 0x04, 0, &self.finish_time);
         write_bits(&mut raw_data, 0x07, 0, 6, u8::from(self.slot_id) as u64);
-        write_bits(&mut raw_data, 0x08, 0, 6, u8::from(self.combo.vehicle()) as u64);
-        write_bits(&mut raw_data, 0x08, 6, 6, u8::from(self.combo.character()) as u64);
-        write_bits(&mut raw_data, 0x09, 4, 7, (self.date_set.year() - 2000) as u64);
+        write_bits(
+            &mut raw_data,
+            0x08,
+            0,
+            6,
+            u8::from(self.combo.vehicle()) as u64,
+        );
+        write_bits(
+            &mut raw_data,
+            0x08,
+            6,
+            6,
+            u8::from(self.combo.character()) as u64,
+        );
+        write_bits(
+            &mut raw_data,
+            0x09,
+            4,
+            7,
+            (self.date_set.year() - 2000) as u64,
+        );
         write_bits(&mut raw_data, 0x0A, 3, 4, self.date_set.month() as u64);
         write_bits(&mut raw_data, 0x0A, 7, 5, self.date_set.day() as u64);
         write_bits(&mut raw_data, 0x0B, 4, 4, u8::from(self.controller) as u64);
         write_bits(&mut raw_data, 0x0C, 4, 1, self.is_compressed as u64);
-        write_bits(&mut raw_data, 0x0C, 5, 2, u8::from(self.transmission_mod) as u64);
+        write_bits(
+            &mut raw_data,
+            0x0C,
+            5,
+            2,
+            u8::from(self.transmission_mod) as u64,
+        );
         write_bits(&mut raw_data, 0x0C, 7, 7, u8::from(self.ghost_type) as u64);
         write_bits(&mut raw_data, 0x0D, 6, 1, self.is_automatic_drift as u64);
         raw_data[0x0E..0x10].copy_from_slice(&self.decompressed_input_data_length.to_be_bytes());
@@ -270,19 +294,25 @@ impl Header {
         for idx in 0..11usize {
             write_in_game_time(&mut raw_data, 0x11 + idx * 3, 0, &self.lap_split_times[idx]);
         }
-        write_bits(&mut raw_data, 0x34, 0, 8, u8::from(self.location.country()) as u64);
+        write_bits(
+            &mut raw_data,
+            0x34,
+            0,
+            8,
+            u8::from(self.location.country()) as u64,
+        );
         let subregion_id = if self.location.country() != Country::NotSet {
             u8::from(self.location.subregion()) as u64
         } else {
             0xFF
         };
         write_bits(&mut raw_data, 0x35, 0, 8, subregion_id);
-        
+
         if self.location.country() == Country::NotSet {
             // Write 0xFFFF to location code if country is not set
             write_bits(&mut raw_data, 0x36, 0, 16, 0xFFFF);
         }
-        
+
         raw_data[0x3C..0x3C + 0x4A].copy_from_slice(self.mii.raw_data());
         let mii_crc16 = crc16(self.mii.raw_data());
         raw_data[0x86..0x88].copy_from_slice(&mii_crc16.to_be_bytes());
