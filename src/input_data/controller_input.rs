@@ -1,4 +1,4 @@
-use crate::input_data::{dpad_button::DPadButton, stick_input::StickInput};
+use crate::input_data::{dpad_button::DPadButton, stick_input::StickInput, drift_flag::DriftFlag};
 
 /// Represents the errors that can go wrong while parsing a `ControllerInput`.
 #[derive(thiserror::Error, Debug)]
@@ -14,7 +14,7 @@ pub struct ControllerInput {
     accelerator: bool,
     brake: bool,
     brake_drift: bool,
-    drift_flag: bool,
+    drift_flag: DriftFlag,
     item: bool,
     /// Unknown face input; mask 0xF0 in a button byte. If creating a new `ControllerInput`, this can be essentially ignored and set to false.
     unknown_face_button: bool,
@@ -29,7 +29,7 @@ impl ControllerInput {
         accelerator: bool,
         brake: bool,
         brake_drift: bool,
-        drift_flag: bool,
+        drift_flag: DriftFlag,
         item: bool,
         unknown_face_button: bool,
         dpad: DPadButton,
@@ -82,11 +82,11 @@ impl ControllerInput {
         self.brake_drift = value;
     }
 
-    pub fn drift_flag(&self) -> bool {
+    pub fn drift_flag(&self) -> DriftFlag {
         self.drift_flag
     }
 
-    pub fn set_drift_flag(&mut self, value: bool) {
+    pub fn set_drift_flag(&mut self, value: DriftFlag) {
         self.drift_flag = value;
     }
 

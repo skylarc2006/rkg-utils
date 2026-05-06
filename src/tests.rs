@@ -35,11 +35,7 @@ use crate::{
         transmission_mod::TransmissionMod,
     },
     input_data::{
-        InputData, InputDataError,
-        controller_input::ControllerInput,
-        dpad_button::DPadButton,
-        stick_input::{StickInput, StickInputError},
-        yaz1_compress, yaz1_decompress,
+        InputData, InputDataError, controller_input::ControllerInput, dpad_button::DPadButton, drift_flag::DriftFlag, stick_input::{StickInput, StickInputError}, yaz1_compress, yaz1_decompress
     },
     write_bits,
 };
@@ -1331,7 +1327,7 @@ fn date_year_too_low() {
 
 #[test]
 fn date_year_too_high() {
-    assert!(matches!(Date::new(2036, 1, 1), Err(DateError::YearInvalid)));
+    assert!(matches!(Date::new(2100, 1, 1), Err(DateError::YearInvalid)));
 }
 
 #[test]
@@ -1713,13 +1709,23 @@ fn dpad_button_invalid() {
 // ===== ControllerInput Tests =====
 
 #[test]
+fn all_inputs_from_valid_ghost_are_driftflag_autodetect() {
+    let ghost =
+        Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
+
+    for controller_input in ghost.input_data().controller_inputs() {
+        assert_eq!(controller_input.drift_flag(), DriftFlag::AutoDetect);
+    }
+}
+
+#[test]
 fn controller_input_new_and_getters() {
     let stick = StickInput::new(7, 7).unwrap();
     let input = ControllerInput::new(
         true,
         false,
         false,
-        true,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::Up,
@@ -1729,7 +1735,7 @@ fn controller_input_new_and_getters() {
     assert!(input.accelerator());
     assert!(!input.brake());
     assert!(!input.brake_drift());
-    assert!(input.drift_flag());
+    assert_eq!(input.drift_flag(), DriftFlag::AutoDetect);
     assert!(!input.item());
     assert!(!input.unknown_face_button());
     assert_eq!(input.dpad(), DPadButton::Up);
@@ -1744,7 +1750,7 @@ fn controller_input_face_buttons_equal() {
         true,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::None,
@@ -1755,7 +1761,7 @@ fn controller_input_face_buttons_equal() {
         true,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::Up,
@@ -1776,13 +1782,183 @@ fn input_data_empty_error() {
 }
 
 #[test]
+fn input_data_illegal_drift_or_brake_input() {
+    let mut controller_inputs = Vec::new();
+    controller_inputs.push(ControllerInput::new(
+        true,
+        false,
+        false,
+        DriftFlag::AutoDetect,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    controller_inputs.push(ControllerInput::new(
+        true,
+        true,
+        false,
+        DriftFlag::AutoDetect,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    controller_inputs.push(ControllerInput::new(
+        true,
+        false,
+        false,
+        DriftFlag::AutoDetect,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    let input_data = InputData::new(controller_inputs, false).unwrap();
+    assert!(!input_data.contains_illegal_brake_or_drift_inputs());
+
+
+
+    let mut controller_inputs = Vec::new();
+    controller_inputs.push(ControllerInput::new(
+        true,
+        false,
+        false,
+        DriftFlag::Disabled,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    controller_inputs.push(ControllerInput::new(
+        true,
+        true,
+        false,
+        DriftFlag::Enabled,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    controller_inputs.push(ControllerInput::new(
+        true,
+        false,
+        false,
+        DriftFlag::Disabled,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    let input_data = InputData::new(controller_inputs, false).unwrap();
+    assert!(!input_data.contains_illegal_brake_or_drift_inputs());
+
+
+
+
+    let mut controller_inputs = Vec::new();
+    controller_inputs.push(ControllerInput::new(
+        true,
+        false,
+        false,
+        DriftFlag::Disabled,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    controller_inputs.push(ControllerInput::new(
+        true,
+        true,
+        false,
+        DriftFlag::Disabled,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    controller_inputs.push(ControllerInput::new(
+        true,
+        false,
+        false,
+        DriftFlag::Disabled,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    let input_data = InputData::new(controller_inputs, false).unwrap();
+    assert!(input_data.contains_illegal_brake_or_drift_inputs());
+
+
+
+    let mut controller_inputs = Vec::new();
+    controller_inputs.push(ControllerInput::new(
+        true,
+        false,
+        false,
+        DriftFlag::Disabled,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    controller_inputs.push(ControllerInput::new(
+        true,
+        true,
+        false,
+        DriftFlag::Enabled,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    controller_inputs.push(ControllerInput::new(
+        true,
+        false,
+        false,
+        DriftFlag::Enabled,
+        false,
+        false,
+        DPadButton::None,
+        StickInput::new(7, 7).unwrap(),
+        10,
+    ));
+
+    let input_data = InputData::new(controller_inputs, false).unwrap();
+    assert!(input_data.contains_illegal_brake_or_drift_inputs());
+}
+
+#[test]
 fn input_data_single_input_uncompressed() {
     let stick = StickInput::new(7, 7).unwrap();
     let input = ControllerInput::new(
         true,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::None,
@@ -1812,7 +1988,7 @@ fn input_data_get_input_at_frame_zero_none() {
         true,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::None,
@@ -1830,7 +2006,7 @@ fn input_data_get_input_at_frame_valid() {
         true,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::None,
@@ -1883,7 +2059,7 @@ fn input_data_set_compressed() {
         false,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::None,
@@ -2125,7 +2301,7 @@ fn ghost_new_no_footer() {
         true,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::None,
@@ -2146,7 +2322,7 @@ fn ghost_new_syncs_compression_true() {
         true,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::None,
@@ -2166,7 +2342,7 @@ fn ghost_new_syncs_compression_false() {
         false,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::None,
@@ -2186,7 +2362,7 @@ fn ghost_new_decompressed_length_correct() {
         true,
         false,
         false,
-        false,
+        DriftFlag::AutoDetect,
         false,
         false,
         DPadButton::None,

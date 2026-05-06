@@ -1,5 +1,6 @@
 use crate::input_data::{
     controller_input::ControllerInput,
+    drift_flag::DriftFlag,
     dpad_button::{DPadButton, DPadButtonError},
     face_button::{FaceButton, FaceButtonError, FaceButtons},
     stick_input::{StickInput, StickInputError},
@@ -9,6 +10,7 @@ pub mod controller_input;
 pub mod dpad_button;
 pub mod face_button;
 pub mod stick_input;
+pub mod drift_flag;
 
 /// Errors that can occur while parsing [`InputData`].
 #[derive(thiserror::Error, Debug)]
@@ -195,12 +197,18 @@ impl InputData {
 
             let FaceButtons(face_buttons) = face.map(|f| f.0.clone()).unwrap_or_default();
 
+            let drift = if face_buttons.contains(&FaceButton::Drift) {
+                DriftFlag::Enabled
+            } else {
+                DriftFlag::Disabled
+            };
+
             // Create combined input for this duration
             let combined = ControllerInput::new(
                 face_buttons.contains(&FaceButton::Accelerator),
                 face_buttons.contains(&FaceButton::Brake),
                 face_buttons.contains(&FaceButton::BrakeDrift),
-                face_buttons.contains(&FaceButton::Drift),
+                drift,
                 face_buttons.contains(&FaceButton::Item),
                 face_buttons.contains(&FaceButton::Unknown),
                 dpad.map(|d| d.0).unwrap_or(DPadButton::None),
@@ -235,6 +243,8 @@ impl InputData {
             }
         }
 
+        assign_auto_detect_drift_flags(&mut controller_inputs);
+
         Ok(Self {
             controller_inputs,
             compressed,
@@ -265,15 +275,16 @@ impl InputData {
     /// the previous frame having accelerator but no brake (indicating the game should
     /// have set the drift flag automatically).
     pub fn contains_illegal_brake_or_drift_inputs(&self) -> bool {
+        let effective_drifts = effective_drift_flags(self.controller_inputs());
         for (idx, current_input) in self.controller_inputs().iter().enumerate() {
-            if current_input.drift_flag() && !current_input.brake() {
+            if effective_drifts[idx] && !current_input.brake() {
                 // Illegal drift input
                 return true;
             } else if idx > 0 {
                 let previous_input = self.controller_inputs()[idx - 1];
                 if current_input.brake()
                     && current_input.accelerator()
-                    && !current_input.drift_flag()
+                    && !effective_drifts[idx]
                     && previous_input.accelerator()
                     && !previous_input.brake()
                 {
@@ -305,12 +316,13 @@ impl InputData {
         // Face button array
         // Derive vector of (FaceButtons, u32 [frames]) from controller inputs
         let controller_inputs = &self.controller_inputs;
+        let effective_drifts = effective_drift_flags(controller_inputs);
         let mut face_button_inputs: Vec<(FaceButtons, u32)> = Vec::new();
         for (idx, input) in controller_inputs.iter().enumerate() {
             if idx > 0 && input.face_buttons_equal_to(controller_inputs[idx - 1]) {
                 face_button_inputs.last_mut().unwrap().1 += input.frame_duration();
             } else {
-                face_button_inputs.push((to_face_buttons(input), input.frame_duration()));
+                face_button_inputs.push((to_face_buttons(input, effective_drifts[idx]), input.frame_duration()));
             }
         }
         for (face_buttons, frames) in &face_button_inputs {
@@ -464,7 +476,7 @@ impl InputData {
     }
 }
 
-fn to_face_buttons(input: &ControllerInput) -> FaceButtons {
+fn to_face_buttons(input: &ControllerInput, drift_flag_bool: bool) -> FaceButtons {
     let mut buttons = Vec::new();
     if input.accelerator() {
         buttons.push(FaceButton::Accelerator);
@@ -472,7 +484,7 @@ fn to_face_buttons(input: &ControllerInput) -> FaceButtons {
     if input.brake() {
         buttons.push(FaceButton::Brake);
     }
-    if input.drift_flag() {
+    if drift_flag_bool {
         buttons.push(FaceButton::Drift);
     }
     if input.brake_drift() {
@@ -485,6 +497,65 @@ fn to_face_buttons(input: &ControllerInput) -> FaceButtons {
         buttons.push(FaceButton::Unknown);
     }
     FaceButtons(buttons)
+}
+
+fn effective_drift_flags(inputs: &[ControllerInput]) -> Vec<bool> {
+    let mut result = Vec::with_capacity(inputs.len());
+    let mut simulated = false;
+    for (idx, input) in inputs.iter().enumerate() {
+        let accel = input.accelerator();
+        let brake = input.brake();
+        let (prev_accel, prev_brake) = if idx > 0 {
+            (inputs[idx - 1].accelerator(), inputs[idx - 1].brake())
+        } else {
+            (false, false)
+        };
+        if !brake {
+            simulated = false;
+        } else if accel && brake && !prev_accel && !prev_brake {
+            simulated = true;
+        } else if brake && !prev_brake && prev_accel {
+            simulated = true;
+        } else if accel && !prev_accel && prev_brake {
+            simulated = false;
+        }
+        result.push(match input.drift_flag() {
+            DriftFlag::Enabled => true,
+            DriftFlag::Disabled => false,
+            DriftFlag::AutoDetect => simulated,
+        });
+    }
+    result
+}
+
+fn assign_auto_detect_drift_flags(inputs: &mut Vec<ControllerInput>) {
+    let mut simulated = false;
+    for idx in 0..inputs.len() {
+        let accel = inputs[idx].accelerator();
+        let brake = inputs[idx].brake();
+        let (prev_accel, prev_brake) = if idx > 0 {
+            (inputs[idx - 1].accelerator(), inputs[idx - 1].brake())
+        } else {
+            (false, false)
+        };
+        if !brake {
+            simulated = false;
+        } else if accel && brake && !prev_accel && !prev_brake {
+            simulated = true;
+        } else if brake && !prev_brake && prev_accel {
+            simulated = true;
+        } else if accel && !prev_accel && prev_brake {
+            simulated = false;
+        }
+        let raw_bool = match inputs[idx].drift_flag() {
+            DriftFlag::Enabled => true,
+            DriftFlag::Disabled => false,
+            DriftFlag::AutoDetect => continue,
+        };
+        if raw_bool == simulated {
+            inputs[idx].set_drift_flag(DriftFlag::AutoDetect);
+        }
+    }
 }
 
 /// Decompresses a Yaz1-encoded byte slice into raw input data.
