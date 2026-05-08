@@ -1,4 +1,4 @@
-use crate::input_data::{dpad_button::DPadButton, stick_input::StickInput, drift_flag::DriftFlag};
+use crate::input_data::{dpad_button::DPadButton, drift_flag::DriftFlag, stick_input::StickInput};
 
 /// Represents the errors that can go wrong while parsing a `ControllerInput`.
 #[derive(thiserror::Error, Debug)]

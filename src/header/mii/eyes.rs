@@ -6,7 +6,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 ///
 /// All positional and size values are validated against the ranges permitted
 /// by the Mii data format on construction.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Eyes {
     /// Eye rotation (0–7).
     rotation: u8,

@@ -1,16 +1,16 @@
 use crate::input_data::{
     controller_input::ControllerInput,
-    drift_flag::DriftFlag,
     dpad_button::{DPadButton, DPadButtonError},
+    drift_flag::DriftFlag,
     face_button::{FaceButton, FaceButtonError, FaceButtons},
     stick_input::{StickInput, StickInputError},
 };
 
 pub mod controller_input;
 pub mod dpad_button;
+pub mod drift_flag;
 pub mod face_button;
 pub mod stick_input;
-pub mod drift_flag;
 
 /// Errors that can occur while parsing [`InputData`].
 #[derive(thiserror::Error, Debug)]
@@ -322,7 +322,10 @@ impl InputData {
             if idx > 0 && input.face_buttons_equal_to(controller_inputs[idx - 1]) {
                 face_button_inputs.last_mut().unwrap().1 += input.frame_duration();
             } else {
-                face_button_inputs.push((to_face_buttons(input, effective_drifts[idx]), input.frame_duration()));
+                face_button_inputs.push((
+                    to_face_buttons(input, effective_drifts[idx]),
+                    input.frame_duration(),
+                ));
             }
         }
         for (face_buttons, frames) in &face_button_inputs {
@@ -600,7 +603,7 @@ pub(crate) fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
 ///
 /// Writes a 16-byte Yaz1 header (magic, uncompressed size, 8 bytes of padding),
 /// followed by the compressed payload. The result is padded so its length is a
-/// multiple of 4 (matching the original JS behavior: adds `len % 4` zero bytes).
+/// multiple of 4.
 pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
     // first remove padded 0s (decompressed input data is padded with 0s to 0x2774 bytes)
     let mut trailing_bytes_to_remove = 0usize;
@@ -617,7 +620,9 @@ pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
     let mut dst = encode_yaz1(src);
 
     let remainder = dst.len() % 4;
-    dst.resize(dst.len() + remainder, 0);
+    if remainder != 0 {
+        dst.resize(dst.len() + (4 - remainder), 0);
+    }
 
     let mut compressed_data = Vec::new();
     compressed_data.extend_from_slice(&((dst.len() + 16) as u32).to_be_bytes()); // size of Yaz1 section (magic + uncomp_size + padding + compressed)

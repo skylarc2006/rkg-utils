@@ -9,7 +9,7 @@ use crate::{
 ///
 /// All positional and size values are validated against the ranges permitted
 /// by the Mii data format on construction.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Eyebrows {
     /// Eyebrow rotation (0–11).
     rotation: u8,

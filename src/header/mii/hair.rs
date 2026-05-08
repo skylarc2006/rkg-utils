@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the hair customization options of a Mii,
 /// including hair style, color, and whether the style is horizontally flipped.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Hair {
     /// Hair style.
     hair_type: HairType,

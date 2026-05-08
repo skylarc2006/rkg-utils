@@ -7,7 +7,7 @@ use crate::{
 
 /// Represents the facial hair customization options of a Mii,
 /// including beard type, mustache type, color, and mustache size and position.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct FacialHair {
     /// Beard shape/style.
     beard_type: BeardType,

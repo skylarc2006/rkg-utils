@@ -26,7 +26,7 @@ pub enum InGameTimeError {
 /// [`InGameTime`] values can be added together and summed via the standard
 /// [`Add`](std::ops::Add) and [`Sum`](std::iter::Sum) traits, which convert
 /// through total milliseconds to avoid per-field overflow.
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, PartialEq, PartialOrd)]
 pub struct InGameTime {
     /// Minutes component (0–99 in normal play).
     minutes: u8,

@@ -146,7 +146,14 @@ impl Ghost {
         } else if let Ok(sp_footer) = SPFooter::new(bytes) {
             Some(FooterType::SPFooter(sp_footer))
         } else {
-            let footer_start = 0x88 + input_data_len + 4;
+            let section_len = if input_data.compressed() {
+                input_data_len
+            } else if bytes.len() >= 0x88 + 0x2774 + 4 {
+                0x2774
+            } else {
+                input_data_len
+            };
+            let footer_start = 0x88 + section_len + 4;
             let footer_end = bytes.len().saturating_sub(4);
             if footer_start < footer_end {
                 Some(FooterType::Unknown(
@@ -182,7 +189,7 @@ impl Ghost {
     ///
     /// # Errors
     ///
-    /// Returns any error from [`update_raw_data`](Ghost::update_raw_data) or
+    /// Returns any error from [`update_ghost_sha1`](Ghost::update_ghost_sha1) or
     /// from file creation/writing.
     pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
         self.update_ghost_sha1()?;

@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the lip customization options of a Mii,
 /// including lip style, color, size, and vertical position.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Lips {
     /// Vertical position of the lips (0–18).
     y: u8,

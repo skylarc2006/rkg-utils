@@ -35,7 +35,12 @@ use crate::{
         transmission_mod::TransmissionMod,
     },
     input_data::{
-        InputData, InputDataError, controller_input::ControllerInput, dpad_button::DPadButton, drift_flag::DriftFlag, stick_input::{StickInput, StickInputError}, yaz1_compress, yaz1_decompress
+        InputData, InputDataError,
+        controller_input::ControllerInput,
+        dpad_button::DPadButton,
+        drift_flag::DriftFlag,
+        stick_input::{StickInput, StickInputError},
+        yaz1_compress, yaz1_decompress,
     },
     write_bits,
 };
@@ -1051,26 +1056,58 @@ fn input_at_frame_test() {
     println!("Input at frame {}:", frame);
     println!("{:#?}", ghost.input_data().get_input_at_frame(frame))
 }
-
 /*
 #[test]
 fn ninrankings_ghost_collection() {
     for entry in std::fs::read_dir("./test_ghosts/ninrankings_ghost_collection").unwrap() {
-        let ghost = Ghost::new_from_file(entry.as_ref().unwrap().path());
-
-        match ghost {
-            Err(e) => {
+        if let Some(ghost) = Ghost::new_from_file(entry.as_ref().unwrap().path()).ok() {
+            if ghost.header().finish_time() == InGameTime::new(2, 04, 292).unwrap()
+                || (ghost.header().lap_split_time(0).unwrap()
+                    == InGameTime::new(0, 41, 501).unwrap()
+                    && ghost.header().lap_split_time(1).unwrap()
+                        == InGameTime::new(0, 41, 374).unwrap())
+            {
                 println!(
-                    "\nFailed on file {}",
-                    entry.as_ref().unwrap().file_name().to_str().unwrap()
+                    "Found {}: {} by {} on {}",
+                    entry.as_ref().unwrap().file_name().to_str().unwrap(),
+                    ghost.header().finish_time(),
+                    ghost.header().mii().name(),
+                    ghost.header().slot_id()
                 );
-                println!("Error: {e}");
             }
-            _ => (),
         }
     }
 }
 */
+
+#[test]
+fn ken_204292_restoration() {
+    let ken_header = Ghost::new_from_file("./test_ghosts/ken mii and other data.rkg").unwrap();
+    let mut ken_204292_ghost =
+        Ghost::new_from_file("./test_ghosts/ken 2 04 292 input data.rkg").unwrap();
+
+    ken_204292_ghost
+        .header_mut()
+        .set_date_set(Date::new(2012, 3, 05).unwrap());
+    ken_204292_ghost
+        .header_mut()
+        .set_controller(Controller::Nunchuk);
+    ken_204292_ghost
+        .header_mut()
+        .set_ghost_type(ken_header.header().ghost_type());
+    ken_204292_ghost
+        .header_mut()
+        .set_location(ken_header.header().location());
+    ken_204292_ghost
+        .header_mut()
+        .set_mii(ken_header.header().mii().clone());
+    ken_204292_ghost.set_input_data_compressed(true);
+
+    let _ = ken_204292_ghost.save_to_file(format!(
+        "./test_ghosts/2m04s292_{}.rkg",
+        ken_204292_ghost.header().mii().name()
+    ));
+}
 
 // In depth tests
 // ===== CRC Tests =====
@@ -1823,8 +1860,6 @@ fn input_data_illegal_drift_or_brake_input() {
     let input_data = InputData::new(controller_inputs, false).unwrap();
     assert!(!input_data.contains_illegal_brake_or_drift_inputs());
 
-
-
     let mut controller_inputs = Vec::new();
     controller_inputs.push(ControllerInput::new(
         true,
@@ -1865,9 +1900,6 @@ fn input_data_illegal_drift_or_brake_input() {
     let input_data = InputData::new(controller_inputs, false).unwrap();
     assert!(!input_data.contains_illegal_brake_or_drift_inputs());
 
-
-
-
     let mut controller_inputs = Vec::new();
     controller_inputs.push(ControllerInput::new(
         true,
@@ -1907,8 +1939,6 @@ fn input_data_illegal_drift_or_brake_input() {
 
     let input_data = InputData::new(controller_inputs, false).unwrap();
     assert!(input_data.contains_illegal_brake_or_drift_inputs());
-
-
 
     let mut controller_inputs = Vec::new();
     controller_inputs.push(ControllerInput::new(

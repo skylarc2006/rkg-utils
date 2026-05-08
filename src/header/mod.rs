@@ -320,8 +320,8 @@ impl Header {
     }
 
     /// Returns the ghost's recorded finish time.
-    pub fn finish_time(&self) -> &InGameTime {
-        &self.finish_time
+    pub fn finish_time(&self) -> InGameTime {
+        self.finish_time
     }
 
     /// Sets the finish time.
@@ -460,8 +460,8 @@ impl Header {
     }
 
     /// Returns the player's geographic location when the ghost was set.
-    pub fn location(&self) -> &Location {
-        &self.location
+    pub fn location(&self) -> Location {
+        self.location
     }
 
     /// Sets the player's location.

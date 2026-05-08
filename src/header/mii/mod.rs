@@ -100,6 +100,7 @@ pub enum MiiError {
 /// and sets [`is_modified`](Mii::is_modified) to `true`.
 ///
 /// The binary layout is documented at <http://wiibrew.org/wiki/Mii_Data#Mii_format>.
+#[derive(Debug, Clone)]
 pub struct Mii {
     /// The raw 74-byte Mii data block, kept in sync with all parsed fields.
     raw_data: [u8; 0x4A],
