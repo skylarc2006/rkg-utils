@@ -1,5 +1,5 @@
 // TODO: eliminate the need for raw_data to be a struct member
-use crate::byte_handler::FromByteHandler;
+use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 use crate::footer::ctgp_footer::region::Region;
 use crate::footer::ctgp_footer::{
     category::Category, ctgp_version::CTGPVersion, exact_finish_time::ExactFinishTime,
@@ -45,6 +45,9 @@ pub enum CTGPFooterError {
     /// A numeric string could not be parsed as an integer.
     #[error("Parse Int Error: {0}")]
     ParseIntError(#[from] std::num::ParseIntError),
+    /// A `ByteHandler` operation failed.
+    #[error("ByteHandler Error: {0}")]
+    ByteHandlerError(#[from] ByteHandlerError),
 }
 
 /// Parsed representation of the CTGP-specific footer appended to Mario Kart Wii ghost files.
@@ -53,70 +56,82 @@ pub enum CTGPFooterError {
 /// high-precision timing, version information, RTC timestamps, pause data, and various
 /// integrity/cheat-detection flags.
 pub struct CTGPFooter {
-    /// The raw bytes of the footer (excluding the trailing CRC32).
-    raw_data: Vec<u8>,
-    /// The security/signature portion of the footer used for verification.
-    security_data: Vec<u8>,
-    /// SHA-1 hash of the track file associated with this ghost.
-    track_sha1: [u8; 0x14],
-    /// SHA-1 hash of the full ghost file.
-    ghost_sha1: [u8; 0x14],
-    /// The player's unique CTGP player ID.
-    player_id: u64,
-    /// Sub-millisecond-accurate finish time derived from the in-game time and CTGP's correction factor.
-    exact_finish_time: ExactFinishTime,
+    /// Length of the footer in bytes, excluding the trailing CRC32.
+    len: usize,
+    /// The footer format version, which determines the layout and size of the footer.
+    footer_version: u8,
+    /// The run category as determined by CTGP's metadata.
+    category: Category,
+    /// Whether the player respawned at any point during the run.
+    respawns: bool,
+    /// Whether the Mii name in the ghost file has been replaced.
+    has_mii_name_replaced: bool,
+    /// Whether the Mii data in the ghost file has been replaced.
+    has_mii_data_replaced: bool,
+    /// Whether CTGP flagged this ghost as potentially cheated.
+    potentially_cheated_ghost: bool,
+    /// Whether CTGP flagged potential rapid-fire input during the run.
+    potential_rapidfire: bool,
+    /// Whether CTGP flagged a potential slowdown event during the run.
+    potential_slowdown: bool,
+    /// Whether the player went out of bounds during the run.
+    went_oob: bool,
+    /// Whether the player was launched by a cannon during the run.
+    cannoned: bool,
+    /// Per-lap mushroom usage counts (shroomstrat), indexed by lap number.
+    shroomstrat: [u8; 10],
+    /// Whether CTGP detected a dubious split-line intersection on the final lap.
+    /// `None` for footer versions below 2.
+    final_lap_dubious_intersection: Option<bool>,
+    /// Whether a USB GameCube adapter was enabled during the run.
+    /// `None` for footer versions below 2.
+    usb_gamecube_enabled: Option<bool>,
+    /// Whether any My Stuff content was actually used during the run.
+    /// `None` for footer versions below 3.
+    my_stuff_used: Option<bool>,
+    /// Whether the player had My Stuff enabled during the run.
+    /// `None` for footer versions below 3.
+    my_stuff_enabled: Option<bool>,
+    /// Total RTC time the game was paused during the run.
+    rtc_time_paused: TimeDelta,
+    /// RTC timestamp recorded when the race began.
+    rtc_race_begins: NaiveDateTime,
+    /// RTC timestamp recorded when the race ended.
+    rtc_race_end: NaiveDateTime,
+    /// Sub-millisecond-accurate lap times, one per recorded lap.
+    exact_lap_times: [ExactFinishTime; 10],
+    /// The reserved security data block introduced in footer version 5.
+    /// `None` for footer versions below 5.
+    security_data_v5: Option<[u8; 0x0C]>,
+    /// The reserved security data block introduced in footer version 3.
+    /// `None` for footer versions below 3.
+    security_data_v3: Option<[u8; 0x04]>,
+    /// The region of the disc used when the ghost was created.
+    /// `None` for footer versions below 3.
+    disc_region: Option<Region>,
+    /// Per-lap flags indicating whether CTGP detected a dubious split-line intersection.
+    /// `None` for footer versions below 2.
+    lap_split_dubious_intersections: Option<[bool; 10]>,
     /// The CTGP CORE version the ghost was driven on.
     core_version: CTGPVersion,
     /// One or more CTGP release versions consistent with the footer's version bytes.
-    /// `None` if the version bytes are unrecognised.
-    possible_ctgp_versions: Option<Vec<CTGPVersion>>,
-    /// Per-lap flags indicating whether CTGP detected a suspicious split-line intersection.
-    /// `None` for footer versions below 2.
-    lap_split_suspicious_intersections: Option<[bool; 10]>,
-    /// The region of the disc used when the ghost was created.
-    disc_region: Option<Region>,
-    /// Sub-millisecond-accurate lap times, one per recorded lap.
-    exact_lap_times: [ExactFinishTime; 10],
-    /// Real-time clock timestamp recorded when the race ended.
-    rtc_race_end: NaiveDateTime,
-    /// Real-time clock timestamp recorded when the race began.
-    rtc_race_begins: NaiveDateTime,
-    /// Total wall-clock time the game was paused during the run.
-    rtc_time_paused: TimeDelta,
+    /// `None` if the version bytes are unrecognized.
+    possible_release_versions: Option<Vec<CTGPVersion>>,
+    /// Sub-millisecond-accurate finish time derived from the in-game time and CTGP's correction factor.
+    exact_finish_time: ExactFinishTime,
+    /// The player's unique CTGP player ID.
+    player_id: u64,
+    /// SHA-1 hash of the track file associated with this ghost.
+    track_sha1: [u8; 0x14],
+    /// The CTGP security data block preceding the track SHA1 that has been present since footer version 1.
+    security_data: [u8; 0x48],
+    /// The CTGP security data block related to its anti-TAS feature, introduced in footer version 7.
+    /// `None` for footer versions below 7.
+    anti_tas_security_data: Option<[u8; 0x08]>,
+    /// SHA-1 hash of the full ghost file.
+    ghost_sha1: [u8; 0x14],
     /// In-game timestamps (relative to race start) at which each pause occurred.
     pause_times: Vec<InGameTime>,
-    /// Whether the player had My Stuff enabled during the run.
-    my_stuff_enabled: bool,
-    /// Whether any My Stuff content was actually used during the run.
-    my_stuff_used: bool,
-    /// Whether a USB GameCube adapter was enabled during the run.
-    usb_gamecube_enabled: bool,
-    /// Whether CTGP detected a suspicious split-line intersection on the final lap.
-    final_lap_suspicious_intersection: bool,
-    /// Per-lap mushroom usage counts (shroomstrat), indexed by lap number.
-    shroomstrat: [u8; 10],
-    /// Whether the player was launched by a cannon during the run.
-    cannoned: bool,
-    /// Whether the player went out of bounds during the run.
-    went_oob: bool,
-    /// Whether CTGP flagged a potential slowdown event during the run.
-    potential_slowdown: bool,
-    /// Whether CTGP flagged potential rapid-fire input during the run.
-    potential_rapidfire: bool,
-    /// Whether CTGP's heuristics flagged this ghost as potentially cheated.
-    potentially_cheated_ghost: bool,
-    /// Whether the Mii data in the ghost file has been replaced.
-    has_mii_data_replaced: bool,
-    /// Whether the Mii name in the ghost file has been replaced.
-    has_name_replaced: bool, // Hi Korben
-    /// Whether the player respawned at any point during the run.
-    respawns: bool,
-    /// The run category as determined by CTGP's metadata.
-    category: Category,
-    /// The footer format version, which determines the layout and size of the footer.
-    footer_version: u8,
-    /// Length of the footer in bytes, excluding the trailing CRC32.
-    len: usize,
     /// Number of laps recorded in the ghost.
     lap_count: u8,
 }
@@ -139,7 +154,12 @@ impl CTGPFooter {
     /// - The footer version is not supported ([`CTGPFooterError::InvalidFooterVersion`]).
     /// - Any byte slice conversion, integer parse, category parse, or time parse fails.
     pub fn new(data: &[u8]) -> Result<Self, CTGPFooterError> {
-        if data.len() < 0x04 {
+        let data = &data[..data.len() - 0x04];
+        let end = data.len();
+
+        // Minimum ~0x96 size for base RKG file
+        // + minimum 0xD0 size for CTGP footer
+        if data.len() < 0x166 {
             return Err(CTGPFooterError::DataLengthTooShort);
         }
 
@@ -147,15 +167,23 @@ impl CTGPFooter {
             return Err(CTGPFooterError::NotRKGD);
         }
 
-        if data.len() < 0x08 {
-            return Err(CTGPFooterError::DataLengthTooShort);
-        }
-
-        if data[data.len() - 0x08..data.len() - 0x04] != *b"CKGD" {
+        if data[end - 0x04..] != *b"CKGD" {
             return Err(CTGPFooterError::NotCKGD);
         }
 
-        let footer_version = data[data.len() - 0x0D];
+        let len = ByteHandler::try_from(&data[end - 0x08..][..0x04])?.copy_dword() as usize;
+        let footer_version = data[end - 0x09];
+        let category = Category::try_from(data[end - 0x0A], data[end - 0x0C])?;
+
+        let flags = ByteHandler::from(data[end - 0x0B]);
+        let respawns = flags.read_bool(0);
+        let has_mii_name_replaced = flags.read_bool(1);
+        let has_mii_data_replaced = flags.read_bool(2);
+        let potentially_cheated_ghost = flags.read_bool(3);
+        let potential_rapidfire = flags.read_bool(4);
+        let potential_slowdown = flags.read_bool(5);
+        let went_oob = flags.read_bool(6);
+        let cannoned = flags.read_bool(7);
 
         match footer_version {
             1 | 2 | 3 | 5 | 6 | 7 => {}
@@ -164,6 +192,44 @@ impl CTGPFooter {
             }
         }
 
+        Ok(Self {
+            len,
+            footer_version,
+            category,
+            respawns,
+            has_mii_name_replaced,
+            has_mii_data_replaced,
+            potentially_cheated_ghost,
+            potential_rapidfire,
+            potential_slowdown,
+            went_oob,
+            cannoned,
+            shroomstrat: todo!(),
+            final_lap_dubious_intersection: todo!(),
+            usb_gamecube_enabled: todo!(),
+            my_stuff_used: todo!(),
+            my_stuff_enabled: todo!(),
+            rtc_time_paused: todo!(),
+            rtc_race_begins: todo!(),
+            rtc_race_end: todo!(),
+            exact_lap_times: todo!(),
+            security_data_v5: todo!(),
+            security_data_v3: todo!(),
+            disc_region: todo!(),
+            lap_split_dubious_intersections: todo!(),
+            core_version: todo!(),
+            possible_release_versions: todo!(),
+            exact_finish_time: todo!(),
+            player_id: todo!(),
+            track_sha1: todo!(),
+            security_data: todo!(),
+            anti_tas_security_data: todo!(),
+            ghost_sha1: todo!(),
+            pause_times: todo!(),
+            lap_count: todo!(),
+        })
+
+        /*
         let len = if footer_version < 7 { 0xD4 } else { 0xE4 };
 
         if data.len() < len {
@@ -411,6 +477,7 @@ impl CTGPFooter {
             len: len - 0x04,
             lap_count,
         })
+        */
     }
 
     /// Returns the raw bytes of the footer, excluding the trailing CRC32.
@@ -595,7 +662,7 @@ impl CTGPFooter {
 
     /// Returns whether the Mii name in the ghost file has been replaced.
     pub fn has_name_replaced(&self) -> bool {
-        self.has_name_replaced
+        self.has_mii_name_replaced
     }
 
     /// Returns whether the player respawned at any point during the run.

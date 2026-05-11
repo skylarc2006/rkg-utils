@@ -311,7 +311,7 @@ pub(crate) fn compute_sha1_hex(input: &[u8]) -> [u8; 0x14] {
 
 /// Converts a raw Wii tick count into a [`NaiveDateTime`].
 ///
-/// Ticks run at 60.75 MHz relative to the Wii epoch of 2000-01-01 00:00:00 UTC.
+/// Ticks run at 60.75 MHz relative to the Wii epoch of 2000-01-01 00:00:00.
 pub(crate) fn datetime_from_timestamp(tick_count: u64) -> NaiveDateTime {
     let clock_rate = 60_750_000.0; // 60.75 MHz tick speed
     let epoch_shift = 946_684_800; // Shifts epoch from 1970-01-01 to 2000-01-01 (which is what the Wii uses)

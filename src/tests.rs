@@ -949,10 +949,20 @@ fn write_to_ghost() {
 #[test]
 fn bulk_ghost_collection() {
     for entry in std::fs::read_dir("./test_ghosts/ctgp_ghost_collection").unwrap() {
-        let ghost = Ghost::new_from_file(entry.as_ref().unwrap().path())
-            .expect(format!("Failed on ghost {:?}", entry.as_ref().unwrap().file_name()).as_str());
-        assert!(ghost.verify_base_crc32());
-        assert!(ghost.verify_file_crc32());
+        if let Some(ghost) = Ghost::new_from_file(entry.as_ref().unwrap().path()).ok() {
+            if let Some(FooterType::CTGPFooter(footer)) = ghost.footer() {
+                if let Some(intersections) = footer.lap_split_suspicious_intersections() {
+                    for intersection in intersections.iter() {
+                        if *intersection {
+                            println!("Found {}", entry.as_ref().unwrap().file_name().into_string().unwrap());
+                        }
+                    }
+                }
+                if footer.final_lap_suspicious_intersection() {
+                    println!("Found {}", entry.as_ref().unwrap().file_name().into_string().unwrap());
+                }
+            }
+        }
     }
 }
 */
@@ -1061,18 +1071,23 @@ fn input_at_frame_test() {
 fn ninrankings_ghost_collection() {
     for entry in std::fs::read_dir("./test_ghosts/ninrankings_ghost_collection").unwrap() {
         if let Some(ghost) = Ghost::new_from_file(entry.as_ref().unwrap().path()).ok() {
-            if ghost.header().finish_time() == InGameTime::new(2, 04, 292).unwrap()
+            /* if ghost.header().finish_time() == InGameTime::new(1, 51, 957).unwrap()
                 || (ghost.header().lap_split_time(0).unwrap()
-                    == InGameTime::new(0, 41, 501).unwrap()
+                    == InGameTime::new(0, 37, 824).unwrap()
                     && ghost.header().lap_split_time(1).unwrap()
-                        == InGameTime::new(0, 41, 374).unwrap())
+                        == InGameTime::new(0, 37, 482).unwrap())
+            */
+            if ghost.header().mii().name() == "NOBUO"
             {
                 println!(
-                    "Found {}: {} by {} on {}",
+                    "Found {}: {} by {} on {} ({} - {} - {})",
                     entry.as_ref().unwrap().file_name().to_str().unwrap(),
                     ghost.header().finish_time(),
                     ghost.header().mii().name(),
-                    ghost.header().slot_id()
+                    ghost.header().slot_id(),
+                    ghost.header().lap_split_time(0).unwrap(),
+                    ghost.header().lap_split_time(1).unwrap(),
+                    ghost.header().lap_split_time(2).unwrap(),
                 );
             }
         }
