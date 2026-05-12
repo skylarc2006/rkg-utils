@@ -172,7 +172,16 @@ impl CTGPFooter {
         }
 
         let len = ByteHandler::try_from(&data[end - 0x08..][..0x04])?.copy_dword() as usize;
+
         let footer_version = data[end - 0x09];
+
+        match footer_version {
+            1 | 2 | 3 | 5 | 6 | 7 => {}
+            _ => {
+                return Err(CTGPFooterError::InvalidFooterVersion);
+            }
+        }
+
         let category = Category::try_from(data[end - 0x0A], data[end - 0x0C])?;
 
         let flags = ByteHandler::from(data[end - 0x0B]);
@@ -185,10 +194,12 @@ impl CTGPFooter {
         let went_oob = flags.read_bool(6);
         let cannoned = flags.read_bool(7);
 
-        match footer_version {
-            1 | 2 | 3 | 5 | 6 | 7 => {}
-            _ => {
-                return Err(CTGPFooterError::InvalidFooterVersion);
+        let mut shroomstrat = [0u8; 10];
+        let shroom_usages = &data[end - 0x0F..][..0x03];
+
+        for shroom in shroom_usages {
+            if *shroom != 0 {
+                shroomstrat[*shroom as usize - 1] += 1;
             }
         }
 
