@@ -5,6 +5,7 @@ use crate::footer::ctgp_footer::{
     category::Category, ctgp_version::CTGPVersion, exact_finish_time::ExactFinishTime,
 };
 use crate::header::in_game_time::InGameTime;
+use crate::shroomstrat::Shroomstrat;
 use crate::{byte_handler::ByteHandler, input_data::yaz1_decompress};
 use crate::{compute_sha1_hex, datetime_from_timestamp, duration_from_ticks};
 use chrono::{TimeDelta, prelude::*};
@@ -42,6 +43,9 @@ pub enum CTGPFooterError {
     /// An in-game time field could not be parsed.
     #[error("In Game Time Error: {0}")]
     InGameTimeError(#[from] crate::header::in_game_time::InGameTimeError),
+    /// Shroomstrat parsing failed.
+    #[error("Shroomstrat Error: {0}")]
+    ShroomstratError(#[from] crate::shroomstrat::ShroomstratError),
     /// A numeric string could not be parsed as an integer.
     #[error("Parse Int Error: {0}")]
     ParseIntError(#[from] std::num::ParseIntError),
@@ -55,10 +59,12 @@ pub enum CTGPFooterError {
 /// The footer stores metadata written by CTGP-R at the end of each recorded ghost, including
 /// high-precision timing, version information, RTC timestamps, pause data, and various
 /// integrity/cheat-detection flags.
+///
+/// Full documentation of CTGP footer data can be found at https://wiki.tockdom.com/wiki/CRKG_(File_Format).
 pub struct CTGPFooter {
     /// Length of the footer in bytes, excluding the trailing CRC32.
     len: usize,
-    /// The footer format version, which determines the layout and size of the footer.
+    /// The footer format version, which determines the layout of the footer.
     footer_version: u8,
     /// The run category as determined by CTGP's metadata.
     category: Category,
@@ -78,8 +84,8 @@ pub struct CTGPFooter {
     went_oob: bool,
     /// Whether the player was launched by a cannon during the run.
     cannoned: bool,
-    /// Per-lap mushroom usage counts (shroomstrat), indexed by lap number.
-    shroomstrat: [u8; 10],
+    /// The shroomstrat used by the ghost.
+    shroomstrat: Shroomstrat,
     /// Whether CTGP detected a dubious split-line intersection on the final lap.
     /// `None` for footer versions below 2.
     final_lap_dubious_intersection: Option<bool>,
@@ -95,11 +101,15 @@ pub struct CTGPFooter {
     /// Total RTC time the game was paused during the run.
     rtc_time_paused: TimeDelta,
     /// RTC timestamp recorded when the race began.
-    rtc_race_begins: NaiveDateTime,
+    rtc_race_start: NaiveDateTime,
     /// RTC timestamp recorded when the race ended.
     rtc_race_end: NaiveDateTime,
     /// Sub-millisecond-accurate lap times, one per recorded lap.
-    exact_lap_times: [ExactFinishTime; 10],
+    exact_lap_times: Vec<ExactFinishTime>,
+    /// Whether the exact lap times are unreliable.
+    exact_lap_times_unreliable: bool,
+    /// The lap true time differences as their raw data representation.
+    lap_true_time_difference_data: Vec<[u8; 4]>,
     /// The reserved security data block introduced in footer version 5.
     /// `None` for footer versions below 5.
     security_data_v5: Option<[u8; 0x0C]>,
@@ -111,7 +121,7 @@ pub struct CTGPFooter {
     disc_region: Option<Region>,
     /// Per-lap flags indicating whether CTGP detected a dubious split-line intersection.
     /// `None` for footer versions below 2.
-    lap_split_dubious_intersections: Option<[bool; 10]>,
+    lap_split_dubious_intersections: Option<Vec<bool>>,
     /// The CTGP CORE version the ghost was driven on.
     core_version: CTGPVersion,
     /// One or more CTGP release versions consistent with the footer's version bytes.
@@ -119,6 +129,10 @@ pub struct CTGPFooter {
     possible_release_versions: Option<Vec<CTGPVersion>>,
     /// Sub-millisecond-accurate finish time derived from the in-game time and CTGP's correction factor.
     exact_finish_time: ExactFinishTime,
+    /// Whether the exact finish time is unreliable.
+    exact_finish_time_unreliable: bool,
+    /// The finish true time difference as its raw data representation.
+    finish_true_time_difference_data: [u8; 4],
     /// The player's unique CTGP player ID.
     player_id: u64,
     /// SHA-1 hash of the track file associated with this ghost.
@@ -194,14 +208,133 @@ impl CTGPFooter {
         let went_oob = flags.read_bool(6);
         let cannoned = flags.read_bool(7);
 
-        let mut shroomstrat = [0u8; 10];
-        let shroom_usages = &data[end - 0x0F..][..0x03];
+        let shroomstrat = Shroomstrat::new(
+            data[end - 0x0D],
+            data[end - 0x0E],
+            data[end - 0x0F],
+            data[0x10],
+        )?;
 
-        for shroom in shroom_usages {
-            if *shroom != 0 {
-                shroomstrat[*shroom as usize - 1] += 1;
+        let flags = ByteHandler::from(data[end - 0x10]);
+        let final_lap_dubious_intersection = if footer_version >= 2 {
+            Some(flags.read_bool(0))
+        } else {
+            None
+        };
+
+        let usb_gamecube_enabled = if footer_version >= 2 {
+            Some(flags.read_bool(1))
+        } else {
+            None
+        };
+
+        let my_stuff_used = if footer_version >= 3 {
+            Some(flags.read_bool(2))
+        } else {
+            None
+        };
+
+        let my_stuff_enabled = if footer_version >= 3 {
+            Some(flags.read_bool(3))
+        } else {
+            None
+        };
+
+        let rtc_time_paused =
+            duration_from_ticks(u64::from_be_bytes(data[end - 0x18..][..0x08].try_into()?));
+
+        let rtc_race_start =
+            datetime_from_timestamp(u64::from_be_bytes(data[end - 0x20..][..0x08].try_into()?));
+
+        let rtc_race_end =
+            datetime_from_timestamp(u64::from_be_bytes(data[end - 0x28..][..0x08].try_into()?));
+
+        // Exact lap split calculation
+        let lap_count = data[0x10] as usize;
+
+        let lap_time_data = &data[0x11..0x11 + (3 * lap_count)];
+        let mut lap_times = Vec::new();
+
+        for lap_time in lap_time_data.chunks_exact(3) {
+            lap_times.push(InGameTime::from_byte_handler(lap_time)?);
+        }
+
+        let lap_true_time_differences_data =
+            &data[end - 0x28 - (lap_count * 0x04)..][..lap_count * 0x04];
+        let mut lap_true_time_differences = Vec::new();
+        lap_true_time_differences.resize(lap_count, [0u8; 4]);
+
+        // The lap differences are stored in reverse because of the nature of how ctgp data is written
+        // Maybe instead potentially reverse the entire lap true time differences data slice and parse
+        // it as little endian f32?
+        for (idx, difference) in lap_true_time_differences_data.chunks_exact(4).enumerate() {
+            lap_true_time_differences[lap_count - 1 - idx] = difference.try_into().unwrap();
+        }
+
+        let mut exact_lap_times = Vec::new();
+        exact_lap_times.resize(lap_count, ExactFinishTime::default());
+
+        let mut previous_subtractions = 0i64;
+        let mut subtraction_ps = 0i64;
+        let mut exact_lap_times_unreliable = false;
+
+        for lap_true_time_difference in lap_true_time_differences.iter() {
+            if f32::from_be_bytes(*lap_true_time_difference) < -1.0 {
+                exact_lap_times_unreliable = true;
             }
         }
+
+        for (idx, exact_lap_time) in exact_lap_times.iter_mut().enumerate() {
+            let lap_true_time_difference = if exact_lap_times_unreliable {
+                0f32
+            } else {
+                f32::from_be_bytes(lap_true_time_differences[idx])
+            };
+
+            let mut true_time_ps_subtraction =
+                (lap_true_time_difference as f64 * 1e+9).floor() as i64;
+
+            // subtract the sum of the previous laps' difference because the lap differences add up to
+            // have its decimal portion be equal to the total time
+            true_time_ps_subtraction -= previous_subtractions;
+
+            if true_time_ps_subtraction > 1e+9 as i64 {
+                true_time_ps_subtraction -= subtraction_ps;
+                subtraction_ps = if subtraction_ps == 0 { 1e+9 as i64 } else { 0 };
+            }
+            previous_subtractions += true_time_ps_subtraction;
+
+            let true_ps =
+                lap_times[idx].igt_to_millis() as i64 * 1e+9 as i64 + true_time_ps_subtraction;
+            let true_sec = (true_ps / 1e+12 as i64) as u8;
+            let true_fractional_sec = true_ps % 1e+12 as i64;
+
+            *exact_lap_time = if true_ps > 0 {
+                ExactFinishTime::new(true_sec / 60, true_sec % 60, true_fractional_sec as u64)
+            } else {
+                ExactFinishTime::default()
+            };
+        }
+
+        let security_data_v5: Option<[u8; 12]> = if footer_version >= 5 {
+            Some(data[end - 0x5C..][..0x0C].try_into().unwrap())
+        } else {
+            None
+        };
+
+        let security_data_v3: Option<[u8; 4]> = if footer_version >= 3 {
+            Some(data[end - 0x60..][..0x04].try_into().unwrap())
+        } else {
+            None
+        };
+
+        let disc_region = if footer_version >= 3 {
+            Some(Region::from(data[end - 0x61]))
+        } else {
+            None
+        };
+
+        // TODO: continue parsing lap split intersections
 
         Ok(Self {
             len,
@@ -215,22 +348,26 @@ impl CTGPFooter {
             potential_slowdown,
             went_oob,
             cannoned,
-            shroomstrat: todo!(),
-            final_lap_dubious_intersection: todo!(),
-            usb_gamecube_enabled: todo!(),
-            my_stuff_used: todo!(),
-            my_stuff_enabled: todo!(),
-            rtc_time_paused: todo!(),
-            rtc_race_begins: todo!(),
-            rtc_race_end: todo!(),
-            exact_lap_times: todo!(),
-            security_data_v5: todo!(),
-            security_data_v3: todo!(),
-            disc_region: todo!(),
+            shroomstrat,
+            final_lap_dubious_intersection,
+            usb_gamecube_enabled,
+            my_stuff_used,
+            my_stuff_enabled,
+            rtc_time_paused,
+            rtc_race_start,
+            rtc_race_end,
+            exact_lap_times,
+            exact_lap_times_unreliable,
+            lap_true_time_difference_data: lap_true_time_differences,
+            security_data_v5,
+            security_data_v3,
+            disc_region,
             lap_split_dubious_intersections: todo!(),
             core_version: todo!(),
             possible_release_versions: todo!(),
             exact_finish_time: todo!(),
+            exact_finish_time_unreliable: todo!(),
+            finish_true_time_difference_data: todo!(),
             player_id: todo!(),
             track_sha1: todo!(),
             security_data: todo!(),
@@ -587,7 +724,7 @@ impl CTGPFooter {
 
     /// Returns the real-time clock timestamp recorded when the race began.
     pub fn rtc_race_begins(&self) -> NaiveDateTime {
-        self.rtc_race_begins
+        self.rtc_race_start
     }
 
     /// Returns the total wall-clock duration the game was paused during the run.
