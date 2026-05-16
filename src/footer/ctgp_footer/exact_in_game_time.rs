@@ -9,10 +9,10 @@ const PICOS_PER_MINUTE: u64 = 60 * PICOS_PER_SECOND;
 /// A high-precision finish time broken down into minutes, seconds, and picoseconds.
 ///
 /// The picoseconds field holds only the sub-second remainder, not the total
-/// elapsed picoseconds. Use [`ExactFinishTime::time_to_picoseconds`] to obtain
+/// elapsed picoseconds. Use [`ExactInGameTime::time_to_picoseconds`] to obtain
 /// the total duration as a single value.
 #[derive(Default, Clone, Copy)]
-pub struct ExactFinishTime {
+pub struct ExactInGameTime {
     /// The minutes component of the time.
     minutes: u8,
     /// The seconds component of the time (0–59).
@@ -21,8 +21,8 @@ pub struct ExactFinishTime {
     picoseconds: u64,
 }
 
-impl ExactFinishTime {
-    /// Creates a new [`ExactFinishTime`] from its individual components.
+impl ExactInGameTime {
+    /// Creates a new [`ExactInGameTime`] from its individual components.
     ///
     /// # Arguments
     ///
@@ -61,9 +61,9 @@ impl ExactFinishTime {
     /// # Examples
     ///
     /// ```
-    /// use rkg_utils::footer::ctgp_footer::exact_finish_time::ExactFinishTime;
+    /// use rkg_utils::footer::ctgp_footer::exact_in_game_time::ExactInGameTime;
     ///
-    /// let t = ExactFinishTime::new(1, 30, 500_000_000_000);
+    /// let t = ExactInGameTime::new(1, 30, 500_000_000_000);
     /// assert_eq!(t.time_to_picoseconds(), 90_500_000_000_000);
     /// ```
     pub fn time_to_picoseconds(self) -> u64 {
@@ -78,12 +78,12 @@ impl ExactFinishTime {
 /// # Examples
 ///
 /// ```
-/// use rkg_utils::footer::ctgp_footer::exact_finish_time::ExactFinishTime;
+/// use rkg_utils::footer::ctgp_footer::exact_in_game_time::ExactInGameTime;
 ///
-/// let t = ExactFinishTime::new(1, 9, 123_456_789_000);
+/// let t = ExactInGameTime::new(1, 9, 123_456_789_000);
 /// assert_eq!(t.to_string(), "01:09.123456789000");
 /// ```
-impl Display for ExactFinishTime {
+impl Display for ExactInGameTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -93,12 +93,12 @@ impl Display for ExactFinishTime {
     }
 }
 
-/// Adds two [`ExactFinishTime`] values by summing their total picoseconds and
+/// Adds two [`ExactInGameTime`] values by summing their total picoseconds and
 /// decomposing the result back into minutes, seconds, and picoseconds.
-impl std::ops::Add for ExactFinishTime {
-    type Output = ExactFinishTime;
+impl std::ops::Add for ExactInGameTime {
+    type Output = ExactInGameTime;
 
-    fn add(self, rhs: ExactFinishTime) -> ExactFinishTime {
+    fn add(self, rhs: ExactInGameTime) -> ExactInGameTime {
         let total_ps = self.time_to_picoseconds() + rhs.time_to_picoseconds();
 
         let picoseconds = total_ps % PICOS_PER_SECOND;
@@ -106,14 +106,14 @@ impl std::ops::Add for ExactFinishTime {
         let seconds = (total_seconds % 60) as u8;
         let minutes = (total_seconds / 60) as u8;
 
-        ExactFinishTime::new(minutes, seconds, picoseconds)
+        ExactInGameTime::new(minutes, seconds, picoseconds)
     }
 }
 
-/// Sums an iterator of [`ExactFinishTime`] values, starting from the default
+/// Sums an iterator of [`ExactInGameTime`] values, starting from the default
 /// (zero) time and accumulating with [`std::ops::Add`].
-impl std::iter::Sum for ExactFinishTime {
-    fn sum<I: Iterator<Item = ExactFinishTime>>(iter: I) -> Self {
-        iter.fold(ExactFinishTime::default(), |a, b| a + b)
+impl std::iter::Sum for ExactInGameTime {
+    fn sum<I: Iterator<Item = ExactInGameTime>>(iter: I) -> Self {
+        iter.fold(ExactInGameTime::default(), |a, b| a + b)
     }
 }

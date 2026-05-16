@@ -10,6 +10,7 @@ pub enum ShroomstratError {
     LapCountInvalid,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Shroomstrat {
     /// The lap that the first mushroom was used on.
     /// `None` if the first mushroom was never used.

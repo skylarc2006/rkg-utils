@@ -23,11 +23,11 @@ impl FooterType {
     }
 
     /// Returns the raw bytes of the footer.
-    pub fn raw_data(&self) -> &[u8] {
+    pub fn raw_data(&self) -> Vec<u8> {
         match self {
             Self::CTGPFooter(footer) => footer.raw_data(),
             Self::SPFooter(footer) => footer.raw_data(),
-            Self::Unknown(bytes) => bytes,
+            Self::Unknown(bytes) => bytes.to_owned(),
         }
     }
 }

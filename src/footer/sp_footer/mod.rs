@@ -1,7 +1,7 @@
 // TODO: eliminate the need for raw_data to be a struct member
 use crate::{
     byte_handler::{ByteHandler, FromByteHandler},
-    footer::{ctgp_footer::exact_finish_time::ExactFinishTime, sp_footer::sp_version::SPVersion},
+    footer::{ctgp_footer::exact_in_game_time::ExactInGameTime, sp_footer::sp_version::SPVersion},
     header::in_game_time::{InGameTime, InGameTimeError},
 };
 
@@ -49,9 +49,9 @@ pub struct SPFooter {
     /// SHA-1 hash of the track file associated with this ghost.
     track_sha1: [u8; 0x14],
     /// Sub-millisecond-accurate finish time, computed as the sum of all exact lap times.
-    exact_finish_time: ExactFinishTime,
+    exact_finish_time: ExactInGameTime,
     /// Sub-millisecond-accurate lap times, one per recorded lap (up to 11).
-    exact_lap_times: [ExactFinishTime; 11],
+    exact_lap_times: [ExactInGameTime; 11],
     /// Whether a speed modifier was active during the run.
     has_speed_mod: bool,
     /// Whether an ultra shortcut was performed during the run.
@@ -146,7 +146,7 @@ impl SPFooter {
 
         // Exact lap split calculation
         let mut previous_subtractions = 0i64;
-        let mut exact_lap_times = [ExactFinishTime::default(); 11];
+        let mut exact_lap_times = [ExactInGameTime::default(); 11];
         let mut in_game_time_offset = 0x00usize;
         let mut subtraction_ps = 0i64;
 
@@ -176,9 +176,9 @@ impl SPFooter {
             let true_fractional_sec = true_ps % 1e+12 as i64;
 
             *exact_lap_time = if true_ps > 0 {
-                ExactFinishTime::new(true_sec / 60, true_sec % 60, true_fractional_sec as u64)
+                ExactInGameTime::new(true_sec / 60, true_sec % 60, true_fractional_sec as u64)
             } else {
-                ExactFinishTime::default()
+                ExactInGameTime::default()
             };
 
             in_game_time_offset += 0x03;
@@ -263,8 +263,8 @@ impl SPFooter {
     }
 
     /// Returns the raw bytes of the footer, excluding the trailing CRC32.
-    pub fn raw_data(&self) -> &[u8] {
-        &self.raw_data
+    pub fn raw_data(&self) -> Vec<u8> {
+        self.raw_data.to_owned()
     }
 
     /// Returns the footer format version number.
@@ -285,12 +285,12 @@ impl SPFooter {
     }
 
     /// Returns the sub-millisecond-accurate finish time, computed as the sum of all exact lap times.
-    pub fn exact_finish_time(&self) -> ExactFinishTime {
+    pub fn exact_finish_time(&self) -> ExactInGameTime {
         self.exact_finish_time
     }
 
     /// Returns the sub-millisecond-accurate lap times for all recorded laps.
-    pub fn exact_lap_times(&self) -> &[ExactFinishTime] {
+    pub fn exact_lap_times(&self) -> &[ExactInGameTime] {
         let lap_count = std::cmp::min(self.exact_lap_times.len(), self.lap_count as usize);
         &self.exact_lap_times[0..lap_count]
     }
@@ -301,7 +301,7 @@ impl SPFooter {
     ///
     /// Returns [`SPFooterError::LapSplitIndexError`] if `idx` is greater than or equal to
     /// the number of recorded laps.
-    pub fn exact_lap_time(&self, idx: usize) -> Result<ExactFinishTime, SPFooterError> {
+    pub fn exact_lap_time(&self, idx: usize) -> Result<ExactInGameTime, SPFooterError> {
         if idx >= self.lap_count as usize || idx >= self.exact_lap_times.len() {
             return Err(SPFooterError::LapSplitIndexError);
         }

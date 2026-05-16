@@ -3,10 +3,7 @@ use chrono::NaiveDateTime;
 use crate::{
     Ghost, GhostError,
     crc::{crc16, crc32},
-    footer::{
-        FooterType,
-        ctgp_footer::{CTGPFooter, region::Region},
-    },
+    footer::{FooterType, ctgp_footer::CTGPFooter},
     header::{
         Header, HeaderError,
         combo::{Combo, ComboError, character::Character, vehicle::Vehicle},
@@ -42,6 +39,7 @@ use crate::{
         stick_input::{StickInput, StickInputError},
         yaz1_compress, yaz1_decompress,
     },
+    shroomstrat::Shroomstrat,
     write_bits,
 };
 use std::io::Read;
@@ -229,8 +227,8 @@ fn test_ctgp_metadata() {
         ctgp_metadata.player_id().to_be_bytes(),
         [0xFD, 0x31, 0x97, 0xB0, 0x7D, 0x9D, 0x2B, 0x84]
     );
-    let shroomstrat: [u8; 3] = [3, 0, 0];
-    assert_eq!(ctgp_metadata.shroomstrat(), &shroomstrat);
+    let shroomstrat = Shroomstrat::new(1, 1, 1, 3).unwrap();
+    assert_eq!(ctgp_metadata.shroomstrat(), shroomstrat);
 }
 
 #[test]
@@ -265,7 +263,7 @@ fn print_ctgp_metadata() {
     println!("Exact finish time: {}", ctgp_metadata.exact_finish_time());
     println!("CORE version: {}", ctgp_metadata.core_version());
     print!("Possible CTGP release versions: ");
-    if let Some(ctgp_versions) = ctgp_metadata.possible_ctgp_versions() {
+    if let Some(ctgp_versions) = ctgp_metadata.possible_release_versions() {
         for version in ctgp_versions {
             print!("{}, ", version)
         }
@@ -292,25 +290,35 @@ fn print_ctgp_metadata() {
     }
     println!("]");
 
-    println!("\nMy Stuff enabled? {}", ctgp_metadata.my_stuff_enabled());
-    println!("My Stuff used? {}", ctgp_metadata.my_stuff_used());
-    println!(
-        "USB Gamecube enabled? {}",
-        ctgp_metadata.usb_gamecube_enabled()
-    );
-    println!(
-        "Disc region: {:#?}",
-        ctgp_metadata.disc_region().unwrap_or(Region::Unknown)
-    );
-    println!(
-        "Final lap dubious intersection? {}",
-        ctgp_metadata.final_lap_suspicious_intersection()
-    );
+    if let Some(my_stuff_enabled) = ctgp_metadata.my_stuff_enabled() {
+        println!("\nMy Stuff enabled? {}", my_stuff_enabled);
+    }
 
-    println!(
-        "\nAll lap dubious intersection bools: {:?}",
-        ctgp_metadata.lap_split_suspicious_intersections().unwrap()
-    );
+    if let Some(my_stuff_used) = ctgp_metadata.my_stuff_used() {
+        println!("My Stuff used? {}", my_stuff_used);
+    }
+
+    if let Some(usb_gamecube_enabled) = ctgp_metadata.usb_gamecube_enabled() {
+        println!("USB Gamecube enabled? {}", usb_gamecube_enabled);
+    }
+
+    if let Some(disc_region) = ctgp_metadata.disc_region() {
+        println!("Disc region: {:#?}", disc_region);
+    }
+
+    if let Some(final_lap_dubious_intersection) = ctgp_metadata.final_lap_dubious_intersection() {
+        println!(
+            "Final lap dubious intersection? {}",
+            final_lap_dubious_intersection
+        );
+    }
+
+    if let Some(lap_split_dubious_intersections) = ctgp_metadata.lap_split_dubious_intersections() {
+        println!(
+            "\nAll lap dubious intersection bools: {:?}",
+            lap_split_dubious_intersections
+        );
+    }
 
     println!("\nShroomstrat: {:?}", ctgp_metadata.shroomstrat());
     println!("Category: {:?}", ctgp_metadata.category());
@@ -967,6 +975,7 @@ fn bulk_ghost_collection() {
 }
 */
 
+// TODO: update this test to make sure footer raw data is equal to the raw bytes in the original file
 #[test]
 fn test_compare_saved_ghost() {
     let mut ghost1 =
