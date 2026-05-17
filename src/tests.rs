@@ -953,39 +953,40 @@ fn write_to_ghost() {
 
 // This test requires a "ctgp_ghost_collection" folder not included in the rkg-utils repository, as it's 6.5k ghost files.
 // Downloadable here: https://drive.google.com/file/d/1g-aY0mcBcMq9Zse0dkQEmZqHxV_UhmXM/view?usp=sharing
-/*
 #[test]
 fn bulk_ghost_collection() {
     for entry in std::fs::read_dir("./test_ghosts/ctgp_ghost_collection").unwrap() {
-        if let Some(ghost) = Ghost::new_from_file(entry.as_ref().unwrap().path()).ok() {
-            if let Some(FooterType::CTGPFooter(footer)) = ghost.footer() {
-                if let Some(intersections) = footer.lap_split_suspicious_intersections() {
-                    for intersection in intersections.iter() {
-                        if *intersection {
-                            println!("Found {}", entry.as_ref().unwrap().file_name().into_string().unwrap());
-                        }
+        let entry = entry.unwrap();
+        let mut rkg_data: Vec<u8> = Vec::new();
+        std::fs::File::open(entry.path())
+            .unwrap()
+            .read_to_end(&mut rkg_data)
+            .expect("Couldn't read bytes in file");
+
+        if let Some(ghost) = Ghost::new_from_bytes(&rkg_data).ok() {
+            if let Some(FooterType::CTGPFooter(_)) = ghost.footer() {
+                for (idx, byte) in ghost.raw_data().iter().enumerate() {
+                    if *byte != rkg_data[idx] && idx >= 0x88 {
+                        println!("{:#?}", entry.path());
+                        break;
+                        // println!("Byte {} didn't match: {} vs. {}", idx, byte, rkg_data[idx]);
                     }
-                }
-                if footer.final_lap_suspicious_intersection() {
-                    println!("Found {}", entry.as_ref().unwrap().file_name().into_string().unwrap());
                 }
             }
         }
     }
 }
-*/
 
-// TODO: update this test to make sure footer raw data is equal to the raw bytes in the original file
 #[test]
 fn test_compare_saved_ghost() {
     let mut ghost1 =
-        Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
+        Ghost::new_from_file("./test_ghosts/ghost2_comp_08.rkg").expect("Failed to read ghost");
 
     ghost1
-        .save_to_file("./test_ghosts/JC_LC_Compressed_Resave.rkg")
+        .save_to_file("./test_ghosts/ghost2_comp_08_resave.rkg")
         .expect("Failed to save ghost");
 
-    let ghost2 = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed_Resave.rkg")
+    let ghost2 = Ghost::new_from_file("./test_ghosts/ghost2_comp_08_resave.rkg")
         .expect("Failed to read ghost");
 
     assert_eq!(ghost1.header().raw_data(), ghost2.header().raw_data());

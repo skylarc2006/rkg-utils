@@ -335,6 +335,17 @@ impl CTGPVersion {
 
         Ok(Self::new(major, minor, revision, None))
     }
+
+    /// Returns the 4-byte BCD-encoded CORE version representation, the inverse of [`CTGPVersion::core_from`].
+    pub fn to_core_bytes(&self) -> [u8; 4] {
+        let rev_str = format!("{:04}", self.revision);
+        [
+            u8::from_str_radix(&format!("{:02}", self.major), 16).unwrap_or(0),
+            u8::from_str_radix(&format!("{:02}", self.minor), 16).unwrap_or(0),
+            u8::from_str_radix(&rev_str[0..2], 16).unwrap_or(0),
+            u8::from_str_radix(&rev_str[2..4], 16).unwrap_or(0),
+        ]
+    }
 }
 
 /// Formats the version as `major.minor.revision` or `major.minor.revision-subrevision`

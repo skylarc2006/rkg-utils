@@ -65,6 +65,16 @@ impl Shroomstrat {
         }
     }
 
+    /// Returns the three raw footer bytes `[shroom_1_usage, shroom_2_usage, shroom_3_usage]`.
+    /// A value of 0 means the mushroom was never used.
+    pub fn to_raw_bytes(&self) -> [u8; 3] {
+        [
+            self.shroom_1_usage.unwrap_or(0),
+            self.shroom_2_usage.unwrap_or(0),
+            self.shroom_3_usage.unwrap_or(0),
+        ]
+    }
+
     pub fn to_vec(&self) -> Vec<u8> {
         let mut shroomstrat = Vec::new();
         shroomstrat.resize(self.lap_count.into(), 0u8);

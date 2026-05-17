@@ -66,6 +66,10 @@ pub struct CTGPFooter {
     footer_version: u8,
     /// The run category as determined by CTGP's metadata.
     category: Category,
+    /// Raw category byte, stored to preserve any anomalous values that map to the same [`Category`].
+    category_byte: u8,
+    /// Raw shortcut byte, stored to preserve any anomalous values that map to the same [`Category`].
+    shortcut_byte: u8,
     /// Whether the player respawned at any point during the run.
     respawns: bool,
     /// Whether the Mii name in the ghost file has been replaced.
@@ -98,10 +102,16 @@ pub struct CTGPFooter {
     my_stuff_enabled: Option<bool>,
     /// Total RTC time the game was paused during the run.
     rtc_time_paused: TimeDelta,
+    /// Raw Wii tick count for the paused duration, stored to enforce identical raw data to the file.
+    rtc_time_paused_ticks: u64,
     /// RTC timestamp recorded when the race began.
     rtc_race_start: NaiveDateTime,
+    /// Raw Wii tick count for the race-start timestamp, stored to enforce identical raw data to the file.
+    rtc_race_start_ticks: u64,
     /// RTC timestamp recorded when the race ended.
     rtc_race_end: NaiveDateTime,
+    /// Raw Wii tick count for the race-end timestamp, stored to enforce identical raw data to the file.
+    rtc_race_end_ticks: u64,
     /// Sub-millisecond-accurate lap times, one per recorded lap.
     exact_lap_times: Vec<ExactInGameTime>,
     /// Whether the exact lap times are unreliable.
@@ -196,7 +206,9 @@ impl CTGPFooter {
             }
         }
 
-        let category = Category::try_from(data[end - 0x0A], data[end - 0x0C])?;
+        let category_byte = data[end - 0x0A];
+        let shortcut_byte = data[end - 0x0C];
+        let category = Category::try_from(category_byte, shortcut_byte)?;
 
         let flags = ByteHandler::from(data[end - 0x0B]);
         let respawns = flags.read_bool(0);
@@ -240,14 +252,14 @@ impl CTGPFooter {
             None
         };
 
-        let rtc_time_paused =
-            duration_from_ticks(u64::from_be_bytes(data[end - 0x18..][..0x08].try_into()?));
+        let rtc_time_paused_ticks = u64::from_be_bytes(data[end - 0x18..][..0x08].try_into()?);
+        let rtc_time_paused = duration_from_ticks(rtc_time_paused_ticks);
 
-        let rtc_race_start =
-            datetime_from_timestamp(u64::from_be_bytes(data[end - 0x20..][..0x08].try_into()?));
+        let rtc_race_start_ticks = u64::from_be_bytes(data[end - 0x20..][..0x08].try_into()?);
+        let rtc_race_start = datetime_from_timestamp(rtc_race_start_ticks);
 
-        let rtc_race_end =
-            datetime_from_timestamp(u64::from_be_bytes(data[end - 0x28..][..0x08].try_into()?));
+        let rtc_race_end_ticks = u64::from_be_bytes(data[end - 0x28..][..0x08].try_into()?);
+        let rtc_race_end = datetime_from_timestamp(rtc_race_end_ticks);
 
         // Exact lap split calculation
         let lap_count = data[0x10] as usize;
@@ -441,6 +453,8 @@ impl CTGPFooter {
             len,
             footer_version,
             category,
+            category_byte,
+            shortcut_byte,
             respawns,
             has_mii_name_replaced,
             has_mii_data_replaced,
@@ -455,8 +469,11 @@ impl CTGPFooter {
             my_stuff_used,
             my_stuff_enabled,
             rtc_time_paused,
+            rtc_time_paused_ticks,
             rtc_race_start,
+            rtc_race_start_ticks,
             rtc_race_end,
+            rtc_race_end_ticks,
             exact_lap_times,
             exact_lap_times_unreliable,
             lap_true_time_difference_data: lap_true_time_differences,
@@ -480,9 +497,116 @@ impl CTGPFooter {
     }
 
     /// Returns the raw bytes of the footer, excluding the trailing CRC32.
-    // TODO: calculate this!
+    /// Size is 0xE0 for footer version 7+, 0xD0 for version 6 and below.
     pub fn raw_data(&self) -> Vec<u8> {
-        Vec::from([0u8])
+        let footer_size: usize = if self.footer_version >= 7 { 0xE0 } else { 0xD0 };
+        let mut data = vec![0u8; footer_size];
+        let end = footer_size;
+        let lap_count = self.lap_count as usize;
+
+        // "CKGD" magic
+        data[end - 0x04..end].copy_from_slice(b"CKGD");
+
+        // len (big-endian u32)
+        data[end - 0x08..end - 0x04].copy_from_slice(&(footer_size as u32).to_be_bytes());
+
+        // footer_version
+        data[end - 0x09] = self.footer_version;
+
+        // category_byte (end-0x0A) and shortcut_byte (end-0x0C)
+        data[end - 0x0A] = self.category_byte;
+        data[end - 0x0C] = self.shortcut_byte;
+
+        // flags: respawns, has_mii_name_replaced, ..., cannoned
+        data[end - 0x0B] = (self.respawns as u8)
+            | ((self.has_mii_name_replaced as u8) << 1)
+            | ((self.has_mii_data_replaced as u8) << 2)
+            | ((self.potentially_cheated_ghost as u8) << 3)
+            | ((self.potential_rapidfire as u8) << 4)
+            | ((self.potential_slowdown as u8) << 5)
+            | ((self.went_oob as u8) << 6)
+            | ((self.cannoned as u8) << 7);
+
+        // shroomstrat: shroom_1_usage, shroom_2_usage, shroom_3_usage
+        let shroom_bytes = self.shroomstrat.to_raw_bytes();
+        data[end - 0x0D] = shroom_bytes[0];
+        data[end - 0x0E] = shroom_bytes[1];
+        data[end - 0x0F] = shroom_bytes[2];
+
+        // flags2: final_lap_dubious_intersection, usb_gamecube_enabled, my_stuff_used, my_stuff_enabled
+        data[end - 0x10] = (self.final_lap_dubious_intersection.unwrap_or(false) as u8)
+            | ((self.usb_gamecube_enabled.unwrap_or(false) as u8) << 1)
+            | ((self.my_stuff_used.unwrap_or(false) as u8) << 2)
+            | ((self.my_stuff_enabled.unwrap_or(false) as u8) << 3);
+
+        // rtc_time_paused (8 bytes, big-endian u64 ticks)
+        data[end - 0x18..end - 0x10]
+            .copy_from_slice(&self.rtc_time_paused_ticks.to_be_bytes());
+
+        // rtc_race_start (8 bytes)
+        data[end - 0x20..end - 0x18]
+            .copy_from_slice(&self.rtc_race_start_ticks.to_be_bytes());
+
+        // rtc_race_end (8 bytes)
+        data[end - 0x28..end - 0x20]
+            .copy_from_slice(&self.rtc_race_end_ticks.to_be_bytes());
+
+        // lap_true_time_differences, stored in reverse order in the file
+        let base = end - 0x28 - lap_count * 4;
+        for (i, diff) in self.lap_true_time_difference_data.iter().rev().enumerate() {
+            data[base + i * 4..base + i * 4 + 4].copy_from_slice(diff);
+        }
+
+        // security_data_v5 (0x0C bytes, footer version >= 5)
+        if let Some(sd) = &self.security_data_v5 {
+            data[end - 0x5C..end - 0x50].copy_from_slice(sd);
+        }
+
+        // security_data_v3 (0x04 bytes, footer version >= 3)
+        if let Some(sd) = &self.security_data_v3 {
+            data[end - 0x60..end - 0x5C].copy_from_slice(sd);
+        }
+
+        // disc_region (1 byte, footer version >= 3)
+        if let Some(region) = self.disc_region {
+            data[end - 0x61] = u8::from(region);
+        }
+
+        // lap_split_dubious_intersections (2 bytes, footer version >= 2)
+        // bit (9 - lap) of the big-endian u16 stores each lap's flag
+        if let Some(intersections) = &self.lap_split_dubious_intersections {
+            let mut word: u16 = 0;
+            for (lap, &intersection) in intersections.iter().take(lap_count).enumerate() {
+                if intersection {
+                    word |= 1u16 << (9 - lap);
+                }
+            }
+            data[end - 0x64..end - 0x62].copy_from_slice(&word.to_be_bytes());
+        }
+
+        // core_version (4 bytes, footer version >= 2)
+        if self.footer_version >= 2 {
+            data[end - 0x68..end - 0x64].copy_from_slice(&self.core_version.to_core_bytes());
+        }
+
+        // finish_true_time_difference_data (4 bytes)
+        data[end - 0x6C..end - 0x68].copy_from_slice(&self.finish_true_time_difference_data);
+
+        // player_id (8 bytes)
+        data[end - 0x74..end - 0x6C].copy_from_slice(&self.player_id.to_be_bytes());
+
+        // track_sha1 (0x14 bytes)
+        data[end - 0x88..end - 0x74].copy_from_slice(&self.track_sha1);
+
+        // security_data (0x48 bytes)
+        data[end - 0xD0..end - 0x88].copy_from_slice(&self.security_data);
+
+        // anti_tas_security_data (0x08 bytes, footer version >= 7)
+        if let Some(atsd) = &self.anti_tas_security_data {
+            data[end - 0xD8..end - 0xD0].copy_from_slice(atsd);
+        }
+
+        data
     }
 
     /// Returns the security/signature portion of the footer.
@@ -713,6 +837,36 @@ impl CTGPFooter {
     /// Returns `true` if the footer has zero length.
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+
+    /// Returns the raw category byte as stored in the footer.
+    ///
+    /// Use this instead of deriving from [`CTGPFooter::category`] when exact byte value matters,
+    /// as multiple byte values can map to the same [`Category`] variant.
+    pub fn category_byte(&self) -> u8 {
+        self.category_byte
+    }
+
+    /// Returns the raw shortcut byte as stored in the footer.
+    ///
+    /// The parsed [`Category`] only distinguishes zero vs. non-zero; this preserves the original value.
+    pub fn shortcut_byte(&self) -> u8 {
+        self.shortcut_byte
+    }
+
+    /// Returns the raw Wii tick count for the paused duration.
+    pub fn rtc_time_paused_ticks(&self) -> u64 {
+        self.rtc_time_paused_ticks
+    }
+
+    /// Returns the raw Wii tick count for the race-start timestamp.
+    pub fn rtc_race_start_ticks(&self) -> u64 {
+        self.rtc_race_start_ticks
+    }
+
+    /// Returns the raw Wii tick count for the race-end timestamp.
+    pub fn rtc_race_end_ticks(&self) -> u64 {
+        self.rtc_race_end_ticks
     }
 }
 
