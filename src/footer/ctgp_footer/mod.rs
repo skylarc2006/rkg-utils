@@ -100,6 +100,9 @@ pub struct CTGPFooter {
     /// Whether the player had My Stuff enabled during the run.
     /// `None` for footer versions below 3.
     my_stuff_enabled: Option<bool>,
+    /// Whether the player had anti-TAS deliberately disabled during the run.
+    /// `None` for footer versions below 7.
+    anti_tas_deliberately_disabled: Option<bool>,
     /// Total RTC time the game was paused during the run.
     rtc_time_paused: TimeDelta,
     /// Raw Wii tick count for the paused duration, stored to enforce identical raw data to the file.
@@ -248,6 +251,12 @@ impl CTGPFooter {
 
         let my_stuff_enabled = if footer_version >= 3 {
             Some(flags.read_bool(3))
+        } else {
+            None
+        };
+
+        let anti_tas_deliberately_disabled = if footer_version >= 7 {
+            Some(flags.read_bool(4))
         } else {
             None
         };
@@ -468,6 +477,7 @@ impl CTGPFooter {
             usb_gamecube_enabled,
             my_stuff_used,
             my_stuff_enabled,
+            anti_tas_deliberately_disabled,
             rtc_time_paused,
             rtc_time_paused_ticks,
             rtc_race_start,
@@ -537,19 +547,17 @@ impl CTGPFooter {
         data[end - 0x10] = (self.final_lap_dubious_intersection.unwrap_or(false) as u8)
             | ((self.usb_gamecube_enabled.unwrap_or(false) as u8) << 1)
             | ((self.my_stuff_used.unwrap_or(false) as u8) << 2)
-            | ((self.my_stuff_enabled.unwrap_or(false) as u8) << 3);
+            | ((self.my_stuff_enabled.unwrap_or(false) as u8) << 3)
+            | ((self.anti_tas_deliberately_disabled.unwrap_or(false) as u8) << 4);
 
         // rtc_time_paused (8 bytes, big-endian u64 ticks)
-        data[end - 0x18..end - 0x10]
-            .copy_from_slice(&self.rtc_time_paused_ticks.to_be_bytes());
+        data[end - 0x18..end - 0x10].copy_from_slice(&self.rtc_time_paused_ticks.to_be_bytes());
 
         // rtc_race_start (8 bytes)
-        data[end - 0x20..end - 0x18]
-            .copy_from_slice(&self.rtc_race_start_ticks.to_be_bytes());
+        data[end - 0x20..end - 0x18].copy_from_slice(&self.rtc_race_start_ticks.to_be_bytes());
 
         // rtc_race_end (8 bytes)
-        data[end - 0x28..end - 0x20]
-            .copy_from_slice(&self.rtc_race_end_ticks.to_be_bytes());
+        data[end - 0x28..end - 0x20].copy_from_slice(&self.rtc_race_end_ticks.to_be_bytes());
 
         // lap_true_time_differences, stored in reverse order in the file
         let base = end - 0x28 - lap_count * 4;
@@ -752,6 +760,11 @@ impl CTGPFooter {
     /// Returns the in-game timestamps at which each pause occurred during the run.
     pub fn pause_times(&self) -> &Vec<InGameTime> {
         &self.pause_times
+    }
+
+    /// Returns whether the player had anti-TAS deliberately disabled during the run.
+    pub fn anti_tas_deliberately_disabled(&self) -> Option<bool> {
+        self.anti_tas_deliberately_disabled
     }
 
     /// Returns whether the player had My Stuff enabled during the run.

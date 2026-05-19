@@ -978,16 +978,49 @@ fn bulk_ghost_collection() {
 }
 
 #[test]
+fn current_wr_ghosts() {
+    println!("WR ghosts with anti-TAS deliberately disabled:");
+
+    for entry in std::fs::read_dir("./test_ghosts/current_wr_ghosts").unwrap() {
+        let entry = entry.unwrap();
+        for entry in std::fs::read_dir(entry.path()).unwrap() {
+            let entry = entry.unwrap();
+
+            let mut rkg_data: Vec<u8> = Vec::new();
+            std::fs::File::open(entry.path())
+                .unwrap()
+                .read_to_end(&mut rkg_data)
+                .expect("Couldn't read bytes in file");
+
+            if let Some(ghost) = Ghost::new_from_bytes(&rkg_data).ok() {
+                if let Some(FooterType::CTGPFooter(footer)) = ghost.footer() {
+                    if let Some(disabled) = footer.anti_tas_deliberately_disabled()
+                        && disabled
+                    {
+                        println!(
+                            "{} - {} by {}",
+                            ghost.header().slot_id(),
+                            ghost.header().finish_time(),
+                            ghost.header().mii().name()
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn test_compare_saved_ghost() {
     let mut ghost1 =
-        Ghost::new_from_file("./test_ghosts/ghost2_comp_08.rkg").expect("Failed to read ghost");
+        Ghost::new_from_file("./test_ghosts/9laps_test.rkg").expect("Failed to read ghost");
 
     ghost1
-        .save_to_file("./test_ghosts/ghost2_comp_08_resave.rkg")
+        .save_to_file("./test_ghosts/9laps_test_resave.rkg")
         .expect("Failed to save ghost");
 
-    let ghost2 = Ghost::new_from_file("./test_ghosts/ghost2_comp_08_resave.rkg")
-        .expect("Failed to read ghost");
+    let ghost2 =
+        Ghost::new_from_file("./test_ghosts/9laps_test_resave.rkg").expect("Failed to read ghost");
 
     assert_eq!(ghost1.header().raw_data(), ghost2.header().raw_data());
     assert_eq!(
