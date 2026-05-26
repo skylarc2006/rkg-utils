@@ -1,4 +1,5 @@
 use crate::input_data::{
+    compression_method::CompressionMethod,
     controller_input::ControllerInput,
     dpad_button::{DPadButton, DPadButtonError},
     drift_flag::DriftFlag,
@@ -6,6 +7,7 @@ use crate::input_data::{
     stick_input::{StickInput, StickInputError},
 };
 
+pub mod compression_method;
 pub mod controller_input;
 pub mod dpad_button;
 pub mod drift_flag;
@@ -35,11 +37,11 @@ pub enum InputDataError {
 /// Decoded controller input sequence for a single race, stored as a list of
 /// [`ControllerInput`] runs where each run represents a contiguous span of
 /// identical inputs lasting `frame_duration` frames.
-// TODO: Look over and spot any bugs with this implementation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InputData {
     controller_inputs: Vec<ControllerInput>,
     compressed: bool,
+    compression_method: CompressionMethod,
 }
 
 impl InputData {
@@ -56,6 +58,7 @@ impl InputData {
         Ok(Self {
             controller_inputs,
             compressed,
+            compression_method: CompressionMethod::Vanilla,
         })
     }
 
@@ -210,6 +213,7 @@ impl InputData {
                 face_buttons.contains(&FaceButton::BrakeDrift),
                 drift,
                 face_buttons.contains(&FaceButton::Item),
+                face_buttons.contains(&FaceButton::Pause),
                 face_buttons.contains(&FaceButton::Unknown),
                 dpad.map(|d| d.0).unwrap_or(DPadButton::None),
                 stick.map(|s| s.0).unwrap_or_default(),
@@ -248,6 +252,7 @@ impl InputData {
         Ok(Self {
             controller_inputs,
             compressed,
+            compression_method: CompressionMethod::Vanilla,
         })
     }
 
@@ -385,11 +390,22 @@ impl InputData {
         }
 
         if self.compressed() {
-            yaz1_compress(&raw_data)
+            match self.compression_method() {
+                CompressionMethod::CTGP => ctgp_compress(&raw_data),
+                CompressionMethod::Vanilla => yaz1_compress(&raw_data),
+            }
         } else {
             raw_data.resize(0x2774, 0x00);
             raw_data
         }
+    }
+
+    pub fn compression_method(&self) -> CompressionMethod {
+        self.compression_method
+    }
+
+    pub fn set_compression_method(&mut self, compression_method: CompressionMethod) {
+        self.compression_method = compression_method
     }
 
     /// Returns the number of face button entries that [`raw_data`](Self::raw_data) will write.
@@ -495,6 +511,9 @@ fn to_face_buttons(input: &ControllerInput, drift_flag_bool: bool) -> FaceButton
     }
     if input.item() {
         buttons.push(FaceButton::Item);
+    }
+    if input.pause() {
+        buttons.push(FaceButton::Pause);
     }
     if input.unknown_face_button() {
         buttons.push(FaceButton::Unknown);
@@ -631,6 +650,33 @@ pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
     compressed_data.extend_from_slice(&[0u8; 8]); // padding
     compressed_data.extend_from_slice(&dst);
     compressed_data
+}
+
+/// Compresses a byte slice using CTGP's Yaz1 variant.
+///
+/// Produces a valid Yaz1 stream where every byte is stored as a literal
+/// (all code bytes are `0xFF`). No back-reference search is performed.
+/// The header format is identical to [`yaz1_compress`]; output is padded
+/// to a multiple of 4 bytes.
+pub(crate) fn ctgp_compress(src: &[u8]) -> Vec<u8> {
+    let mut data = Vec::with_capacity(src.len() + (src.len() + 7) / 8);
+    for chunk in src.chunks(8) {
+        data.push(0xFF);
+        data.extend_from_slice(chunk);
+    }
+
+    let remainder = data.len() % 4;
+    if remainder != 0 {
+        data.resize(data.len() + (4 - remainder), 0);
+    }
+
+    let mut input_data = Vec::with_capacity(data.len() + 20);
+    input_data.extend_from_slice(&((data.len() + 16) as u32).to_be_bytes());
+    input_data.extend_from_slice(b"Yaz1");
+    input_data.extend_from_slice(&(src.len() as u32).to_be_bytes());
+    input_data.extend_from_slice(&[0u8; 8]);
+    input_data.extend_from_slice(&data);
+    input_data
 }
 
 fn encode_yaz1(src: &[u8]) -> Vec<u8> {

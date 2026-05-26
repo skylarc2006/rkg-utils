@@ -16,6 +16,7 @@ pub struct ControllerInput {
     brake_drift: bool,
     drift_flag: DriftFlag,
     item: bool,
+    pause: bool,
     /// Unknown face input; mask 0xF0 in a button byte. If creating a new `ControllerInput`, this can be essentially ignored and set to false.
     unknown_face_button: bool,
     dpad: DPadButton,
@@ -31,6 +32,7 @@ impl ControllerInput {
         brake_drift: bool,
         drift_flag: DriftFlag,
         item: bool,
+        pause: bool,
         unknown_face_button: bool,
         dpad: DPadButton,
         stick: StickInput,
@@ -42,6 +44,7 @@ impl ControllerInput {
             brake_drift,
             drift_flag,
             item,
+            pause,
             unknown_face_button,
             dpad,
             stick,
@@ -53,8 +56,10 @@ impl ControllerInput {
     pub fn face_buttons_equal_to(&self, other: ControllerInput) -> bool {
         self.accelerator() == other.accelerator()
             && self.brake() == other.brake()
+            && self.brake_drift() == other.brake_drift()
             && self.drift_flag() == other.drift_flag()
             && self.item() == other.item()
+            && self.pause() == other.pause()
             && self.unknown_face_button() == other.unknown_face_button()
     }
 
@@ -96,6 +101,14 @@ impl ControllerInput {
 
     pub fn set_item(&mut self, value: bool) {
         self.item = value;
+    }
+
+    pub fn pause(&self) -> bool {
+        self.pause
+    }
+
+    pub fn set_pause(&mut self, value: bool) {
+        self.pause = value;
     }
 
     /// Unknown face input; mask 0xF0 in a button byte.

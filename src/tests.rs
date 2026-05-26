@@ -963,15 +963,39 @@ fn bulk_ghost_collection() {
             .read_to_end(&mut rkg_data)
             .expect("Couldn't read bytes in file");
 
-        if let Some(ghost) = Ghost::new_from_bytes(&rkg_data).ok() {
-            if let Some(FooterType::CTGPFooter(_)) = ghost.footer() {
-                for (idx, byte) in ghost.raw_data().iter().enumerate() {
-                    if *byte != rkg_data[idx] && idx >= 0x88 {
-                        println!("{:#?}", entry.path());
-                        break;
-                        // println!("Byte {} didn't match: {} vs. {}", idx, byte, rkg_data[idx]);
+        if let Some(mut ghost) = Ghost::new_from_bytes(&rkg_data).ok() {
+            let ghost_raw = ghost.raw_data();
+            if let Some(FooterType::CTGPFooter(footer)) = ghost.footer() {
+                let ckgd_len = rkg_data[rkg_data.len() - 0x09] as usize;
+                let raw_ckgd = &rkg_data[rkg_data.len() - 0x04 - ckgd_len..rkg_data.len() - 0x04];
+
+                let len = rkg_data.len().max(ghost_raw.len());
+                for i in 0..len {
+                    let a = rkg_data.get(i).copied();
+                    let b = ghost_raw.get(i).copied();
+                    if a != b {
+                        println!(
+                            "Byte mismatch at 0x{:04X}: file={} ghost={}",
+                            i,
+                            a.map_or("--".to_string(), |v| format!("{:02X}", v)),
+                            b.map_or("--".to_string(), |v| format!("{:02X}", v)),
+                        );
                     }
                 }
+
+                assert_eq!(
+                    &footer.raw_data(),
+                    raw_ckgd,
+                    "File: {}",
+                    entry.file_name().into_string().unwrap()
+                );
+
+                assert_eq!(
+                    &ghost.raw_data(),
+                    &rkg_data,
+                    "File: {}",
+                    entry.file_name().into_string().unwrap()
+                )
             }
         }
     }
@@ -1012,15 +1036,15 @@ fn current_wr_ghosts() {
 
 #[test]
 fn test_compare_saved_ghost() {
-    let mut ghost1 =
-        Ghost::new_from_file("./test_ghosts/9laps_test.rkg").expect("Failed to read ghost");
+    let mut ghost1 = Ghost::new_from_file("./test_ghosts/02m42s5850962 Daelyn.rkg")
+        .expect("Failed to read ghost");
 
     ghost1
-        .save_to_file("./test_ghosts/9laps_test_resave.rkg")
+        .save_to_file("./test_ghosts/02m42s5850962 Daelyn_resave.rkg")
         .expect("Failed to save ghost");
 
-    let ghost2 =
-        Ghost::new_from_file("./test_ghosts/9laps_test_resave.rkg").expect("Failed to read ghost");
+    let mut ghost2 = Ghost::new_from_file("./test_ghosts/02m42s5850962 Daelyn_resave.rkg")
+        .expect("Failed to read ghost");
 
     assert_eq!(ghost1.header().raw_data(), ghost2.header().raw_data());
     assert_eq!(
@@ -1065,7 +1089,7 @@ fn test_sp_footer() {
         println!("Lap {}: {}", index + 1, time);
     }
     println!("Total: {}", sp_footer.exact_finish_time());
-    println!("Has speed mod? {}", sp_footer.has_speed_mod());
+    println!("Has speed mod? {}", sp_footer.is_200cc());
     println!("Has ultra shortcut? {}", sp_footer.has_ultra_shortcut());
     println!(
         "Has horizontal wall glitch? {}",
@@ -1823,6 +1847,7 @@ fn controller_input_new_and_getters() {
         DriftFlag::AutoDetect,
         false,
         false,
+        false,
         DPadButton::Up,
         stick,
         5,
@@ -1848,6 +1873,7 @@ fn controller_input_face_buttons_equal() {
         DriftFlag::AutoDetect,
         false,
         false,
+        false,
         DPadButton::None,
         stick,
         1,
@@ -1857,6 +1883,7 @@ fn controller_input_face_buttons_equal() {
         false,
         false,
         DriftFlag::AutoDetect,
+        false,
         false,
         false,
         DPadButton::Up,
@@ -1886,6 +1913,7 @@ fn input_data_illegal_drift_or_brake_input() {
         DriftFlag::AutoDetect,
         false,
         false,
+        false,
         DPadButton::None,
         StickInput::new(7, 7).unwrap(),
         10,
@@ -1898,6 +1926,7 @@ fn input_data_illegal_drift_or_brake_input() {
         DriftFlag::AutoDetect,
         false,
         false,
+        false,
         DPadButton::None,
         StickInput::new(7, 7).unwrap(),
         10,
@@ -1908,6 +1937,7 @@ fn input_data_illegal_drift_or_brake_input() {
         false,
         false,
         DriftFlag::AutoDetect,
+        false,
         false,
         false,
         DPadButton::None,
@@ -1924,6 +1954,7 @@ fn input_data_illegal_drift_or_brake_input() {
         false,
         false,
         DriftFlag::Disabled,
+        false,
         false,
         false,
         DPadButton::None,
@@ -1938,6 +1969,7 @@ fn input_data_illegal_drift_or_brake_input() {
         DriftFlag::Enabled,
         false,
         false,
+        false,
         DPadButton::None,
         StickInput::new(7, 7).unwrap(),
         10,
@@ -1948,6 +1980,7 @@ fn input_data_illegal_drift_or_brake_input() {
         false,
         false,
         DriftFlag::Disabled,
+        false,
         false,
         false,
         DPadButton::None,
@@ -1966,6 +1999,7 @@ fn input_data_illegal_drift_or_brake_input() {
         DriftFlag::Disabled,
         false,
         false,
+        false,
         DPadButton::None,
         StickInput::new(7, 7).unwrap(),
         10,
@@ -1978,6 +2012,7 @@ fn input_data_illegal_drift_or_brake_input() {
         DriftFlag::Disabled,
         false,
         false,
+        false,
         DPadButton::None,
         StickInput::new(7, 7).unwrap(),
         10,
@@ -1988,6 +2023,7 @@ fn input_data_illegal_drift_or_brake_input() {
         false,
         false,
         DriftFlag::Disabled,
+        false,
         false,
         false,
         DPadButton::None,
@@ -2006,6 +2042,7 @@ fn input_data_illegal_drift_or_brake_input() {
         DriftFlag::Disabled,
         false,
         false,
+        false,
         DPadButton::None,
         StickInput::new(7, 7).unwrap(),
         10,
@@ -2018,6 +2055,7 @@ fn input_data_illegal_drift_or_brake_input() {
         DriftFlag::Enabled,
         false,
         false,
+        false,
         DPadButton::None,
         StickInput::new(7, 7).unwrap(),
         10,
@@ -2028,6 +2066,7 @@ fn input_data_illegal_drift_or_brake_input() {
         false,
         false,
         DriftFlag::Enabled,
+        false,
         false,
         false,
         DPadButton::None,
@@ -2047,6 +2086,7 @@ fn input_data_single_input_uncompressed() {
         false,
         false,
         DriftFlag::AutoDetect,
+        false,
         false,
         false,
         DPadButton::None,
@@ -2079,6 +2119,7 @@ fn input_data_get_input_at_frame_zero_none() {
         DriftFlag::AutoDetect,
         false,
         false,
+        false,
         DPadButton::None,
         stick,
         10,
@@ -2095,6 +2136,7 @@ fn input_data_get_input_at_frame_valid() {
         false,
         false,
         DriftFlag::AutoDetect,
+        false,
         false,
         false,
         DPadButton::None,
@@ -2148,6 +2190,7 @@ fn input_data_set_compressed() {
         false,
         false,
         DriftFlag::AutoDetect,
+        false,
         false,
         false,
         DPadButton::None,
@@ -2392,6 +2435,7 @@ fn ghost_new_no_footer() {
         DriftFlag::AutoDetect,
         false,
         false,
+        false,
         DPadButton::None,
         stick,
         100,
@@ -2411,6 +2455,7 @@ fn ghost_new_syncs_compression_true() {
         false,
         false,
         DriftFlag::AutoDetect,
+        false,
         false,
         false,
         DPadButton::None,
@@ -2433,6 +2478,7 @@ fn ghost_new_syncs_compression_false() {
         DriftFlag::AutoDetect,
         false,
         false,
+        false,
         DPadButton::None,
         stick,
         100,
@@ -2451,6 +2497,7 @@ fn ghost_new_decompressed_length_correct() {
         false,
         false,
         DriftFlag::AutoDetect,
+        false,
         false,
         false,
         DPadButton::None,
@@ -2473,7 +2520,7 @@ fn ghost_new_decompressed_length_correct() {
 
 #[test]
 fn ghost_file_crc32_valid() {
-    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let mut ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let raw = ghost.raw_data();
     let expected = crc32(&raw[..raw.len() - 4]);
     assert_eq!(ghost.file_crc32(), expected);
@@ -2489,7 +2536,7 @@ fn ghost_base_crc32_is_prefix_crc() {
 
 #[test]
 fn ghost_raw_data_last_4_bytes_are_file_crc32() {
-    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let mut ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let raw = ghost.raw_data();
     let stored = u32::from_be_bytes(raw[raw.len() - 4..].try_into().unwrap());
     assert_eq!(stored, ghost.file_crc32());
@@ -2497,7 +2544,7 @@ fn ghost_raw_data_last_4_bytes_are_file_crc32() {
 
 #[test]
 fn ghost_raw_data_reparse_identical() {
-    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let mut ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let raw = ghost.raw_data();
     let reparsed = Ghost::new_from_bytes(&raw).unwrap();
     assert_eq!(reparsed.header().finish_time().to_string(), "01:03.904");

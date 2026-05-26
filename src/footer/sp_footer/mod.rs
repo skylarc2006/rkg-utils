@@ -52,8 +52,8 @@ pub struct SPFooter {
     exact_finish_time: ExactInGameTime,
     /// Sub-millisecond-accurate lap times, one per recorded lap (up to 11).
     exact_lap_times: [ExactInGameTime; 11],
-    /// Whether a speed modifier was active during the run.
-    has_speed_mod: bool,
+    /// Whether the run was in 200cc.
+    is_200cc: bool,
     /// Whether an ultra shortcut was performed during the run.
     has_ultra_shortcut: bool,
     /// Whether a horizontal wall glitch was performed during the run.
@@ -190,7 +190,7 @@ impl SPFooter {
         current_offset += (11 - lap_count as usize) * 0x04;
 
         let bools = ByteHandler::from(footer_data[current_offset]);
-        let has_speed_mod = bools.read_bool(7);
+        let is_200cc = bools.read_bool(7);
         let has_ultra_shortcut = bools.read_bool(6);
         let has_horizontal_wall_glitch = bools.read_bool(5);
         let has_wallride = bools.read_bool(4);
@@ -249,7 +249,7 @@ impl SPFooter {
             track_sha1,
             exact_finish_time,
             exact_lap_times,
-            has_speed_mod,
+            is_200cc,
             has_ultra_shortcut,
             has_horizontal_wall_glitch,
             has_wallride,
@@ -309,8 +309,8 @@ impl SPFooter {
     }
 
     /// Returns whether a speed modifier was active during the run.
-    pub fn has_speed_mod(&self) -> bool {
-        self.has_speed_mod
+    pub fn is_200cc(&self) -> bool {
+        self.is_200cc
     }
 
     /// Returns whether an ultra shortcut was performed during the run.

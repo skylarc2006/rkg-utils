@@ -152,7 +152,7 @@ pub struct CTGPFooter {
     security_data: [u8; 0x48],
     /// The CTGP security data block related to its anti-TAS feature, introduced in footer version 7.
     /// `None` for footer versions below 7.
-    anti_tas_security_data: Option<[u8; 0x08]>,
+    anti_tas_security_data: Option<[u8; 0x0A]>,
     /// SHA-1 hash of the full ghost file.
     ghost_sha1: [u8; 0x14],
     /// In-game timestamps (relative to race start) at which each pause occurred.
@@ -408,8 +408,8 @@ impl CTGPFooter {
         let track_sha1: [u8; 0x14] = data[end - 0x88..][..0x14].try_into().unwrap();
         let security_data: [u8; 0x48] = data[end - 0xD0..][..0x48].try_into().unwrap();
 
-        let anti_tas_security_data: Option<[u8; 0x08]> = if footer_version >= 7 {
-            Some(data[end - 0xD8..][..0x08].try_into().unwrap())
+        let anti_tas_security_data: Option<[u8; 0x0A]> = if footer_version >= 7 {
+            Some(data[end - 0xDA..][..0x0A].try_into().unwrap())
         } else {
             None
         };
@@ -609,9 +609,9 @@ impl CTGPFooter {
         // security_data (0x48 bytes)
         data[end - 0xD0..end - 0x88].copy_from_slice(&self.security_data);
 
-        // anti_tas_security_data (0x08 bytes, footer version >= 7)
+        // anti_tas_security_data (0x0A bytes, footer version >= 7)
         if let Some(atsd) = &self.anti_tas_security_data {
-            data[end - 0xD8..end - 0xD0].copy_from_slice(atsd);
+            data[end - 0xDA..end - 0xD0].copy_from_slice(atsd);
         }
 
         data

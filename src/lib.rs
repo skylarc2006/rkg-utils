@@ -23,7 +23,7 @@ use crate::{
     crc::crc32,
     footer::{FooterType, ctgp_footer::CTGPFooter, sp_footer::SPFooter},
     header::Header,
-    input_data::InputData,
+    input_data::{InputData, compression_method::CompressionMethod},
 };
 
 pub mod byte_handler;
@@ -140,9 +140,10 @@ impl Ghost {
             return Err(GhostError::DataLengthTooShort);
         }
 
-        let input_data = InputData::new_from_bytes(&bytes[0x88..0x88 + input_data_len])?;
+        let mut input_data = InputData::new_from_bytes(&bytes[0x88..0x88 + input_data_len])?;
 
         let footer = if let Ok(ctgp_footer) = CTGPFooter::new(bytes) {
+            input_data.set_compression_method(CompressionMethod::CTGP);
             Some(FooterType::CTGPFooter(ctgp_footer))
         } else if let Ok(sp_footer) = SPFooter::new(bytes) {
             Some(FooterType::SPFooter(sp_footer))
@@ -208,8 +209,21 @@ impl Ghost {
     /// Returns the computed raw file bytes.
     ///
     /// The result always reflects the current state of all parsed fields.
-    pub fn raw_data(&self) -> Vec<u8> {
+    pub fn raw_data(&mut self) -> Vec<u8> {
         let mut buf = Vec::from(self.header.raw_data());
+
+        if let Some(FooterType::CTGPFooter(_)) = &self.footer()
+            && self.should_preserve_external_footer
+        {
+            let _ = &self
+                .input_data_mut()
+                .set_compression_method(CompressionMethod::CTGP);
+        } else {
+            let _ = &self
+                .input_data_mut()
+                .set_compression_method(CompressionMethod::Vanilla);
+        }
+
         buf.extend_from_slice(&self.input_data.raw_data());
         let base_crc32 = crc32(&buf);
         buf.extend_from_slice(&base_crc32.to_be_bytes());
@@ -261,7 +275,7 @@ impl Ghost {
     }
 
     /// Returns the CRC-32 of the entire file excluding its final 4 bytes.
-    pub fn file_crc32(&self) -> u32 {
+    pub fn file_crc32(&mut self) -> u32 {
         let raw = self.raw_data();
         crc32(&raw[..raw.len() - 4])
     }

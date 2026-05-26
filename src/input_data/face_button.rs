@@ -18,6 +18,8 @@ pub(crate) enum FaceButton {
     BrakeDrift,
     /// Item button (bit 2, mask `0x04`).
     Item,
+    /// CTGP pause input (bit 6, mask `0x40`).
+    Pause,
     /// An unrecognized button bit was set in the upper nibble.
     Unknown,
 }
@@ -51,8 +53,12 @@ impl TryFrom<u8> for FaceButtons {
             buttons.push(FaceButton::Item);
         }
 
-        // 0x40 is the CTGP pause mask and would trigger this otherwise
-        if value & 0xF0 != 0 && value & 0x40 == 0 {
+        if value & 0x40 != 0 {
+            buttons.push(FaceButton::Pause);
+        }
+
+        // 0x40 is the CTGP pause mask and 0x10 is BrakeDrift — exclude both
+        if value & 0xE0 != 0 && value & 0x40 == 0 {
             buttons.push(FaceButton::Unknown);
         }
 
@@ -75,6 +81,7 @@ impl FaceButtons {
                 FaceButton::Drift => 0x08,
                 FaceButton::BrakeDrift => 0x10,
                 FaceButton::Unknown => 0x20,
+                FaceButton::Pause => 0x40,
             };
         }
         byte
