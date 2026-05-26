@@ -227,10 +227,10 @@ impl Ghost {
         buf.extend_from_slice(&self.input_data.raw_data());
         let base_crc32 = crc32(&buf);
         buf.extend_from_slice(&base_crc32.to_be_bytes());
-        if self.should_preserve_external_footer {
-            if let Some(footer) = &self.footer {
-                buf.extend_from_slice(&footer.raw_data());
-            }
+        if self.should_preserve_external_footer
+            && let Some(footer) = &self.footer
+        {
+            buf.extend_from_slice(&footer.raw_data());
         }
         let file_crc32 = crc32(&buf);
         buf.extend_from_slice(&file_crc32.to_be_bytes());

@@ -76,8 +76,7 @@ impl Shroomstrat {
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
-        let mut shroomstrat = Vec::new();
-        shroomstrat.resize(self.lap_count.into(), 0u8);
+        let mut shroomstrat = vec![0; self.lap_count.into()];
 
         for shroom in [
             self.shroom_1_usage,
@@ -85,10 +84,9 @@ impl Shroomstrat {
             self.shroom_3_usage,
         ]
         .iter()
+        .flatten()
         {
-            if let Some(shroom) = shroom {
-                shroomstrat[(*shroom - 1) as usize] += 1;
-            }
+            shroomstrat[(*shroom - 1) as usize] += 1;
         }
 
         shroomstrat

@@ -113,7 +113,7 @@ impl InputData {
 
         let mut face_button_inputs: Vec<(FaceButtons, u32)> =
             Vec::with_capacity(face_button_input_count as usize);
-        for chunk in face_button_array.chunks_exact(2).into_iter() {
+        for chunk in face_button_array.chunks_exact(2) {
             let face_buttons = FaceButtons::try_from(chunk[0])?;
             let frame_duration = chunk[1] as u32;
             face_button_inputs.push((face_buttons, frame_duration));
@@ -121,7 +121,7 @@ impl InputData {
 
         let mut stick_inputs: Vec<(StickInput, u32)> =
             Vec::with_capacity(stick_input_count as usize);
-        for chunk in stick_input_array.chunks_exact(2).into_iter() {
+        for chunk in stick_input_array.chunks_exact(2) {
             let stick_input = StickInput::try_from(chunk[0])?;
             let frame_duration = chunk[1] as u32;
             stick_inputs.push((stick_input, frame_duration));
@@ -129,7 +129,7 @@ impl InputData {
 
         let mut dpad_button_inputs: Vec<(DPadButton, u32)> =
             Vec::with_capacity(dpad_button_input_count as usize);
-        for chunk in dpad_button_array.chunks_exact(2).into_iter() {
+        for chunk in dpad_button_array.chunks_exact(2) {
             let dpad_button = DPadButton::try_from(chunk[0])?;
             let frame_duration = (u16::from_be_bytes([chunk[0], chunk[1]]) & 0xFFF) as u32;
             dpad_button_inputs.push((dpad_button, frame_duration));
@@ -417,16 +417,14 @@ impl InputData {
         let mut current_face_input_frames = 0u32;
         let mut face_button_input_count = 0u16;
         for (idx, current_input) in self.controller_inputs().iter().enumerate() {
-            if idx == 0 {
-                current_face_input_frames += current_input.frame_duration();
-            } else if current_input.face_buttons_equal_to(self.controller_inputs[idx - 1]) {
+            if idx == 0 || current_input.face_buttons_equal_to(self.controller_inputs[idx - 1]) {
                 current_face_input_frames += current_input.frame_duration();
             } else {
-                face_button_input_count += ((current_face_input_frames + 254) / 255) as u16;
+                face_button_input_count += current_face_input_frames.div_ceil(255) as u16;
                 current_face_input_frames = current_input.frame_duration();
             }
         }
-        face_button_input_count += ((current_face_input_frames + 254) / 255) as u16;
+        face_button_input_count += current_face_input_frames.div_ceil(255) as u16;
         face_button_input_count
     }
 
@@ -439,16 +437,14 @@ impl InputData {
         let mut current_stick_input_frames = 0u32;
         let mut stick_input_count = 0u16;
         for (idx, current_input) in self.controller_inputs().iter().enumerate() {
-            if idx == 0 {
-                current_stick_input_frames += current_input.frame_duration();
-            } else if current_input.stick() == self.controller_inputs[idx - 1].stick() {
+            if idx == 0 || current_input.stick() == self.controller_inputs[idx - 1].stick() {
                 current_stick_input_frames += current_input.frame_duration();
             } else {
-                stick_input_count += ((current_stick_input_frames + 254) / 255) as u16;
+                stick_input_count += current_stick_input_frames.div_ceil(255) as u16;
                 current_stick_input_frames = current_input.frame_duration();
             }
         }
-        stick_input_count += ((current_stick_input_frames + 254) / 255) as u16;
+        stick_input_count += current_stick_input_frames.div_ceil(255) as u16;
         stick_input_count
     }
 
@@ -461,16 +457,14 @@ impl InputData {
         let mut current_dpad_input_frames = 0u32;
         let mut dpad_button_input_count = 0u16;
         for (idx, current_input) in self.controller_inputs().iter().enumerate() {
-            if idx == 0 {
-                current_dpad_input_frames += current_input.frame_duration();
-            } else if current_input.dpad() == self.controller_inputs[idx - 1].dpad() {
+            if idx == 0 || current_input.dpad() == self.controller_inputs[idx - 1].dpad() {
                 current_dpad_input_frames += current_input.frame_duration();
             } else {
-                dpad_button_input_count += ((current_dpad_input_frames + 4094) / 4095) as u16;
+                dpad_button_input_count += current_dpad_input_frames.div_ceil(4095) as u16;
                 current_dpad_input_frames = current_input.frame_duration();
             }
         }
-        dpad_button_input_count += ((current_dpad_input_frames + 4094) / 4095) as u16;
+        dpad_button_input_count += current_dpad_input_frames.div_ceil(4095) as u16;
         dpad_button_input_count
     }
 
@@ -534,9 +528,7 @@ fn effective_drift_flags(inputs: &[ControllerInput]) -> Vec<bool> {
         };
         if !brake {
             simulated = false;
-        } else if accel && brake && !prev_accel && !prev_brake {
-            simulated = true;
-        } else if brake && !prev_brake && prev_accel {
+        } else if (prev_accel || accel) && !prev_brake && brake {
             simulated = true;
         } else if accel && !prev_accel && prev_brake {
             simulated = false;
@@ -550,7 +542,7 @@ fn effective_drift_flags(inputs: &[ControllerInput]) -> Vec<bool> {
     result
 }
 
-fn assign_auto_detect_drift_flags(inputs: &mut Vec<ControllerInput>) {
+fn assign_auto_detect_drift_flags(inputs: &mut [ControllerInput]) {
     let mut simulated = false;
     for idx in 0..inputs.len() {
         let accel = inputs[idx].accelerator();
@@ -562,9 +554,7 @@ fn assign_auto_detect_drift_flags(inputs: &mut Vec<ControllerInput>) {
         };
         if !brake {
             simulated = false;
-        } else if accel && brake && !prev_accel && !prev_brake {
-            simulated = true;
-        } else if brake && !prev_brake && prev_accel {
+        } else if (prev_accel || accel) && !prev_brake && brake {
             simulated = true;
         } else if accel && !prev_accel && prev_brake {
             simulated = false;
@@ -659,7 +649,7 @@ pub(crate) fn yaz1_compress(src: &[u8]) -> Vec<u8> {
 /// The header format is identical to [`yaz1_compress`]; output is padded
 /// to a multiple of 4 bytes.
 pub(crate) fn ctgp_compress(src: &[u8]) -> Vec<u8> {
-    let mut data = Vec::with_capacity(src.len() + (src.len() + 7) / 8);
+    let mut data = Vec::with_capacity(src.len() + src.len().div_ceil(8));
     for chunk in src.chunks(8) {
         data.push(0xFF);
         data.extend_from_slice(chunk);

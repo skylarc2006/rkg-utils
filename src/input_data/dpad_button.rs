@@ -36,7 +36,7 @@ impl TryFrom<u8> for DPadButton {
 
     /// Expects full DPad button byte
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        if value & 0x80 == 1 {
+        if value & 0x80 != 0 {
             return Ok(DPadButton::Unknown);
         }
 
