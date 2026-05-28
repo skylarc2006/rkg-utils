@@ -3,6 +3,7 @@ use crate::{
     byte_handler::{ByteHandler, FromByteHandler},
     footer::{ctgp_footer::exact_in_game_time::ExactInGameTime, sp_footer::sp_version::SPVersion},
     header::in_game_time::{InGameTime, InGameTimeError},
+    shroomstrat::Shroomstrat,
 };
 
 pub mod sp_version;
@@ -25,6 +26,9 @@ pub enum SPFooterError {
     /// An in-game time field could not be parsed.
     #[error("In Game Time Error: {0}")]
     InGameTimeError(#[from] InGameTimeError),
+    /// Shroomstrat parsing failed.
+    #[error("Shroomstrat Error: {0}")]
+    ShroomstratError(#[from] crate::shroomstrat::ShroomstratError),
     /// A lap split index was out of range for the recorded lap count.
     #[error("Lap split index not semantically valid")]
     LapSplitIndexError,
@@ -39,8 +43,6 @@ pub enum SPFooterError {
 /// including high-precision timing, version information, track hash, mushroom strategy,
 /// and various gameplay flags. Some fields are only present in later footer versions.
 pub struct SPFooter {
-    /// The raw bytes of the footer (excluding the trailing CRC32).
-    raw_data: Vec<u8>,
     /// The footer format version, which determines available fields and layout.
     footer_version: u32,
     /// One or more MKW-SP release versions consistent with the footer version number.
@@ -50,8 +52,14 @@ pub struct SPFooter {
     track_sha1: [u8; 0x14],
     /// Sub-millisecond-accurate finish time, computed as the sum of all exact lap times.
     exact_finish_time: ExactInGameTime,
+    /// Whether the exact finish time is unreliable.
+    exact_finish_time_unreliable: bool,
     /// Sub-millisecond-accurate lap times, one per recorded lap (up to 11).
-    exact_lap_times: [ExactInGameTime; 11],
+    exact_lap_times: Vec<ExactInGameTime>,
+    /// Whether the exact lap times are unreliable.
+    exact_lap_times_unreliable: bool,
+    /// Raw data representations of the exact lap time differences.
+    lap_true_time_difference_data: Vec<[u8; 4]>,
     /// Whether the run was in 200cc.
     is_200cc: bool,
     /// Whether an ultra shortcut was performed during the run.
@@ -61,7 +69,7 @@ pub struct SPFooter {
     /// Whether a wallride was performed during the run.
     has_wallride: bool,
     /// Per-lap mushroom usage counts. `None` for footer version 0, which lacks this data.
-    shroomstrat: Option<[u8; 11]>,
+    shroomstrat: Option<Shroomstrat>,
     /// Whether vanilla mode was enabled during the run. `None` for footer versions below 3.
     is_vanilla_mode_enabled: Option<bool>,
     /// Whether simplified controls were enabled during the run. `None` for footer versions below 4.
@@ -93,7 +101,7 @@ impl SPFooter {
     /// - The footer version exceeds 5 ([`SPFooterError::InvalidFooterVersion`]).
     /// - Any byte slice conversion, integer parse, or time parse fails.
     pub fn new(data: &[u8]) -> Result<Self, SPFooterError> {
-        if data.len() < 0x04 {
+        if data.len() < 0x0C {
             return Err(SPFooterError::DataLengthTooShort);
         }
 
@@ -101,16 +109,8 @@ impl SPFooter {
             return Err(SPFooterError::NotRKGD);
         }
 
-        if data.len() < 0x08 {
-            return Err(SPFooterError::DataLengthTooShort);
-        }
-
         if data[data.len() - 0x08..data.len() - 0x04] != *b"SPGD" {
             return Err(SPFooterError::NotSPGD);
-        }
-
-        if data.len() < 0x0C {
-            return Err(SPFooterError::DataLengthTooShort);
         }
 
         let footer_len = (u32::from_be_bytes(
@@ -122,9 +122,6 @@ impl SPFooter {
         if data.len() < footer_len {
             return Err(SPFooterError::DataLengthTooShort);
         }
-
-        let lap_count = data[0x10];
-        let laps_data = &data[0x11..0x32];
 
         let footer_data = &data[data.len() - footer_len - 0x04..data.len() - 0x04];
 
@@ -145,21 +142,47 @@ impl SPFooter {
         current_offset += 0x14;
 
         // Exact lap split calculation
+        let lap_count = data[0x10] as usize;
+
+        let lap_time_data = &data[0x11..0x11 + (3 * lap_count)];
+        let mut lap_times = Vec::new();
+
+        for lap_time in lap_time_data.chunks_exact(3) {
+            lap_times.push(InGameTime::from_byte_handler(lap_time)?);
+        }
+
+        let lap_true_time_differences =
+            &data[current_offset..current_offset + lap_count * 0x04];
+        let mut lap_true_time_difference_data = Vec::new();
+        lap_true_time_difference_data.resize(lap_count, [0u8; 4]);
+
+        for (idx, difference) in lap_true_time_differences.chunks_exact(4).enumerate() {
+            lap_true_time_difference_data[idx] = difference.try_into().unwrap();
+        }
+
+        let mut exact_lap_times = Vec::new();
+        exact_lap_times.resize(lap_count, ExactInGameTime::default());
+
         let mut previous_subtractions = 0i64;
-        let mut exact_lap_times = [ExactInGameTime::default(); 11];
-        let mut in_game_time_offset = 0x00usize;
         let mut subtraction_ps = 0i64;
+        let mut exact_lap_times_unreliable = false;
+        let exact_finish_time_unreliable;
 
-        for exact_lap_time in exact_lap_times.iter_mut().take(lap_count as usize) {
-            let mut true_time_ps_subtraction = ((f32::from_be_bytes(
-                footer_data[current_offset..current_offset + 0x04].try_into()?,
-            ) as f64)
-                * 1e+9)
-                .floor() as i64;
+        for lap_true_time_difference in lap_true_time_difference_data.iter() {
+            if f32::from_be_bytes(*lap_true_time_difference) < -1.0 {
+                exact_lap_times_unreliable = true;
+            }
+        }
 
-            let lap_time = InGameTime::from_byte_handler(
-                &laps_data[in_game_time_offset..=in_game_time_offset + 0x02],
-            )?;
+        for (idx, exact_lap_time) in exact_lap_times.iter_mut().enumerate() {
+            let lap_true_time_difference = if exact_lap_times_unreliable {
+                0f32
+            } else {
+                f32::from_be_bytes(lap_true_time_difference_data[idx])
+            };
+
+            let mut true_time_ps_subtraction =
+                (lap_true_time_difference as f64 * 1e+9).floor() as i64;
 
             // subtract the sum of the previous laps' difference because the lap differences add up to
             // have its decimal portion be equal to the total time
@@ -171,7 +194,8 @@ impl SPFooter {
             }
             previous_subtractions += true_time_ps_subtraction;
 
-            let true_ps = lap_time.igt_to_millis() as i64 * 1e+9 as i64 + true_time_ps_subtraction;
+            let true_ps =
+                lap_times[idx].igt_to_millis() as i64 * 1e+9 as i64 + true_time_ps_subtraction;
             let true_sec = (true_ps / 1e+12 as i64) as u8;
             let true_fractional_sec = true_ps % 1e+12 as i64;
 
@@ -180,12 +204,31 @@ impl SPFooter {
             } else {
                 ExactInGameTime::default()
             };
-
-            in_game_time_offset += 0x03;
-            current_offset += 0x04;
         }
 
-        let exact_finish_time = exact_lap_times[..lap_count as usize].iter().copied().sum();
+        let mut exact_finish_time: ExactInGameTime =
+            exact_lap_times[..lap_count as usize].iter().copied().sum();
+
+        let finish_true_time_difference =
+            f32::from_be_bytes(lap_true_time_difference_data[lap_true_time_difference_data.len() - 1]);
+        if exact_lap_times_unreliable && finish_true_time_difference < -1.0 {
+            let true_time_ps_subtraction =
+                (finish_true_time_difference as f64 * 1e+9).floor() as i64;
+            let total_picoseconds = exact_finish_time.time_to_picoseconds() as i64 + true_time_ps_subtraction;
+
+            let true_sec = (total_picoseconds / 1e+12 as i64) as u8;
+            let true_fractional_sec = total_picoseconds % 1e+12 as i64;
+
+            exact_finish_time = if total_picoseconds > 0 {
+                ExactInGameTime::new(true_sec / 60, true_sec % 60, true_fractional_sec as u64)
+            } else {
+                ExactInGameTime::default()
+            };
+
+            exact_finish_time_unreliable = false;
+        } else {
+            exact_finish_time_unreliable = exact_lap_times_unreliable;
+        }
 
         current_offset += (11 - lap_count as usize) * 0x04;
 
@@ -195,30 +238,20 @@ impl SPFooter {
         let has_horizontal_wall_glitch = bools.read_bool(5);
         let has_wallride = bools.read_bool(4);
 
-        let shroomstrat;
-
-        if footer_version >= 1 {
+        let shroomstrat = if footer_version >= 1 {
             let shroom_data: [u8; 3] = footer_data[current_offset..current_offset + 0x03]
                 .try_into()
                 .unwrap();
-
-            let mut shroom_arr = [0u8; 11];
-            let mut shrooms = [0u8; 3];
-
+            
             let raw = u32::from_be_bytes([0, shroom_data[0], shroom_data[1], shroom_data[2]]);
-            shrooms[0] = ((raw >> 15) & 0x1F) as u8;
-            shrooms[1] = ((raw >> 10) & 0x1F) as u8;
-            shrooms[2] = ((raw >> 5) & 0x1F) as u8;
+            let shroom_1 = ((raw >> 15) & 0x1F) as u8;
+            let shroom_2 = ((raw >> 10) & 0x1F) as u8;
+            let shroom_3 = ((raw >> 5) & 0x1F) as u8;
 
-            for shroom in shrooms.iter() {
-                if *shroom != 0 {
-                    shroom_arr[*shroom as usize - 1] += 1;
-                }
-            }
-            shroomstrat = Some(shroom_arr);
+            Some(Shroomstrat::new(shroom_1, shroom_2, shroom_3, lap_count as u8)?)
         } else {
-            shroomstrat = None;
-        }
+            None
+        };
 
         current_offset += 0x02;
 
@@ -243,12 +276,14 @@ impl SPFooter {
         };
 
         Ok(Self {
-            raw_data: footer_data.to_owned(),
             footer_version,
             possible_sp_versions,
             track_sha1,
             exact_finish_time,
+            exact_finish_time_unreliable,
             exact_lap_times,
+            exact_lap_times_unreliable,
+            lap_true_time_difference_data,
             is_200cc,
             has_ultra_shortcut,
             has_horizontal_wall_glitch,
@@ -258,13 +293,14 @@ impl SPFooter {
             has_simplified_controls,
             set_in_mirror,
             len: footer_len as u32,
-            lap_count,
+            lap_count: lap_count as u8,
         })
     }
 
     /// Returns the raw bytes of the footer, excluding the trailing CRC32.
+    // TODO: calculate this!
     pub fn raw_data(&self) -> Vec<u8> {
-        self.raw_data.to_owned()
+        Vec::from([0u8])
     }
 
     /// Returns the footer format version number.
@@ -289,10 +325,25 @@ impl SPFooter {
         self.exact_finish_time
     }
 
+    /// Returns whether the exact finish time is unreliable.
+    pub fn exact_finish_time_unreliable(&self) -> bool {
+        self.exact_finish_time_unreliable
+    }
+
     /// Returns the sub-millisecond-accurate lap times for all recorded laps.
     pub fn exact_lap_times(&self) -> &[ExactInGameTime] {
         let lap_count = std::cmp::min(self.exact_lap_times.len(), self.lap_count as usize);
         &self.exact_lap_times[0..lap_count]
+    }
+
+    /// Returns whether the exact lap times are unreliable.
+    pub fn exact_lap_times_unreliable(&self) -> bool {
+        self.exact_lap_times_unreliable
+    }
+
+    /// Returns the lap true time differences, in their raw data form.
+    pub fn lap_true_time_difference_data(&self) -> &[[u8; 4]] {
+        &self.lap_true_time_difference_data
     }
 
     /// Returns the sub-millisecond-accurate time for a single lap by index.
@@ -331,32 +382,8 @@ impl SPFooter {
     /// Returns the per-lap mushroom usage counts (shroomstrat) for the recorded laps.
     ///
     /// Returns `None` for footer version 0, which does not include shroomstrat data.
-    pub fn shroomstrat(&self) -> Option<&[u8]> {
+    pub fn shroomstrat(&self) -> Option<Shroomstrat> {
         self.shroomstrat
-            .as_ref()
-            .map(|s| &s[..self.lap_count as usize])
-    }
-
-    /// Returns a dash-separated string representation of the per-lap mushroom usage counts.
-    ///
-    /// Returns `None` for footer version 0, which does not include shroomstrat data.
-    ///
-    /// For example, a three-lap run with one mushroom on lap 2 would return `"0-1-0"`.
-    pub fn shroomstrat_string(&self) -> Option<String> {
-        if let Some(shroomstrat) = self.shroomstrat() {
-            let mut s = String::new();
-
-            for (idx, lap) in shroomstrat.iter().enumerate() {
-                s += lap.to_string().as_str();
-
-                if idx + 1 < self.lap_count as usize {
-                    s += "-";
-                }
-            }
-            Some(s)
-        } else {
-            None
-        }
     }
 
     /// Returns whether vanilla mode was enabled during the run.

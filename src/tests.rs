@@ -1071,8 +1071,8 @@ fn test_sp_footer() {
     );
     println!("Has wallride? {}", sp_footer.has_wallride());
 
-    if let Some(shroomstrat_string) = sp_footer.shroomstrat_string() {
-        println!("Shroomstrat: {}", shroomstrat_string);
+    if let Some(shroomstrat) = sp_footer.shroomstrat() {
+        println!("Shroomstrat: {}", shroomstrat);
     }
 
     if let Some(is_vanilla) = sp_footer.is_vanilla_mode_enabled() {
