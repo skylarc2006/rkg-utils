@@ -151,8 +151,7 @@ impl SPFooter {
             lap_times.push(InGameTime::from_byte_handler(lap_time)?);
         }
 
-        let lap_true_time_differences =
-            &data[current_offset..current_offset + lap_count * 0x04];
+        let lap_true_time_differences = &data[current_offset..current_offset + lap_count * 0x04];
         let mut lap_true_time_difference_data = Vec::new();
         lap_true_time_difference_data.resize(lap_count, [0u8; 4]);
 
@@ -209,12 +208,14 @@ impl SPFooter {
         let mut exact_finish_time: ExactInGameTime =
             exact_lap_times[..lap_count as usize].iter().copied().sum();
 
-        let finish_true_time_difference =
-            f32::from_be_bytes(lap_true_time_difference_data[lap_true_time_difference_data.len() - 1]);
-        if exact_lap_times_unreliable && finish_true_time_difference < -1.0 {
+        let finish_true_time_difference = f32::from_be_bytes(
+            lap_true_time_difference_data[lap_true_time_difference_data.len() - 1],
+        );
+        if exact_lap_times_unreliable && finish_true_time_difference > -1.0 {
             let true_time_ps_subtraction =
                 (finish_true_time_difference as f64 * 1e+9).floor() as i64;
-            let total_picoseconds = exact_finish_time.time_to_picoseconds() as i64 + true_time_ps_subtraction;
+            let total_picoseconds =
+                exact_finish_time.time_to_picoseconds() as i64 + true_time_ps_subtraction;
 
             let true_sec = (total_picoseconds / 1e+12 as i64) as u8;
             let true_fractional_sec = total_picoseconds % 1e+12 as i64;
@@ -242,13 +243,18 @@ impl SPFooter {
             let shroom_data: [u8; 3] = footer_data[current_offset..current_offset + 0x03]
                 .try_into()
                 .unwrap();
-            
+
             let raw = u32::from_be_bytes([0, shroom_data[0], shroom_data[1], shroom_data[2]]);
             let shroom_1 = ((raw >> 15) & 0x1F) as u8;
             let shroom_2 = ((raw >> 10) & 0x1F) as u8;
             let shroom_3 = ((raw >> 5) & 0x1F) as u8;
 
-            Some(Shroomstrat::new(shroom_1, shroom_2, shroom_3, lap_count as u8)?)
+            Some(Shroomstrat::new(
+                shroom_1,
+                shroom_2,
+                shroom_3,
+                lap_count as u8,
+            )?)
         } else {
             None
         };
@@ -300,7 +306,9 @@ impl SPFooter {
     /// Returns the raw bytes of the footer, excluding the trailing CRC32.
     // TODO: calculate this!
     pub fn raw_data(&self) -> Vec<u8> {
-        Vec::from([0u8])
+        let footer_size = self.len();
+        let data = vec![0u8; footer_size];
+        data
     }
 
     /// Returns the footer format version number.

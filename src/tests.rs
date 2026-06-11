@@ -306,6 +306,13 @@ fn print_ctgp_metadata() {
         println!("Disc region: {:#?}", disc_region);
     }
 
+    if let Some(anti_tas_deliberately_disabled) = ctgp_metadata.anti_tas_deliberately_disabled() {
+        println!(
+            "Anti-TAS deliberately disabled? {}",
+            anti_tas_deliberately_disabled
+        );
+    }
+
     if let Some(final_lap_dubious_intersection) = ctgp_metadata.final_lap_dubious_intersection() {
         println!(
             "Final lap dubious intersection? {}",
