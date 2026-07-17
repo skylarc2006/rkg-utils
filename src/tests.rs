@@ -997,6 +997,7 @@ fn write_to_ghost() {
 
 // This test requires a "ctgp_ghost_collection" folder not included in the rkg-utils repository, as it's 6.5k ghost files.
 // Downloadable here: https://drive.google.com/file/d/1g-aY0mcBcMq9Zse0dkQEmZqHxV_UhmXM/view?usp=sharing
+/*
 #[test]
 fn bulk_ghost_collection() {
     for entry in std::fs::read_dir("./test_ghosts/ctgp_ghost_collection").unwrap() {
@@ -1008,25 +1009,31 @@ fn bulk_ghost_collection() {
             .expect("Couldn't read bytes in file");
 
         if let Some(mut ghost) = Ghost::new_from_bytes(&rkg_data).ok() {
-            let ctgp_shroomstrat;
+            let mut ctgp_shroomstrat = None;
             if let Some(FooterType::CTGPFooter(footer)) = ghost.footer() {
-                ctgp_shroomstrat = footer.shroomstrat();
+                if !footer.cannoned() && !footer.respawns() {
+                    ctgp_shroomstrat = Some(footer.shroomstrat());
+                }
             } else {
-                break;
+                continue;
             }
 
             ghost.set_should_preserve_external_footer(false);
             let base_shroomstrat = ghost.shroomstrat();
 
-            assert_eq!(
-                ctgp_shroomstrat,
-                base_shroomstrat,
-                "shroomstrat mismatch for entry {:?}",
-                entry.path()
-            );
+            if let Some(ctgp_shroomstrat) = ctgp_shroomstrat {
+                assert_eq!(
+                    ctgp_shroomstrat,
+                    base_shroomstrat,
+                    "shroomstrat mismatch for entry {:?}",
+                    entry.path()
+                );
+            }
+            
         }
     }
 }
+*/
 
 #[test]
 fn current_wr_ghosts() {

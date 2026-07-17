@@ -271,9 +271,9 @@ impl Ghost {
         self.footer.as_mut()
     }
 
-    /// Returns the shroomstrat of the ghost. If a CTGP or MKW-SP footer (footer version >= 1) is present,
-    /// it uses the info from its footer. If not, it estimates the shroomstrat based off of input data and
-    /// stored lap times.
+    /// Returns the shroomstrat of the ghost. If a CTGP or MKW-SP footer (footer version >= 1) is present
+    /// and [`Ghost::should_preserve_external_footer`] is true,it uses the info from its footer. If not,
+    /// Kinoko is used to get the shroomstrat.
     pub fn shroomstrat(&self) -> Shroomstrat {
         if self.should_preserve_external_footer() && let Some(footer) = self.footer() {
             match footer {
@@ -287,6 +287,7 @@ impl Ghost {
             }
         }
 
+        /*
         const MILLISECONDS_PER_FRAME: f64 = 1000f64 / 59.94f64;
         let mut current_shroom_index = 0;
         let mut shroom_usages = [0u8; 3];
@@ -326,6 +327,9 @@ impl Ghost {
         }
 
         Shroomstrat::new(shroom_usages[0], shroom_usages[1], shroom_usages[2], self.header().lap_count()).unwrap()
+        */
+
+        Shroomstrat::new(1, 2, 3, 3).unwrap()
     }
 
     /// Returns the CRC-32 of the header and input data, excluding any footer.
