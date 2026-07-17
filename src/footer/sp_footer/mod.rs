@@ -4,6 +4,7 @@ use crate::{
     footer::{ctgp_footer::exact_in_game_time::ExactInGameTime, sp_footer::sp_version::SPVersion},
     header::in_game_time::{InGameTime, InGameTimeError},
     shroomstrat::Shroomstrat,
+    write_bits,
 };
 
 pub mod sp_version;
@@ -151,7 +152,8 @@ impl SPFooter {
             lap_times.push(InGameTime::from_byte_handler(lap_time)?);
         }
 
-        let lap_true_time_differences = &data[current_offset..current_offset + lap_count * 0x04];
+        let lap_true_time_differences =
+            &footer_data[current_offset..current_offset + lap_count * 0x04];
         let mut lap_true_time_difference_data = Vec::new();
         lap_true_time_difference_data.resize(lap_count, [0u8; 4]);
 
@@ -231,7 +233,7 @@ impl SPFooter {
             exact_finish_time_unreliable = exact_lap_times_unreliable;
         }
 
-        current_offset += (11 - lap_count as usize) * 0x04;
+        current_offset += 0x2C;
 
         let bools = ByteHandler::from(footer_data[current_offset]);
         let is_200cc = bools.read_bool(7);
@@ -304,10 +306,63 @@ impl SPFooter {
     }
 
     /// Returns the raw bytes of the footer, excluding the trailing CRC32.
-    // TODO: calculate this!
     pub fn raw_data(&self) -> Vec<u8> {
-        let footer_size = self.len();
-        let data = vec![0u8; footer_size];
+        let mut data = Vec::<u8>::new();
+
+        data.extend_from_slice(&self.footer_version.to_be_bytes());
+        data.extend_from_slice(self.track_sha1());
+        for lap in self.lap_true_time_difference_data().iter() {
+            data.extend_from_slice(lap);
+        }
+        for _ in 0..11 - self.lap_count {
+            data.extend_from_slice(&0u32.to_be_bytes());
+        }
+
+        let [shroom_1, shroom_2, shroom_3] = self
+            .shroomstrat
+            .map(|shroomstrat| shroomstrat.to_raw_bytes())
+            .unwrap_or([0, 0, 0]);
+
+        let mut flags = [0u8; 4];
+        write_bits(&mut flags, 0, 0, 1, self.is_200cc() as u64);
+        write_bits(&mut flags, 0, 1, 1, self.has_ultra_shortcut() as u64);
+        write_bits(
+            &mut flags,
+            0,
+            2,
+            1,
+            self.has_horizontal_wall_glitch() as u64,
+        );
+        write_bits(&mut flags, 0, 3, 1, self.has_wallride() as u64);
+        write_bits(&mut flags, 0, 4, 5, shroom_1 as u64);
+        write_bits(&mut flags, 1, 1, 5, shroom_2 as u64);
+        write_bits(&mut flags, 1, 6, 5, shroom_3 as u64);
+        write_bits(
+            &mut flags,
+            2,
+            3,
+            1,
+            self.is_vanilla_mode_enabled.unwrap_or(false) as u64,
+        );
+        write_bits(
+            &mut flags,
+            2,
+            4,
+            1,
+            self.has_simplified_controls.unwrap_or(false) as u64,
+        );
+        write_bits(
+            &mut flags,
+            2,
+            5,
+            1,
+            self.set_in_mirror.unwrap_or(false) as u64,
+        );
+        data.extend_from_slice(&flags);
+
+        data.extend_from_slice(&(self.len() as u32 - 8).to_be_bytes());
+        data.extend_from_slice(b"SPGD");
+
         data
     }
 

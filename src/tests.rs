@@ -1041,7 +1041,7 @@ fn test_compare_saved_ghost() {
 
 #[test]
 fn test_sp_footer() {
-    let ghost = Ghost::new_from_file("./test_ghosts/spv5.rkg").unwrap();
+    let ghost = Ghost::new_from_file("./test_ghosts/mc_glitch_sp.rkg").unwrap();
 
     let sp_footer = if let Some(FooterType::SPFooter(sp_footer)) = ghost.footer() {
         sp_footer
@@ -1093,6 +1093,30 @@ fn test_sp_footer() {
     if let Some(set_in_mirror) = sp_footer.set_in_mirror() {
         println!("Set in mirror mode? {}", set_in_mirror);
     }
+}
+
+#[test]
+fn test_sp_ghost_save() {
+    let mut ghost1 =
+        Ghost::new_from_file("./test_ghosts/mc_glitch_sp.rkg").expect("Failed to read ghost");
+
+    ghost1
+        .save_to_file("./test_ghosts/mc_glitch_sp_resave.rkg")
+        .expect("Failed to save ghost");
+
+    let mut ghost2 = Ghost::new_from_file("./test_ghosts/mc_glitch_sp_resave.rkg")
+        .expect("Failed to read resaved ghost");
+
+    assert_eq!(ghost1.header().raw_data(), ghost2.header().raw_data());
+    assert_eq!(
+        ghost1.input_data().raw_data(),
+        ghost2.input_data().raw_data()
+    );
+    assert_eq!(ghost1.file_crc32(), ghost2.file_crc32());
+    assert_eq!(
+        ghost1.footer().as_ref().unwrap().raw_data(),
+        ghost2.footer().as_ref().unwrap().raw_data()
+    );
 }
 
 #[test]

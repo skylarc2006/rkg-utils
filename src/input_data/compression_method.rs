@@ -2,4 +2,5 @@
 pub enum CompressionMethod {
     Vanilla,
     CTGP,
+    SP,
 }

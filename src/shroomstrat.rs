@@ -65,6 +65,18 @@ impl Shroomstrat {
         }
     }
 
+    pub fn shroom_1_usage(&self) -> Option<u8> {
+        self.shroom_1_usage
+    }
+
+    pub fn shroom_2_usage(&self) -> Option<u8> {
+        self.shroom_2_usage
+    }
+
+    pub fn shroom_3_usage(&self) -> Option<u8> {
+        self.shroom_3_usage
+    }
+
     /// Returns the three raw footer bytes `[shroom_1_usage, shroom_2_usage, shroom_3_usage]`.
     /// A value of 0 means the mushroom was never used.
     pub fn to_raw_bytes(&self) -> [u8; 3] {

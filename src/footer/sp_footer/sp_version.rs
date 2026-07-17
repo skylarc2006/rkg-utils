@@ -104,6 +104,33 @@ impl SPVersion {
     }
 }
 
+/// Converts an [`SPVersion`] back into its raw SP footer version integer.
+///
+/// This is the inverse of [`SPVersion::from`], mapping a version's `revision` back to the
+/// footer version value(s) that produced it. Because footer versions `4` and `5` are
+/// ambiguous (both correspond to revision `10`), this conversion always yields `4` for
+/// that case.
+///
+/// # Examples
+///
+/// ```
+/// use rkg_utils::footer::sp_footer::sp_version::SPVersion;
+///
+/// let version = SPVersion::from(0).unwrap()[0];
+/// assert_eq!(u8::from(version), 0);
+/// ```
+impl From<SPVersion> for u8 {
+    fn from(version: SPVersion) -> Self {
+        match version.revision {
+            0 => 0,
+            1..=3 => 1,
+            4..=7 => 2,
+            8..=9 => 3,
+            _ => 4,
+        }
+    }
+}
+
 /// Formats the version as `major.minor.revision` (e.g. `0.1.4`).
 impl Display for SPVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

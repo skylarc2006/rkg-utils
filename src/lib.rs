@@ -146,6 +146,7 @@ impl Ghost {
             input_data.set_compression_method(CompressionMethod::CTGP);
             Some(FooterType::CTGPFooter(ctgp_footer))
         } else if let Ok(sp_footer) = SPFooter::new(bytes) {
+            input_data.set_compression_method(CompressionMethod::SP);
             Some(FooterType::SPFooter(sp_footer))
         } else {
             let section_len = if input_data.compressed() {
@@ -218,6 +219,12 @@ impl Ghost {
             let _ = &self
                 .input_data_mut()
                 .set_compression_method(CompressionMethod::CTGP);
+        } else if let Some(FooterType::SPFooter(_)) = &self.footer()
+            && self.should_preserve_external_footer
+        {
+            let _ = &self
+                .input_data_mut()
+                .set_compression_method(CompressionMethod::SP);
         } else {
             let _ = &self
                 .input_data_mut()

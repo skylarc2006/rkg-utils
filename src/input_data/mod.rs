@@ -393,6 +393,7 @@ impl InputData {
             match self.compression_method() {
                 CompressionMethod::CTGP => ctgp_compress(&raw_data),
                 CompressionMethod::Vanilla => yaz1_compress(&raw_data),
+                CompressionMethod::SP => sp_compress(&raw_data),
             }
         } else {
             raw_data.resize(0x2774, 0x00);
@@ -667,6 +668,109 @@ pub(crate) fn ctgp_compress(src: &[u8]) -> Vec<u8> {
     input_data.extend_from_slice(&[0u8; 8]);
     input_data.extend_from_slice(&data);
     input_data
+}
+
+/// Compresses a byte slice using MKW-SP's Yaz1 encoder (`Yaz_encode`).
+///
+/// Wraps the payload in the same envelope as [`yaz1_compress`] (a 4-byte
+/// total section size, `"Yaz1"` magic, uncompressed size, 8 bytes of
+/// padding, then the payload padded to a multiple of 4 bytes). Unlike
+/// [`yaz1_compress`], matching is purely greedy with no one-byte lookahead,
+/// mirroring MKW-SP's in-game compressor byte-for-byte.
+pub(crate) fn sp_compress(src: &[u8]) -> Vec<u8> {
+    let mut trailing_bytes_to_remove = 0usize;
+    for idx in (0..src.len()).rev() {
+        if src[idx] == 0 {
+            trailing_bytes_to_remove += 1;
+        } else {
+            break;
+        }
+    }
+
+    let src = &src[0..src.len() - trailing_bytes_to_remove];
+
+    let mut dst = encode_yaz1_greedy(src);
+
+    let remainder = dst.len() % 4;
+    if remainder != 0 {
+        dst.resize(dst.len() + (4 - remainder), 0);
+    }
+
+    let mut compressed_data = Vec::new();
+    compressed_data.extend_from_slice(&((dst.len() + 16) as u32).to_be_bytes());
+    compressed_data.extend_from_slice(b"Yaz1");
+    compressed_data.extend_from_slice(&(src.len() as u32).to_be_bytes());
+    compressed_data.extend_from_slice(&[0u8; 8]);
+    compressed_data.extend_from_slice(&dst);
+    compressed_data
+}
+
+/// The destination bound checks present in the original `Yaz_encode` (which
+/// guard a fixed-size output buffer) are omitted since `dst` grows
+/// dynamically here.
+fn encode_yaz1_greedy(src: &[u8]) -> Vec<u8> {
+    let src_size = src.len();
+    let mut dst = Vec::with_capacity(src_size);
+
+    let mut src_offset = 0usize;
+    let mut group_header_offset = 0usize;
+    let mut i = 0u8;
+
+    while src_offset < src_size {
+        if i == 0 {
+            group_header_offset = dst.len();
+            dst.push(0);
+        }
+
+        let first_ref_offset = src_offset.saturating_sub(0x1000);
+        let max_ref_size = 0x111.min(src_size - src_offset);
+
+        let mut best_ref_size = 1usize;
+        let mut best_ref_offset = 0usize;
+
+        for ref_offset in first_ref_offset..src_offset {
+            if best_ref_size >= max_ref_size {
+                break;
+            }
+            if src[src_offset + best_ref_size] != src[ref_offset + best_ref_size] {
+                continue;
+            }
+
+            let mut ref_size = 0;
+            while ref_size < max_ref_size
+                && src[src_offset + ref_size] == src[ref_offset + ref_size]
+            {
+                ref_size += 1;
+            }
+
+            if ref_size > best_ref_size {
+                best_ref_size = ref_size;
+                best_ref_offset = ref_offset;
+                if best_ref_size == 0x111 {
+                    break;
+                }
+            }
+        }
+
+        if best_ref_size < 3 {
+            dst[group_header_offset] |= 1 << (7 - i);
+            dst.push(src[src_offset]);
+            src_offset += 1;
+        } else if best_ref_size < 0x12 {
+            let val = (((best_ref_size - 2) << 12) | (src_offset - best_ref_offset - 1)) as u16;
+            dst.extend_from_slice(&val.to_be_bytes());
+            src_offset += best_ref_size;
+        } else {
+            let dist = (src_offset - best_ref_offset - 1) as u16;
+            dst.extend_from_slice(&dist.to_be_bytes());
+            dst.push((best_ref_size - 0x12) as u8);
+            src_offset += best_ref_size;
+        }
+
+        i = (i + 1) % 8;
+    }
+
+    dst
 }
 
 fn encode_yaz1(src: &[u8]) -> Vec<u8> {
