@@ -273,6 +273,7 @@ impl InputData {
         None
     }
 
+
     /// Returns `true` if any input in the sequence is illegal under normal race conditions.
     ///
     /// Two conditions are checked: a drift flag set without the brake button held,
@@ -672,9 +673,9 @@ pub(crate) fn ctgp_compress(src: &[u8]) -> Vec<u8> {
 
 /// Compresses a byte slice using MKW-SP's Yaz1 encoder (`Yaz_encode`).
 ///
-/// Wraps the payload in the same envelope as [`yaz1_compress`] (a 4-byte
+/// Wraps data in the same format as [`yaz1_compress`] (a 4-byte
 /// total section size, `"Yaz1"` magic, uncompressed size, 8 bytes of
-/// padding, then the payload padded to a multiple of 4 bytes). Unlike
+/// padding, then the data padded to a multiple of 4 bytes). Unlike
 /// [`yaz1_compress`], matching is purely greedy with no one-byte lookahead,
 /// mirroring MKW-SP's in-game compressor byte-for-byte.
 pub(crate) fn sp_compress(src: &[u8]) -> Vec<u8> {

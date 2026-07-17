@@ -91,7 +91,7 @@ impl InGameTime {
     }
 
     /// Converts the time to a total number of milliseconds.
-    pub fn igt_to_millis(self) -> u32 {
+    pub fn to_milliseconds(self) -> u32 {
         (self.milliseconds as u32) + (self.seconds as u32) * 1000 + (self.minutes as u32) * 60000
     }
 }
@@ -169,7 +169,7 @@ impl std::ops::Add for InGameTime {
     type Output = InGameTime;
 
     fn add(self, rhs: InGameTime) -> InGameTime {
-        let total_millis = self.igt_to_millis() + rhs.igt_to_millis();
+        let total_millis = self.to_milliseconds() + rhs.to_milliseconds();
 
         let milliseconds = (total_millis % 1000) as u16;
         let total_seconds = total_millis / 1000;

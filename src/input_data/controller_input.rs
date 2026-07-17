@@ -144,3 +144,9 @@ impl ControllerInput {
         self.frame_duration = value;
     }
 }
+
+impl Default for ControllerInput {
+    fn default() -> Self {
+        Self { accelerator: Default::default(), brake: Default::default(), brake_drift: Default::default(), drift_flag: DriftFlag::AutoDetect, item: Default::default(), pause: Default::default(), unknown_face_button: Default::default(), dpad: Default::default(), stick: Default::default(), frame_duration: 1 }
+    }
+}

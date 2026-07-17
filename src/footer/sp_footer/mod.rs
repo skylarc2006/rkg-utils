@@ -196,7 +196,7 @@ impl SPFooter {
             previous_subtractions += true_time_ps_subtraction;
 
             let true_ps =
-                lap_times[idx].igt_to_millis() as i64 * 1e+9 as i64 + true_time_ps_subtraction;
+                lap_times[idx].to_milliseconds() as i64 * 1e+9 as i64 + true_time_ps_subtraction;
             let true_sec = (true_ps / 1e+12 as i64) as u8;
             let true_fractional_sec = true_ps % 1e+12 as i64;
 

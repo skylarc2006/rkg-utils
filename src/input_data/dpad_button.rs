@@ -7,8 +7,9 @@ pub enum DPadButtonError {
 }
 
 /// Represents every possible DPad input.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub enum DPadButton {
+    #[default]
     None,
     Up,
     Left,

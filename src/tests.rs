@@ -606,6 +606,71 @@ fn test_full_ghost() {
 }
 
 #[test]
+fn print_full_ghost() {
+    let ghost =
+        Ghost::new_from_file("./test_ghosts/2m04s292_☆ROK☆Ken.rkg").expect("Failed to read ghost");
+
+    // General ghost info
+    println!("Finish Time: {}", ghost.header().finish_time());
+    println!("Player: {}", ghost.header().mii().name());
+    println!("Slot ID: {:?}", ghost.header().slot_id());
+    println!("Vehicle: {:?}", ghost.header().combo().vehicle());
+    println!("Character: {:?}", ghost.header().combo().character());
+    println!("Date Set: {}", ghost.header().date_set());
+    println!("Controller: {:?}", ghost.header().controller());
+    println!("Is Compressed: {}", ghost.header().is_compressed());
+    println!("Ghost Type: {:?}", ghost.header().ghost_type());
+    println!("Is Automatic Drift: {}", ghost.header().is_automatic_drift());
+    println!(
+        "Decompressed Input Data Length: {}",
+        ghost.header().decompressed_input_data_length()
+    );
+    println!("Lap Count: {}", ghost.header().lap_count());
+    for (i, lap_split) in ghost.header().lap_split_times().iter().enumerate() {
+        println!("Lap {} Split Time: {}", i + 1, lap_split);
+    }
+    println!("Shroomstrat: {}", ghost.shroomstrat());
+    println!("Country: {:?}", ghost.header().location().country());
+    println!("Subregion: {:?}", ghost.header().location().subregion());
+
+    // Input data
+    println!(
+        "Face Button Input Count: {}",
+        ghost.input_data().face_button_input_count()
+    );
+    println!(
+        "Stick Input Count: {}",
+        ghost.input_data().stick_input_count()
+    );
+    println!(
+        "DPad Button Input Count: {}",
+        ghost.input_data().dpad_button_input_count()
+    );
+    println!(
+        "Controller Inputs: {}",
+        ghost.input_data().controller_inputs().len()
+    );
+    println!(
+        "Contains Illegal Brake or Drift Inputs: {}",
+        ghost.input_data().contains_illegal_brake_or_drift_inputs()
+    );
+
+    let impossible_stick_inputs = ghost
+        .input_data()
+        .controller_inputs()
+        .iter()
+        .filter(|input| input.stick().is_impossible(ghost.header().controller()))
+        .count();
+    println!("Impossible Stick Inputs: {}", impossible_stick_inputs);
+
+    // CTGP Metadata
+    println!(
+        "Has CTGP Footer: {}",
+        ghost.footer().is_some_and(FooterType::is_ctgp)
+    );
+}
+
+#[test]
 fn write_to_ghost() {
     let mut ghost =
         Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").expect("Failed to read ghost");
@@ -932,7 +997,6 @@ fn write_to_ghost() {
 
 // This test requires a "ctgp_ghost_collection" folder not included in the rkg-utils repository, as it's 6.5k ghost files.
 // Downloadable here: https://drive.google.com/file/d/1g-aY0mcBcMq9Zse0dkQEmZqHxV_UhmXM/view?usp=sharing
-/*
 #[test]
 fn bulk_ghost_collection() {
     for entry in std::fs::read_dir("./test_ghosts/ctgp_ghost_collection").unwrap() {
@@ -944,43 +1008,25 @@ fn bulk_ghost_collection() {
             .expect("Couldn't read bytes in file");
 
         if let Some(mut ghost) = Ghost::new_from_bytes(&rkg_data).ok() {
-            let ghost_raw = ghost.raw_data();
+            let ctgp_shroomstrat;
             if let Some(FooterType::CTGPFooter(footer)) = ghost.footer() {
-                let ckgd_len = rkg_data[rkg_data.len() - 0x09] as usize;
-                let raw_ckgd = &rkg_data[rkg_data.len() - 0x04 - ckgd_len..rkg_data.len() - 0x04];
-
-                let len = rkg_data.len().max(ghost_raw.len());
-                for i in 0..len {
-                    let a = rkg_data.get(i).copied();
-                    let b = ghost_raw.get(i).copied();
-                    if a != b {
-                        println!(
-                            "Byte mismatch at 0x{:04X}: file={} ghost={}",
-                            i,
-                            a.map_or("--".to_string(), |v| format!("{:02X}", v)),
-                            b.map_or("--".to_string(), |v| format!("{:02X}", v)),
-                        );
-                    }
-                }
-
-                assert_eq!(
-                    &footer.raw_data(),
-                    raw_ckgd,
-                    "File: {}",
-                    entry.file_name().into_string().unwrap()
-                );
-
-                assert_eq!(
-                    &ghost.raw_data(),
-                    &rkg_data,
-                    "File: {}",
-                    entry.file_name().into_string().unwrap()
-                )
+                ctgp_shroomstrat = footer.shroomstrat();
+            } else {
+                break;
             }
+
+            ghost.set_should_preserve_external_footer(false);
+            let base_shroomstrat = ghost.shroomstrat();
+
+            assert_eq!(
+                ctgp_shroomstrat,
+                base_shroomstrat,
+                "shroomstrat mismatch for entry {:?}",
+                entry.path()
+            );
         }
     }
 }
-*/
 
 #[test]
 fn current_wr_ghosts() {
@@ -1300,7 +1346,7 @@ fn in_game_time_new_valid() {
 #[test]
 fn in_game_time_new_zero() {
     let t = InGameTime::new(0, 0, 0).unwrap();
-    assert_eq!(t.igt_to_millis(), 0);
+    assert_eq!(t.to_milliseconds(), 0);
 }
 
 #[test]
@@ -1395,14 +1441,14 @@ fn in_game_time_sum_lap_splits() {
 
 #[test]
 fn in_game_time_igt_to_millis() {
-    assert_eq!(InGameTime::new(1, 3, 904).unwrap().igt_to_millis(), 63904);
-    assert_eq!(InGameTime::new(0, 0, 0).unwrap().igt_to_millis(), 0);
+    assert_eq!(InGameTime::new(1, 3, 904).unwrap().to_milliseconds(), 63904);
+    assert_eq!(InGameTime::new(0, 0, 0).unwrap().to_milliseconds(), 0);
 }
 
 #[test]
 fn in_game_time_from_milliseconds_persists() {
     let original = InGameTime::new(1, 23, 456).unwrap();
-    let millis = original.igt_to_millis();
+    let millis = original.to_milliseconds();
     let reconstructed = InGameTime::from_milliseconds(millis).unwrap();
     assert_eq!(reconstructed.minutes(), 1);
     assert_eq!(reconstructed.seconds(), 23);
@@ -2330,7 +2376,7 @@ fn header_lap_split_time_out_of_bounds() {
 fn header_lap_splits_sum_to_finish_time() {
     let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let total: InGameTime = header.lap_split_times().iter().copied().sum();
-    assert_eq!(total.igt_to_millis(), header.finish_time().igt_to_millis());
+    assert_eq!(total.to_milliseconds(), header.finish_time().to_milliseconds());
 }
 
 #[test]
@@ -2396,10 +2442,10 @@ fn header_setter_lap_split_time_persists_in_raw() {
 #[test]
 fn header_set_lap_split_oob_is_noop() {
     let mut header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
-    let original_time = header.lap_split_time(0).unwrap().igt_to_millis();
+    let original_time = header.lap_split_time(0).unwrap().to_milliseconds();
     header.set_lap_split_time(99, InGameTime::new(0, 1, 0).unwrap());
     assert_eq!(
-        header.lap_split_time(0).unwrap().igt_to_millis(),
+        header.lap_split_time(0).unwrap().to_milliseconds(),
         original_time
     );
 }

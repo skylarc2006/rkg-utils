@@ -20,10 +20,7 @@ use chrono::{DateTime, Duration, NaiveDateTime, TimeDelta};
 use sha1::{Digest, Sha1};
 
 use crate::{
-    crc::crc32,
-    footer::{FooterType, ctgp_footer::CTGPFooter, sp_footer::SPFooter},
-    header::Header,
-    input_data::{InputData, compression_method::CompressionMethod},
+    crc::crc32, footer::{FooterType, ctgp_footer::CTGPFooter, sp_footer::SPFooter}, header::Header, input_data::{InputData, compression_method::CompressionMethod, controller_input::ControllerInput}, shroomstrat::Shroomstrat,
 };
 
 pub mod byte_handler;
@@ -272,6 +269,63 @@ impl Ghost {
     /// Returns a mutable reference to the footer, if present.
     pub fn footer_mut(&mut self) -> Option<&mut FooterType> {
         self.footer.as_mut()
+    }
+
+    /// Returns the shroomstrat of the ghost. If a CTGP or MKW-SP footer (footer version >= 1) is present,
+    /// it uses the info from its footer. If not, it estimates the shroomstrat based off of input data and
+    /// stored lap times.
+    pub fn shroomstrat(&self) -> Shroomstrat {
+        if self.should_preserve_external_footer() && let Some(footer) = self.footer() {
+            match footer {
+                FooterType::CTGPFooter(f) => return f.shroomstrat(),
+                FooterType::SPFooter(f) => {
+                    if f.footer_version() >= 1 {
+                        return f.shroomstrat().unwrap();
+                    }
+                },
+                FooterType::Unknown(_) => (),
+            }
+        }
+
+        const MILLISECONDS_PER_FRAME: f64 = 1000f64 / 59.94f64;
+        let mut current_shroom_index = 0;
+        let mut shroom_usages = [0u8; 3];
+        let mut current_frames = 1;
+        let mut previous_input = &ControllerInput::default();
+
+        let mut lap_splits_ms = Vec::new();
+        for lap in self.header().lap_split_times().iter() {
+            lap_splits_ms.push(lap.to_milliseconds());
+        }
+
+        for input in self.input_data().controller_inputs().iter() {
+            if current_frames >= 240 {
+                if input.item() && !previous_input.item() {
+                    let current_ms = 
+                        (MILLISECONDS_PER_FRAME * (current_frames - 240) as f64).floor() as u32;
+
+                    let mut current_lap = 1;
+                    let mut previous_laps_ms_sum = 0;
+
+                    for lap_split in lap_splits_ms.iter() {
+                        if current_ms < previous_laps_ms_sum + *lap_split {
+                            shroom_usages[current_shroom_index] = current_lap;
+                            current_shroom_index += 1;
+                            current_lap += 1;
+                        }
+                        if current_shroom_index > 2 || current_lap > self.header().lap_count() {
+                            break;
+                        }
+                        previous_laps_ms_sum += lap_split;
+                    }
+                }
+            }
+
+            current_frames += input.frame_duration();
+            previous_input = input;
+        }
+
+        Shroomstrat::new(shroom_usages[0], shroom_usages[1], shroom_usages[2], self.header().lap_count()).unwrap()
     }
 
     /// Returns the CRC-32 of the header and input data, excluding any footer.
