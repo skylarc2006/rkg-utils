@@ -208,7 +208,7 @@ impl SPFooter {
         }
 
         let mut exact_finish_time: ExactInGameTime =
-            exact_lap_times[..lap_count as usize].iter().copied().sum();
+            exact_lap_times[..lap_count].iter().copied().sum();
 
         let finish_true_time_difference = f32::from_be_bytes(
             lap_true_time_difference_data[lap_true_time_difference_data.len() - 1],
