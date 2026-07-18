@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the lip customization options of a Mii,
 /// including lip style, color, size, and vertical position.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Lips {
     /// Vertical position of the lips (0–18).
     y: u8,
@@ -104,6 +104,24 @@ impl Lips {
     /// Sets the lip color.
     pub fn set_lips_color(&mut self, lips_color: LipsColor) {
         self.lips_color = lips_color;
+    }
+}
+
+/// Converts [`Lips`] to its raw-data representation.
+/// `0bTTTTTCCS SSSYYYYY`, where:
+/// T = lips type (5 bits), C = lips color (2 bits), S = size (4 bits),
+/// Y = y position (5 bits).
+impl From<Lips> for [u8; 2] {
+    fn from(value: Lips) -> Self {
+        let lips_type = u8::from(value.lips_type());
+        let lips_color = u8::from(value.lips_color());
+        let size = value.size();
+        let y = value.y();
+
+        [
+            (lips_type << 3) | (lips_color << 1) | (size >> 3),
+            ((size & 0x07) << 5) | y,
+        ]
     }
 }
 

@@ -1,17 +1,18 @@
-pub mod character;
-pub mod transmission;
-pub mod vehicle;
-pub mod weight_class;
+pub(crate) mod character;
+pub(crate) mod transmission;
+pub(crate) mod vehicle;
+pub(crate) mod weight_class;
 
-use crate::{
-    byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
-    header::combo::{
-        character::Character,
-        transmission::Transmission,
-        vehicle::Vehicle,
-        weight_class::{GetWeightClass, WeightClass},
-    },
-};
+#[doc(inline)]
+pub use character::Character;
+#[doc(inline)]
+pub use transmission::Transmission;
+#[doc(inline)]
+pub use vehicle::Vehicle;
+#[doc(inline)]
+pub use weight_class::{GetWeightClass, WeightClass};
+
+use crate::byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler};
 use std::fmt::Display;
 
 /// Represents a valid character and vehicle combination from a Mario Kart Wii RKG ghost file.
@@ -26,8 +27,25 @@ pub struct Combo {
 }
 
 impl Combo {
+    /// Returns the vehicle's inherent transmission (inside/outside drift),
+    /// independent of any active [`TransmissionMod`](crate::header::TransmissionMod).
     pub const fn get_transmission(&self) -> Transmission {
         self.vehicle.get_transmission()
+    }
+}
+
+/// Converts a [`Combo`] to its raw-data representation.
+/// `0bVVVVVVCC CCCCXXXX`, where:
+/// V = vehicle id, C = character id, X = other data (0'd in the return value).
+impl From<Combo> for [u8; 2] {
+    fn from(value: Combo) -> Self {
+        let vehicle_id = u8::from(value.vehicle());
+        let character_id = u8::from(value.character());
+
+        [
+            (vehicle_id << 2) | (character_id >> 4),
+            (character_id & 0x0F) << 4,
+        ]
     }
 }
 

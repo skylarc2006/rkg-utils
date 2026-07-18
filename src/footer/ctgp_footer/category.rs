@@ -48,7 +48,7 @@ impl Category {
     /// # Examples
     ///
     /// ```
-    /// use rkg_utils::footer::ctgp_footer::category::Category;
+    /// use rkg_utils::footer::ctgp_footer::Category;
     ///
     /// assert_eq!(Category::try_from(0x00, 0).unwrap(), Category::Normal);
     /// assert_eq!(Category::try_from(0x00, 1).unwrap(), Category::Shortcut);
@@ -98,6 +98,30 @@ impl Category {
             0x27 => Ok(Self::NoShortcut200ccTAS),
 
             _ => Err(CategoryError::NonexistentCategory),
+        }
+    }
+}
+
+impl Category {
+    /// Returns the two raw footer bytes `(category_byte, shortcut_byte)` that encode this category.
+    pub fn to_bytes(self) -> (u8, u8) {
+        match self {
+            Self::Normal => (0x00, 0x00),
+            Self::Shortcut => (0x00, 0x01),
+            Self::Glitch => (0x01, 0x00),
+            Self::NoShortcut => (0x02, 0x00),
+            Self::NormalTAS => (0x03, 0x00),
+            Self::ShortcutTAS => (0x03, 0x01),
+            Self::GlitchTAS => (0x13, 0x00),
+            Self::NoShortcutTAS => (0x23, 0x00),
+            Self::Normal200cc => (0x04, 0x00),
+            Self::Shortcut200cc => (0x04, 0x01),
+            Self::Glitch200cc => (0x05, 0x00),
+            Self::NoShortcut200cc => (0x06, 0x00),
+            Self::Normal200ccTAS => (0x07, 0x00),
+            Self::Shortcut200ccTAS => (0x07, 0x01),
+            Self::Glitch200ccTAS => (0x17, 0x00),
+            Self::NoShortcut200ccTAS => (0x27, 0x00),
         }
     }
 }

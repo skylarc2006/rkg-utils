@@ -6,6 +6,7 @@ pub mod constants;
 
 /// Represents a player's geographic location as recorded in the ghost file header,
 /// consisting of a country, subregion, and regions version.
+#[derive(Debug, Copy, Clone)]
 pub struct Location {
     /// The country component of the location.
     country: Country,

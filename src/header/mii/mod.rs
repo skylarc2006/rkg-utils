@@ -2,39 +2,51 @@ use chrono::{DateTime, Duration, NaiveDateTime};
 
 use crate::{
     byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
-    header::mii::{
-        birthday::{Birthday, BirthdayError},
-        build::{Build, BuildError},
-        eyebrows::{Eyebrows, EyebrowsError},
-        eyes::{Eyes, EyesError},
-        facial_hair::{FacialHair, FacialHairError},
-        favorite_color::{FavoriteColor, FavoriteColorError},
-        glasses::{Glasses, GlassesError},
-        hair::{Hair, HairError},
-        head::{Head, HeadError},
-        lips::{Lips, LipsError},
-        mii_type::{MiiType, MiiTypeError},
-        mole::{Mole, MoleError},
-        nose::{Nose, NoseError},
-    },
     write_bits,
 };
 
 use std::io::{Read, Write};
 
-pub mod birthday;
-pub mod build;
-pub mod eyebrows;
-pub mod eyes;
-pub mod facial_hair;
-pub mod favorite_color;
-pub mod glasses;
-pub mod hair;
-pub mod head;
-pub mod lips;
-pub mod mii_type;
-pub mod mole;
-pub mod nose;
+pub(crate) mod birthday;
+pub(crate) mod build;
+pub(crate) mod eyebrows;
+pub(crate) mod eyes;
+pub(crate) mod facial_hair;
+pub(crate) mod favorite_color;
+pub(crate) mod glasses;
+pub(crate) mod hair;
+pub(crate) mod head;
+pub(crate) mod lips;
+pub(crate) mod mii_type;
+pub(crate) mod mole;
+pub(crate) mod nose;
+
+#[doc(inline)]
+pub use birthday::{Birthday, BirthdayError};
+#[doc(inline)]
+pub use build::{Build, BuildError};
+#[doc(inline)]
+pub use eyebrows::{EyebrowType, Eyebrows, EyebrowsError};
+#[doc(inline)]
+pub use eyes::{EyeColor, EyeType, Eyes, EyesError};
+#[doc(inline)]
+pub use facial_hair::{BeardType, FacialHair, FacialHairError, MustacheType};
+#[doc(inline)]
+pub use favorite_color::{FavoriteColor, FavoriteColorError};
+#[doc(inline)]
+pub use glasses::{Glasses, GlassesColor, GlassesError, GlassesType};
+#[doc(inline)]
+pub use hair::{Hair, HairColor, HairError, HairType};
+#[doc(inline)]
+pub use head::{FaceFeatures, Head, HeadError, HeadShape, SkinTone};
+#[doc(inline)]
+pub use lips::{Lips, LipsColor, LipsError, LipsType};
+#[doc(inline)]
+pub use mii_type::{MiiType, MiiTypeError};
+#[doc(inline)]
+pub use mole::{Mole, MoleError};
+#[doc(inline)]
+pub use nose::{Nose, NoseError, NoseType};
 
 /// Errors that can occur while parsing or modifying a [`Mii`].
 #[derive(thiserror::Error, Debug)]
@@ -100,6 +112,7 @@ pub enum MiiError {
 /// and sets [`is_modified`](Mii::is_modified) to `true`.
 ///
 /// The binary layout is documented at <http://wiibrew.org/wiki/Mii_Data#Mii_format>.
+#[derive(Debug, Clone)]
 pub struct Mii {
     /// The raw 74-byte Mii data block, kept in sync with all parsed fields.
     raw_data: [u8; 0x4A],
@@ -152,6 +165,95 @@ pub struct Mii {
 }
 
 impl Mii {
+    /// Creates a [`Mii`] from its components as arguments.
+    pub fn new(
+        is_girl: bool,
+        birthday: Birthday,
+        favorite_color: FavoriteColor,
+        is_favorite: bool,
+        name: String,
+        build: Build,
+        mii_type: MiiType,
+        creation_date: NaiveDateTime,
+        system_id: u32,
+        head: Head,
+        mingle_off: bool,
+        downloaded: bool,
+        hair: Hair,
+        eyebrows: Eyebrows,
+        eyes: Eyes,
+        nose: Nose,
+        lips: Lips,
+        glasses: Glasses,
+        facial_hair: FacialHair,
+        mole: Mole,
+        creator_name: String,
+    ) -> Self {
+        let mii_id_prefix = (u8::from(mii_type) as u32) << 29;
+        let creation_date_timestamp = timestamp_from_creation_date(creation_date) & 0x1FFFFFFF;
+        let mii_id = mii_id_prefix | creation_date_timestamp;
+        let mut raw_data = Vec::with_capacity(0x4A);
+
+        let mut mii_info_bytes = <[u8; 2]>::from(birthday);
+        mii_info_bytes[0] |= (is_girl as u8) << 6;
+        mii_info_bytes[1] |= u8::from(favorite_color) << 1;
+        mii_info_bytes[1] |= is_favorite as u8;
+
+        raw_data.extend_from_slice(&mii_info_bytes);
+        let mut name_bytes = [0u8; 0x14];
+        let name_utf16 = string_to_utf16be(&name);
+        name_bytes[..name_utf16.len()].copy_from_slice(&name_utf16);
+        raw_data.extend_from_slice(&name_bytes);
+        raw_data.extend_from_slice(&<[u8; 2]>::from(build));
+        raw_data.extend_from_slice(&mii_id.to_be_bytes());
+        raw_data.extend_from_slice(&system_id.to_be_bytes());
+
+        let mut head_bytes = <[u8; 2]>::from(head);
+        head_bytes[1] |= (mingle_off as u8) << 2;
+        head_bytes[1] |= downloaded as u8;
+        raw_data.extend_from_slice(&head_bytes);
+
+        raw_data.extend_from_slice(&<[u8; 2]>::from(hair));
+        raw_data.extend_from_slice(&<[u8; 4]>::from(eyebrows));
+        raw_data.extend_from_slice(&<[u8; 4]>::from(eyes));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(nose));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(lips));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(glasses));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(facial_hair));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(mole));
+        let mut creator_name_bytes = [0u8; 0x14];
+        let creator_utf16 = string_to_utf16be(&creator_name);
+        creator_name_bytes[..creator_utf16.len()].copy_from_slice(&creator_utf16);
+        raw_data.extend_from_slice(&creator_name_bytes);
+
+        Self {
+            raw_data: raw_data.try_into().unwrap(),
+            is_modified: false,
+            is_girl,
+            birthday,
+            favorite_color,
+            is_favorite,
+            name,
+            build,
+            mii_type,
+            creation_date,
+            mii_id,
+            system_id,
+            head,
+            mingle_off,
+            downloaded,
+            hair,
+            eyebrows,
+            eyes,
+            nose,
+            lips,
+            glasses,
+            facial_hair,
+            mole,
+            creator_name,
+        }
+    }
+
     /// Parses a [`Mii`] from a 74-byte (`0x4A`) data block.
     ///
     /// Accepts any type that can be converted into `[u8; 0x4A]`, such as a
@@ -162,7 +264,7 @@ impl Mii {
     /// Returns [`MiiError::InvalidLength`] if the input cannot be converted to
     /// exactly `0x4A` bytes. Returns other [`MiiError`] variants if any
     /// individual field fails to parse.
-    pub fn new(mii_data: impl TryInto<[u8; 0x4A]>) -> Result<Self, MiiError> {
+    pub fn new_from_bytes(mii_data: impl TryInto<[u8; 0x4A]>) -> Result<Self, MiiError> {
         let raw_data = mii_data.try_into().map_err(|_| MiiError::InvalidLength)?;
 
         let bytes = ByteHandler::try_from(&raw_data[0..=1])?;
@@ -255,7 +357,7 @@ impl Mii {
             return Err(MiiError::InvalidLength);
         }
 
-        Self::new(&data[..0x4A])
+        Self::new_from_bytes(&data[..0x4A])
     }
 
     /// Writes the Mii's raw data to a file, creating or truncating it as needed.
@@ -304,8 +406,6 @@ impl Mii {
 
     /// Sets the Mii's birthday and updates the raw data accordingly.
     pub fn set_birthday(&mut self, birthday: Birthday) {
-        // "public fortnite" - fawwe
-
         self.birthday = birthday;
 
         let month = birthday.month().unwrap_or(0) as u64;
@@ -409,7 +509,6 @@ impl Mii {
     ///
     /// Note: the valid range of the timestamp has not been fully determined.
     pub fn set_creation_date(&mut self, creation_date: NaiveDateTime) {
-        // TODO: determine limits for timestamp
         let raw_data = self.raw_data_mut();
         write_bits(
             raw_data,

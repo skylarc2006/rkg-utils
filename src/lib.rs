@@ -19,21 +19,26 @@ use std::{
 use chrono::{DateTime, Duration, NaiveDateTime, TimeDelta};
 use sha1::{Digest, Sha1};
 
-use crate::{
-    crc::crc32,
-    footer::{FooterType, ctgp_footer::CTGPFooter, sp_footer::SPFooter},
-    header::{Header, mii::Mii},
-    input_data::InputData,
-};
+use crate::{crc::crc32, input_data::CompressionMethod};
 
 pub mod byte_handler;
 pub mod crc;
 pub mod footer;
 pub mod header;
 pub mod input_data;
+pub mod shroomstrat;
 
 #[cfg(test)]
 mod tests;
+
+#[doc(inline)]
+pub use footer::{CTGPFooter, FooterType, SPFooter};
+#[doc(inline)]
+pub use header::{Combo, Header, HeaderError, Mii};
+#[doc(inline)]
+pub use input_data::{ControllerInput, InputData, InputDataError};
+#[doc(inline)]
+pub use shroomstrat::Shroomstrat;
 
 /// Errors that can occur while parsing or modifying a [`Ghost`].
 #[derive(thiserror::Error, Debug)]
@@ -53,7 +58,7 @@ pub enum GhostError {
     /// The CTGP footer could not be parsed.
     #[error("CTGP Footer Error: {0}")]
     CTGPFooterError(#[from] footer::ctgp_footer::CTGPFooterError),
-    /// A `ByteHandler`(byte_handler::ByteHandler) operation failed.
+    /// A `ByteHandler` operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] byte_handler::ByteHandlerError),
     /// A slice-to-array conversion failed (e.g. when extracting a CRC-32 word).
@@ -66,29 +71,41 @@ pub enum GhostError {
 
 /// A fully parsed Mario Kart Wii RKG ghost file.
 ///
-/// Holds the file header, decompressed or compressed input data, optional
-/// external footers (CTGP or SP), and CRC-32 checksums. All setter
-/// operations update the parsed fields; call [`update_raw_data`](Ghost::update_raw_data)
-/// (or [`save_to_file`](Ghost::save_to_file), which calls it implicitly) to
-/// flush all changes back into the raw byte buffer before writing.
+/// Holds the file header, decompressed or compressed input data, and an optional
+/// external footer (CTGP or SP). All CRC values and the raw byte representation
+/// are computed on demand via their respective methods.
 pub struct Ghost {
-    /// The complete raw file bytes, kept in sync by [`update_raw_data`](Ghost::update_raw_data).
-    raw_data: Vec<u8>,
-    /// The parsed 136-byte RKG file header.
+    /// The parsed ghost header.
     header: Header,
     /// The ghost's controller input data (compressed or decompressed).
     input_data: InputData,
-    /// The CRC-32 of the header and input data only, excluding any external footer.
-    base_crc32: u32,
     /// The footer appended to the file, if present.
     footer: Option<FooterType>,
-    /// The file's crc 32
-    file_crc32: u32,
-    /// When `true`, any existing external footer is preserved when saving (including footer data from any mods that this crate doesn't support).
+    /// When `true`, any existing external footer is preserved when saving.
     should_preserve_external_footer: bool,
 }
 
 impl Ghost {
+    /// Creates a [`Ghost`] from a [`Header`] and [`InputData`].
+    ///
+    /// Sets `is_compressed` and `decompressed_input_data_length` on the header
+    /// to match the provided input data. No footer is attached and
+    /// `should_preserve_external_footer` is set to `false`.
+    pub fn new(mut header: Header, input_data: InputData) -> Self {
+        header.set_compressed(input_data.compressed());
+        let decompressed_len = 8u16
+            + input_data.face_button_input_count() * 2
+            + input_data.stick_input_count() * 2
+            + input_data.dpad_button_input_count() * 2;
+        header.set_decompressed_input_data_length(decompressed_len);
+        Self {
+            header,
+            input_data,
+            footer: None,
+            should_preserve_external_footer: false,
+        }
+    }
+
     /// Parses a [`Ghost`] from an RKG file at the given path.
     ///
     /// # Errors
@@ -98,46 +115,24 @@ impl Ghost {
     pub fn new_from_file<T: AsRef<std::path::Path>>(path: T) -> Result<Self, GhostError> {
         let mut buf = Vec::with_capacity(0x100);
         std::fs::File::open(path)?.read_to_end(&mut buf)?;
-        Self::new(&buf)
+        Self::new_from_bytes(&buf)
     }
 
     /// Parses a [`Ghost`] from a byte slice.
     ///
-    /// Detects and parses an optional CTGP or SP footer if present. The
-    /// base CRC-32 is read from just before the footer when one is found,
-    /// or from the last 4 bytes of the file otherwise.
+    /// Detects and parses an optional CTGP or SP footer if present.
     ///
     /// # Errors
     ///
     /// Returns [`GhostError::DataLengthTooShort`] if `bytes` is shorter than
     /// `0x90` bytes OR input data is shorter than the expected input data size.
-    /// Returns other [`GhostError`] variants if any field fails
-    /// to parse.
-    pub fn new(bytes: &[u8]) -> Result<Self, GhostError> {
+    /// Returns other [`GhostError`] variants if any field fails to parse.
+    pub fn new_from_bytes(bytes: &[u8]) -> Result<Self, GhostError> {
         if bytes.len() < 0x90 {
             return Err(GhostError::DataLengthTooShort);
         }
 
-        let header = Header::new(&bytes[..0x88])?;
-
-        let file_crc32 = u32::from_be_bytes(bytes[bytes.len() - 0x04..].try_into()?);
-        let mut base_crc32 = file_crc32;
-
-        let footer = if let Ok(ctgp_footer) = CTGPFooter::new(bytes) {
-            let input_data_end_offset = bytes.len() - ctgp_footer.len() - 0x08;
-            base_crc32 = u32::from_be_bytes(
-                bytes[input_data_end_offset..input_data_end_offset + 0x04].try_into()?,
-            );
-            Some(FooterType::CTGPFooter(ctgp_footer))
-        } else if let Ok(sp_footer) = SPFooter::new(bytes) {
-            let input_data_end_offset = bytes.len() - sp_footer.len() - 0x08;
-            base_crc32 = u32::from_be_bytes(
-                bytes[input_data_end_offset..input_data_end_offset + 0x04].try_into()?,
-            );
-            Some(FooterType::SPFooter(sp_footer))
-        } else {
-            None
-        };
+        let header = Header::new_from_bytes(&bytes[..0x88])?;
 
         let input_data_len = if bytes[0x8C..0x90] == *b"Yaz1" {
             u32::from_be_bytes(bytes[0x88..0x8C].try_into().unwrap()) as usize + 0x04
@@ -149,154 +144,114 @@ impl Ghost {
             return Err(GhostError::DataLengthTooShort);
         }
 
-        let input_data = InputData::new(&bytes[0x88..0x88 + input_data_len])?;
+        let mut input_data = InputData::new_from_bytes(&bytes[0x88..0x88 + input_data_len])?;
+
+        let footer = if let Ok(ctgp_footer) = CTGPFooter::new(bytes) {
+            input_data.set_compression_method(CompressionMethod::CTGP);
+            Some(FooterType::CTGPFooter(ctgp_footer))
+        } else if let Ok(sp_footer) = SPFooter::new(bytes) {
+            input_data.set_compression_method(CompressionMethod::SP);
+            Some(FooterType::SPFooter(sp_footer))
+        } else {
+            let section_len = if input_data.compressed() {
+                input_data_len
+            } else if bytes.len() >= 0x88 + 0x2774 + 4 {
+                0x2774
+            } else {
+                input_data_len
+            };
+            let footer_start = 0x88 + section_len + 4;
+            let footer_end = bytes.len().saturating_sub(4);
+            if footer_start < footer_end {
+                Some(FooterType::Unknown(
+                    bytes[footer_start..footer_end].to_vec(),
+                ))
+            } else {
+                None
+            }
+        };
 
         Ok(Self {
-            raw_data: bytes.to_vec(),
             header,
             input_data,
-            base_crc32,
             footer,
-            file_crc32,
             should_preserve_external_footer: true,
         })
     }
 
-    /// Flushes all parsed field modifications back into the raw byte buffer.
-    ///
-    /// This method recomputes the Mii CRC-16, rebuilds the raw buffer from the
-    /// current header and input data, resizes the buffer if the input data
-    /// length has changed, re-inserts any preserved external footer, and
-    /// finally recomputes both the base CRC-32 and the file-level CRC-32. The
-    /// CTGP footer SHA-1 field is also updated if a CTGP footer is present.
+    /// Updates the SHA-1 field in the CTGP footer, if one is present.
     ///
     /// # Errors
     ///
-    /// Returns [`GhostError::MiiError`] if the Mii data is invalid, or
-    /// [`GhostError::CTGPFooterError`] if the SHA-1 field cannot be written.
-    pub fn update_raw_data(&mut self) -> Result<(), GhostError> {
-        let mii_bytes = self.header().mii().raw_data().to_vec();
-        self.header_mut().set_mii(Mii::new(mii_bytes)?);
-        self.header_mut().fix_mii_crc16();
-
-        let mut buf = Vec::from(self.header().raw_data());
-
-        buf.extend_from_slice(self.input_data().raw_data());
-
-        let header_len = 0x88;
-        let new_input_data_end = header_len + self.input_data().raw_data().len();
-
-        // Find input data length of old data
-        let old_input_data_end = if self.raw_data[0x8C..0x90] == *b"Yaz1" {
-            u32::from_be_bytes(self.raw_data[0x88..0x8C].try_into().unwrap()) as usize
-        } else {
-            header_len + 0x2774
-        };
-
-        if new_input_data_end > old_input_data_end {
-            let diff = new_input_data_end - old_input_data_end;
-            let insert_pos = old_input_data_end;
-            self.raw_data
-                .splice(insert_pos..insert_pos, vec![0u8; diff]);
-        } else if new_input_data_end < old_input_data_end {
-            let diff = old_input_data_end - new_input_data_end;
-            let remove_end = old_input_data_end;
-            self.raw_data.drain(remove_end - diff..remove_end);
-        }
-
-        self.raw_data[..new_input_data_end].copy_from_slice(&buf[..new_input_data_end]);
-        let base_crc32 = crc32(&buf);
-
-        match (self.footer(), self.should_preserve_external_footer()) {
-            (Some(FooterType::CTGPFooter(ctgp_footer)), true) => {
-                buf.extend_from_slice(&base_crc32.to_be_bytes());
-                buf.extend_from_slice(ctgp_footer.raw_data());
-
-                let footer_len = ctgp_footer.len();
-                self.raw_data.drain(new_input_data_end..);
-                self.raw_data
-                    .extend_from_slice(&buf[buf.len() - footer_len - 0x04..]);
-                self.raw_data.extend_from_slice(&[0u8; 4]);
-            }
-            (Some(FooterType::SPFooter(sp_footer)), true) => {
-                buf.extend_from_slice(&base_crc32.to_be_bytes());
-                buf.extend_from_slice(sp_footer.raw_data());
-
-                let footer_len = sp_footer.len();
-                self.raw_data.drain(new_input_data_end..);
-                self.raw_data
-                    .extend_from_slice(&buf[buf.len() - footer_len - 0x04..]);
-                self.raw_data.extend_from_slice(&[0u8; 4]);
-            }
-            (_, true) if self.raw_data.len() >= new_input_data_end + 0x08 => {
-                self.raw_data.drain(new_input_data_end + 0x04..);
-            }
-            (_, false) if self.raw_data.len() >= new_input_data_end + 0x08 => self.raw_data
-                [new_input_data_end..new_input_data_end + 0x04]
-                .copy_from_slice(&base_crc32.to_be_bytes()),
-            _ => (),
-        }
-
-        let len = self.raw_data.len();
-        let crc32 = crc32(&self.raw_data[..len - 0x04]);
-        self.raw_data[len - 0x04..].copy_from_slice(&crc32.to_be_bytes());
-
-        let sha1 = compute_sha1_hex(&self.raw_data);
+    /// Returns [`GhostError::CTGPFooterError`] if the SHA-1 field cannot be written,
+    /// or [`GhostError::InputDataError`] if the input data cannot be serialized.
+    pub fn update_ghost_sha1(&mut self) -> Result<(), GhostError> {
+        let sha1 = compute_sha1_hex(&self.raw_data()?);
         if let Some(FooterType::CTGPFooter(ctgp_footer)) = self.footer_mut() {
             ctgp_footer.set_ghost_sha1(&sha1)?;
         }
-
         Ok(())
     }
 
-    /// Flushes all modifications and writes the ghost to a file at the given path.
+    /// Flushes modifications and writes the ghost to a file at the given path.
     ///
     /// # Errors
     ///
-    /// Returns any error from [`update_raw_data`](Ghost::update_raw_data) or
+    /// Returns any error from [`update_ghost_sha1`](Ghost::update_ghost_sha1) or
     /// from file creation/writing.
     pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
-        self.update_raw_data()?;
+        self.update_ghost_sha1()?;
         let mut file = std::fs::File::create(path)?;
-        file.write_all(&self.raw_data)?;
-
+        file.write_all(&self.raw_data()?)?;
         Ok(())
     }
 
-    /// Compresses the input data using Yaz1 encoding and sets the compression flag in the header.
+    /// Sets compression flag in `InputData` and the compression flag in the header.
+    pub fn set_input_data_compressed(&mut self, compressed: bool) {
+        self.input_data_mut().set_compressed(compressed);
+        self.header_mut().set_compressed(compressed);
+    }
+
+    /// Returns the computed raw file bytes.
     ///
-    /// Does nothing if the input data is already compressed.
-    pub fn compress_input_data(&mut self) {
-        if self.input_data().is_compressed() {
-            return;
+    /// The result always reflects the current state of all parsed fields.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhostError::InputDataError`] if the input data's uncompressed
+    /// raw representation would exceed `0x2774` bytes.
+    pub fn raw_data(&mut self) -> Result<Vec<u8>, GhostError> {
+        let mut buf = Vec::from(self.header.raw_data());
+
+        if let Some(FooterType::CTGPFooter(_)) = &self.footer()
+            && self.should_preserve_external_footer
+        {
+            let _ = &self
+                .input_data_mut()
+                .set_compression_method(CompressionMethod::CTGP);
+        } else if let Some(FooterType::SPFooter(_)) = &self.footer()
+            && self.should_preserve_external_footer
+        {
+            let _ = &self
+                .input_data_mut()
+                .set_compression_method(CompressionMethod::SP);
+        } else {
+            let _ = &self
+                .input_data_mut()
+                .set_compression_method(CompressionMethod::Vanilla);
         }
 
-        self.input_data_mut().compress();
-        self.header_mut().set_compressed(true);
-    }
-
-    /// Decompresses the input data and clears the compression flag in the header.
-    ///
-    /// Does nothing if the input data is not compressed.
-    pub fn decompress_input_data(&mut self) {
-        if !self.input_data().is_compressed() {
-            return;
+        buf.extend_from_slice(&self.input_data.raw_data()?);
+        let base_crc32 = crc32(&buf);
+        buf.extend_from_slice(&base_crc32.to_be_bytes());
+        if self.should_preserve_external_footer
+            && let Some(footer) = &self.footer
+        {
+            buf.extend_from_slice(&footer.raw_data());
         }
-
-        self.input_data_mut().decompress();
-        self.header_mut().set_compressed(false);
-    }
-
-    /// Returns the raw file bytes.
-    ///
-    /// May not reflect recent modifications until [`update_raw_data`](Ghost::update_raw_data) is called.
-    pub fn raw_data(&self) -> &[u8] {
-        &self.raw_data
-    }
-
-    /// Returns a mutable reference to the raw file bytes.
-    pub fn raw_data_mut(&mut self) -> &mut [u8] {
-        &mut self.raw_data
+        let file_crc32 = crc32(&buf);
+        buf.extend_from_slice(&file_crc32.to_be_bytes());
+        Ok(buf)
     }
 
     /// Returns the parsed RKG file header.
@@ -329,29 +284,89 @@ impl Ghost {
         self.footer.as_mut()
     }
 
-    /// Returns the CRC-32 of the header and input data, excluding any external footer.
-    pub fn base_crc32(&self) -> u32 {
-        self.base_crc32
+    /// Returns the shroomstrat of the ghost. If a CTGP or MKW-SP footer (footer version >= 1) is present
+    /// and [`Ghost::should_preserve_external_footer`] is true, it uses the info from its footer. If not,
+    /// input data is used to estimate the shroomstrat. Shroomstrat estimation may be inaccurate if the
+    /// item button is pressed during a cannon, after a respawn, while being spun out by something, or
+    /// otherwise losing mushrooms early.
+    pub fn shroomstrat(&self) -> Shroomstrat {
+        if self.should_preserve_external_footer() && let Some(footer) = self.footer() {
+            match footer {
+                FooterType::CTGPFooter(f) => return f.shroomstrat(),
+                FooterType::SPFooter(f) => {
+                    if f.footer_version() >= 1 {
+                        return f.shroomstrat().unwrap();
+                    }
+                },
+                FooterType::Unknown(_) => (),
+            }
+        }
+
+        const MILLISECONDS_PER_FRAME: f64 = 1000f64 / 59.94f64;
+        let mut current_shroom_index = 0;
+        let mut shroom_usages = [0u8; 3];
+        let mut current_frames = 0;
+        let mut previous_input = &ControllerInput::default();
+
+        let mut lap_splits_ms = Vec::new();
+        for lap in self.header().lap_split_times().iter() {
+            lap_splits_ms.push(lap.to_milliseconds());
+        }
+
+        for input in self.input_data().controller_inputs().iter() {
+            if current_frames >= 240
+                && current_shroom_index < 3
+                && input.item()
+                && !previous_input.item()
+            {
+                let current_ms =
+                    (MILLISECONDS_PER_FRAME * (current_frames - 240) as f64).floor() as u32;
+
+                let mut current_lap = 1u8;
+                let mut previous_laps_ms_sum = 0u32;
+
+                for lap_split in lap_splits_ms.iter() {
+                    if current_ms < previous_laps_ms_sum + *lap_split {
+                        break;
+                    }
+                    previous_laps_ms_sum += lap_split;
+                    current_lap += 1;
+                }
+
+                if current_lap <= self.header().lap_count() {
+                    shroom_usages[current_shroom_index] = current_lap;
+                    current_shroom_index += 1;
+                }
+            }
+
+            current_frames += input.frame_duration();
+            previous_input = input;
+        }
+
+        Shroomstrat::new(shroom_usages[0], shroom_usages[1], shroom_usages[2], self.header().lap_count()).unwrap()
     }
 
-    /// Returns `true` if the stored base CRC-32 matches a freshly computed
-    /// checksum of the current header and input data bytes.
-    pub fn verify_base_crc32(&self) -> bool {
-        let mut data = Vec::from(self.header().raw_data());
-        data.extend_from_slice(self.input_data().raw_data());
-        self.base_crc32 == crc32(&data)
+    /// Returns the CRC-32 of the header and input data, excluding any footer.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhostError::InputDataError`] if the input data's uncompressed
+    /// raw representation would exceed `0x2774` bytes.
+    pub fn base_crc32(&self) -> Result<u32, GhostError> {
+        let mut buf = Vec::from(self.header.raw_data());
+        buf.extend_from_slice(&self.input_data.raw_data()?);
+        Ok(crc32(&buf))
     }
 
     /// Returns the CRC-32 of the entire file excluding its final 4 bytes.
-    pub fn file_crc32(&self) -> u32 {
-        self.file_crc32
-    }
-
-    /// Returns `true` if the stored file CRC-32 matches a freshly computed
-    /// checksum of the entire file excluding its final 4 bytes.
-    pub fn verify_file_crc32(&self) -> bool {
-        let len = self.raw_data().len();
-        self.file_crc32 == crc32(&self.raw_data()[..len - 0x04])
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhostError::InputDataError`] if the input data's uncompressed
+    /// raw representation would exceed `0x2774` bytes.
+    pub fn file_crc32(&mut self) -> Result<u32, GhostError> {
+        let raw = self.raw_data()?;
+        Ok(crc32(&raw[..raw.len() - 4]))
     }
 
     /// Returns whether an existing external footer will be preserved when saving.
@@ -365,7 +380,13 @@ impl Ghost {
     }
 }
 
-/// Used internally for writing bits to a buffer.
+/// Writes `bit_width` bits of `value` into `buf`, starting `bit_offset` bits past
+/// `byte_offset` bytes from the start of the buffer, in big-endian bit order.
+///
+/// # Panics
+///
+/// Panics if `byte_offset`, `bit_offset`, and `bit_width` together describe a range
+/// that falls outside `buf`.
 pub(crate) fn write_bits(
     buf: &mut [u8],
     byte_offset: usize,
@@ -400,7 +421,7 @@ pub(crate) fn compute_sha1_hex(input: &[u8]) -> [u8; 0x14] {
 
 /// Converts a raw Wii tick count into a [`NaiveDateTime`].
 ///
-/// Ticks run at 60.75 MHz relative to the Wii epoch of 2000-01-01 00:00:00 UTC.
+/// Ticks run at 60.75 MHz relative to the Wii epoch of 2000-01-01 00:00:00.
 pub(crate) fn datetime_from_timestamp(tick_count: u64) -> NaiveDateTime {
     let clock_rate = 60_750_000.0; // 60.75 MHz tick speed
     let epoch_shift = 946_684_800; // Shifts epoch from 1970-01-01 to 2000-01-01 (which is what the Wii uses)

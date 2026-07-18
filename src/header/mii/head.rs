@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the head customization options of a Mii,
 /// including face shape, skin tone, and facial feature overlay.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Head {
     /// Face/head shape.
     shape: HeadShape,
@@ -106,6 +106,23 @@ impl FromByteHandler for Head {
             face_features: FaceFeatures::try_from(byte & 0x0F)
                 .map_err(|_| HeadError::FaceFeaturesInvalid)?,
         })
+    }
+}
+
+/// Serializes a [`Head`] into its raw two-byte representation.
+///
+/// The bit layout is `0bTTTSSSFF FFXXXXXX`, where `T` is the face shape (3 bits),
+/// `S` is the skin tone (3 bits), `F` is the face features (4 bits), and `X` bits are outside data (0'd out in the return value).
+impl From<Head> for [u8; 2] {
+    fn from(value: Head) -> Self {
+        let face_shape = u8::from(value.shape());
+        let skin_tone = u8::from(value.skin_tone());
+        let face_features = u8::from(value.face_features());
+
+        [
+            (face_shape << 5) | (skin_tone << 2) | (face_features >> 2),
+            (face_features & 0x03) << 6,
+        ]
     }
 }
 

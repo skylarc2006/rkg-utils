@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the nose customization options of a Mii,
 /// including nose style, size, and vertical position.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Nose {
     /// Vertical position of the nose (0–18).
     y: u8,
@@ -82,6 +82,19 @@ impl Nose {
     /// Sets the nose shape/style.
     pub fn set_nose_type(&mut self, nose_type: NoseType) {
         self.nose_type = nose_type;
+    }
+}
+
+/// Converts a [`Nose`] to its raw byte representation.
+/// `0bTTTTSSSS YYYYYUUU`, where:
+/// T = type (4 bits), S = size (4 bits), Y = y position (5 bits)
+impl From<Nose> for [u8; 2] {
+    fn from(value: Nose) -> Self {
+        let nose_type = u8::from(value.nose_type());
+        let size = value.size();
+        let y = value.y();
+
+        [(nose_type << 4) | size, y << 3]
     }
 }
 

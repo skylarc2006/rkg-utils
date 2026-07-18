@@ -232,6 +232,7 @@ impl GetWeightClass for Vehicle {
 }
 
 impl Vehicle {
+    /// Returns `true` if this vehicle is a bike (as opposed to a kart).
     pub const fn is_bike(&self) -> bool {
         match self {
             Self::BulletBike
@@ -273,6 +274,7 @@ impl Vehicle {
         }
     }
 
+    /// Returns this vehicle's inherent transmission (inside/outside drift).
     pub const fn get_transmission(&self) -> Transmission {
         match self {
             Self::BulletBike

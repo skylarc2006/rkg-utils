@@ -9,7 +9,7 @@ use crate::{
 ///
 /// All positional and size values are validated against the ranges permitted
 /// by the Mii data format on construction.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Eyebrows {
     /// Eyebrow rotation (0–11).
     rotation: u8,
@@ -164,6 +164,29 @@ impl Eyebrows {
     /// Sets the eyebrow shape/style.
     pub fn set_eyebrow_type(&mut self, eyebrow_type: EyebrowType) {
         self.eyebrow_type = eyebrow_type;
+    }
+}
+
+/// Converts [`Eyebrows`] to its raw-data representation.
+/// `0bTTTTTRRR RRUUUUUU CCCSSSSY YYYYXXXX`, where:
+/// T = eyebrow type (5 bits), R = rotation (5 bits), U = unused (0),
+/// C = color (3 bits), S = size (4 bits), Y = y position (5 bits),
+/// X = x position (4 bits).
+impl From<Eyebrows> for [u8; 4] {
+    fn from(value: Eyebrows) -> Self {
+        let eyebrow_type = u8::from(value.eyebrow_type());
+        let rotation = value.rotation();
+        let color = u8::from(value.eyebrow_color());
+        let size = value.size();
+        let y = value.y();
+        let x = value.x();
+
+        [
+            (eyebrow_type << 3) | (rotation >> 2),
+            (rotation & 0x03) << 6,
+            (color << 5) | (size << 1) | (y >> 4),
+            ((y & 0x0F) << 4) | x,
+        ]
     }
 }
 

@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the mole customization options of a Mii,
 /// including whether a mole is shown and its position and size.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Mole {
     /// Whether the mole is visible on the Mii's face.
     has_mole: bool,
@@ -111,6 +111,24 @@ impl Mole {
         }
         self.size = size;
         Ok(())
+    }
+}
+
+/// Converts a [`Mole`] to its raw byte representation.
+/// `0bHSSSSYYY YYXXXXXU`, where:
+/// H = has_mole (1 bit), S = size (4 bits), Y = mole's Y position (5 bits),
+/// X = mole's X position (5 bits), U = unused (0).
+impl From<Mole> for [u8; 2] {
+    fn from(value: Mole) -> Self {
+        let has_mole = value.has_mole() as u8;
+        let size = value.size();
+        let y = value.y();
+        let x = value.x();
+
+        [
+            (has_mole << 7) | (size << 3) | (y >> 2),
+            ((y & 0x03) << 6) | (x << 1),
+        ]
     }
 }
 

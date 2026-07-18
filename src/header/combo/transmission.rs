@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-/// Vehicle Transmission
+/// Whether a vehicle/combo uses inside or outside drift.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Transmission {
     Inside,

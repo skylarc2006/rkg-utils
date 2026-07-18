@@ -24,7 +24,7 @@ pub enum BirthdayError {
 ///
 /// Both fields are `None` when the Mii's birthday is not set (i.e. month byte is 0).
 /// A month without a day is not a valid state and will be rejected by [`Birthday::new`].
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Birthday {
     /// The month of the birthday (1–12), or `None` if not set.
     month: Option<u8>,
@@ -94,5 +94,20 @@ impl FromByteHandler for Birthday {
         let mut handler = handler.try_into()?;
         handler.shift_right(2);
         Self::new(handler.copy_byte(0) & 0x0F, handler.copy_byte(1) >> 3)
+    }
+}
+
+/// Serializes a [`Birthday`] into its raw two-byte representation.
+///
+/// The bit layout is `0bXXMMMMDD DDDXXXXX`, where `M` is the month (4 bits),
+/// `D` is the day (5 bits), and `X` bits are other surrounding data,
+/// set to 0 in the resulting return value to allow bitwise ORing with the surrounding data.
+/// An unset birthday produces `[0, 0]`.
+impl From<Birthday> for [u8; 2] {
+    fn from(value: Birthday) -> Self {
+        match (value.month(), value.day()) {
+            (Some(month), Some(day)) => [(month << 2) | (day >> 3), (day & 0b111) << 5],
+            _ => [0u8; 2],
+        }
     }
 }

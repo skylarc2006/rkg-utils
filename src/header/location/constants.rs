@@ -7,7 +7,7 @@ pub enum CountryError {
     NonexistentCountry,
 }
 
-/// Error type for country-related failures.
+/// Error type for subregion-related failures.
 #[derive(thiserror::Error, Debug)]
 pub enum SubregionError {
     #[error("Nonexistent Subregion")]
@@ -22050,12 +22050,20 @@ impl std::fmt::Display for GreenlandSubregion {
         )
     }
 }
+/// Result of looking up a country/subregion/version combination against the RKG
+/// location table.
 pub enum LocationFinder {
+    /// A [`Location`] was found matching the requested version exactly.
     Exact(Location),
+    /// A [`Location`] was found, but under a different version than requested
+    /// (or no version was requested).
     Adjusted(Location),
+    /// No location entry matches the given country and subregion IDs.
     None,
 }
 impl LocationFinder {
+    /// Looks up a [`Location`] by country ID, subregion ID, and optional version,
+    /// reporting whether the match was exact or version-adjusted.
     pub const fn find(country_id: u8, subregion_id: u8, version: Option<Version>) -> Self {
         match (country_id, subregion_id, version) {
             (0x01, 0x01, Some(Version::Vanilla)) => Self::Exact(Location {

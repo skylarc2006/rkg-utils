@@ -1,3 +1,4 @@
+/// Errors that can occur while converting raw data into a `ByteHandler`.
 #[derive(thiserror::Error, Debug)]
 pub enum ByteHandlerError {
     /// The input slice was longer than 4 bytes and cannot fit in a `ByteHandler`.

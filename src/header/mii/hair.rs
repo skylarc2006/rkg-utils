@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the hair customization options of a Mii,
 /// including hair style, color, and whether the style is horizontally flipped.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Hair {
     /// Hair style.
     hair_type: HairType,
@@ -98,6 +98,23 @@ impl FromByteHandler for Hair {
             hair_color: HairColor::try_from(handler.copy_byte(1) >> 5)
                 .map_err(|_| HairError::ColorInvalid)?,
         })
+    }
+}
+
+/// Serializes a [`Hair`] into its raw two-byte representation.
+///
+/// The bit layout is `0bTTTTTTTC CCFXXXXX`, where `T` is the hair type (7 bits),
+/// `C` is the hair color (3 bits), `F` is the flipped hair flag (1 bit), and `X` bits are outside data (0'd out in the return value).
+impl From<Hair> for [u8; 2] {
+    fn from(value: Hair) -> Self {
+        let hair_type = u8::from(value.hair_type());
+        let hair_color = u8::from(value.hair_color());
+        let flipped = value.is_flipped() as u8;
+
+        [
+            (hair_type << 1) | (hair_color >> 2),
+            ((hair_color & 0x03) << 6) | (flipped << 5),
+        ]
     }
 }
 

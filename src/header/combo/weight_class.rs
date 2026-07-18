@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 /// The weight class of a character or vehicle in Mario Kart Wii.
 ///
-/// A valid [`Combo`] requires the character and vehicle to share the same weight class.
+/// A valid [`Combo`](crate::header::Combo) requires the character and vehicle to share the same weight class.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WeightClass {
     Small,

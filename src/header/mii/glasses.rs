@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the glasses customization options of a Mii,
 /// including glasses type, color, size, and vertical position.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Glasses {
     /// Vertical position of the glasses (0–20).
     y: u8,
@@ -108,6 +108,24 @@ impl Glasses {
     }
 }
 
+/// Converts [`Glasses`] to its raw-data representation.
+/// `0bTTTTCCCS SSSYYYYY`, where:
+/// T = glasses type (4 bits), C = color (3 bits), S = size (4 bits),
+/// Y = y position (5 bits).
+impl From<Glasses> for [u8; 2] {
+    fn from(value: Glasses) -> Self {
+        let glasses_type = u8::from(value.glasses_type());
+        let color = u8::from(value.glasses_color());
+        let size = value.size();
+        let y = value.y();
+
+        [
+            (glasses_type << 4) | (color << 1) | (size >> 3),
+            ((size & 0x07) << 5) | y,
+        ]
+    }
+}
+
 /// Deserializes [`Glasses`] from a `ByteHandler`.
 ///
 /// Extracts and unpacks the glasses type, vertical position, color, and size
@@ -125,7 +143,7 @@ impl FromByteHandler for Glasses {
             .map_err(|_| GlassesError::TypeInvalid)?;
         let y = handler.copy_byte(1) & 0x1F;
         handler.shift_right(1);
-        let glasses_color = GlassesColor::try_from(handler.copy_byte(0) & 0x03)
+        let glasses_color = GlassesColor::try_from(handler.copy_byte(0) & 0x07)
             .map_err(|_| GlassesError::ColorInvalid)?;
         let size = handler.copy_byte(1) >> 4;
 

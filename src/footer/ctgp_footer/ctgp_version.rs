@@ -52,7 +52,7 @@ impl CTGPVersion {
     /// # Examples
     ///
     /// ```
-    /// use rkg_utils::footer::ctgp_footer::ctgp_version::CTGPVersion;
+    /// use rkg_utils::footer::ctgp_footer::CTGPVersion;
     ///
     /// // Unambiguous mapping
     /// let versions = CTGPVersion::from(&[0x01, 0x03, 0x01, 0x42]).unwrap();
@@ -296,6 +296,8 @@ impl CTGPVersion {
                 possible_versions.push(CTGPVersion::new(1, 3, 1182, Some(4)));
                 possible_versions.push(CTGPVersion::new(1, 3, 1186, Some(5)));
                 possible_versions.push(CTGPVersion::new(1, 3, 1188, Some(3)));
+                possible_versions.push(CTGPVersion::new(1, 3, 1190, Some(5)));
+                possible_versions.push(CTGPVersion::new(1, 3, 1192, Some(3)));
             }
 
             _ => {
@@ -323,7 +325,7 @@ impl CTGPVersion {
     /// # Examples
     ///
     /// ```
-    /// use rkg_utils::footer::ctgp_footer::ctgp_version::CTGPVersion;
+    /// use rkg_utils::footer::ctgp_footer::CTGPVersion;
     ///
     /// let version = CTGPVersion::core_from(&[0x01, 0x03, 0x04, 0x10]).unwrap();
     /// assert_eq!(version.to_string(), "1.03.0410");
@@ -334,6 +336,17 @@ impl CTGPVersion {
         let revision: u16 = format!("{:02X}{:02X}", bytes[2], bytes[3]).parse()?;
 
         Ok(Self::new(major, minor, revision, None))
+    }
+
+    /// Returns the 4-byte BCD-encoded CORE version representation, the inverse of [`CTGPVersion::core_from`].
+    pub fn to_core_bytes(&self) -> [u8; 4] {
+        let rev_str = format!("{:04}", self.revision);
+        [
+            u8::from_str_radix(&format!("{:02}", self.major), 16).unwrap_or(0),
+            u8::from_str_radix(&format!("{:02}", self.minor), 16).unwrap_or(0),
+            u8::from_str_radix(&rev_str[0..2], 16).unwrap_or(0),
+            u8::from_str_radix(&rev_str[2..4], 16).unwrap_or(0),
+        ]
     }
 }
 

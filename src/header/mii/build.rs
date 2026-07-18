@@ -22,7 +22,7 @@ pub enum BuildError {
 /// Represents the body proportions of a Mii, storing height and weight values.
 ///
 /// Both values are clamped to the range 0–127 as defined by the Mii data format.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Build {
     /// The Mii's height (0–127).
     height: u8,
@@ -104,5 +104,14 @@ impl FromByteHandler for Build {
         let handler = handler.try_into()?;
 
         Self::new(handler.copy_byte(0), handler.copy_byte(1))
+    }
+}
+
+/// Converts a [`Build`] to its raw byte representation.
+/// `0bHHHHHHHH WWWWWWWW`, where:
+/// H = height, W = weight
+impl From<Build> for [u8; 2] {
+    fn from(value: Build) -> Self {
+        [value.height(), value.weight()]
     }
 }
