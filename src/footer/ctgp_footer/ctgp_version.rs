@@ -52,7 +52,7 @@ impl CTGPVersion {
     /// # Examples
     ///
     /// ```
-    /// use rkg_utils::footer::ctgp_footer::ctgp_version::CTGPVersion;
+    /// use rkg_utils::footer::ctgp_footer::CTGPVersion;
     ///
     /// // Unambiguous mapping
     /// let versions = CTGPVersion::from(&[0x01, 0x03, 0x01, 0x42]).unwrap();
@@ -325,7 +325,7 @@ impl CTGPVersion {
     /// # Examples
     ///
     /// ```
-    /// use rkg_utils::footer::ctgp_footer::ctgp_version::CTGPVersion;
+    /// use rkg_utils::footer::ctgp_footer::CTGPVersion;
     ///
     /// let version = CTGPVersion::core_from(&[0x01, 0x03, 0x04, 0x10]).unwrap();
     /// assert_eq!(version.to_string(), "1.03.0410");

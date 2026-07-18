@@ -32,7 +32,7 @@ impl SPVersion {
     /// # Examples
     ///
     /// ```
-    /// use rkg_utils::footer::sp_footer::sp_version::SPVersion;
+    /// use rkg_utils::footer::sp_footer::SPVersion;
     ///
     /// // Unambiguous mapping
     /// let versions = SPVersion::from(0).unwrap();
@@ -114,7 +114,7 @@ impl SPVersion {
 /// # Examples
 ///
 /// ```
-/// use rkg_utils::footer::sp_footer::sp_version::SPVersion;
+/// use rkg_utils::footer::sp_footer::SPVersion;
 ///
 /// let version = SPVersion::from(0).unwrap()[0];
 /// assert_eq!(u8::from(version), 0);

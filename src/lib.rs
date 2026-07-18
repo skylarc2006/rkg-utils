@@ -19,9 +19,7 @@ use std::{
 use chrono::{DateTime, Duration, NaiveDateTime, TimeDelta};
 use sha1::{Digest, Sha1};
 
-use crate::{
-    crc::crc32, footer::{FooterType, ctgp_footer::CTGPFooter, sp_footer::SPFooter}, header::Header, input_data::{InputData, compression_method::CompressionMethod, controller_input::ControllerInput}, shroomstrat::Shroomstrat,
-};
+use crate::{crc::crc32, input_data::CompressionMethod};
 
 pub mod byte_handler;
 pub mod crc;
@@ -32,6 +30,15 @@ pub mod shroomstrat;
 
 #[cfg(test)]
 mod tests;
+
+#[doc(inline)]
+pub use footer::{CTGPFooter, FooterType, SPFooter};
+#[doc(inline)]
+pub use header::{Combo, Header, HeaderError, Mii};
+#[doc(inline)]
+pub use input_data::{ControllerInput, InputData, InputDataError};
+#[doc(inline)]
+pub use shroomstrat::Shroomstrat;
 
 /// Errors that can occur while parsing or modifying a [`Ghost`].
 #[derive(thiserror::Error, Debug)]
@@ -51,7 +58,7 @@ pub enum GhostError {
     /// The CTGP footer could not be parsed.
     #[error("CTGP Footer Error: {0}")]
     CTGPFooterError(#[from] footer::ctgp_footer::CTGPFooterError),
-    /// A `ByteHandler`(byte_handler::ByteHandler) operation failed.
+    /// A `ByteHandler` operation failed.
     #[error("ByteHandler Error: {0}")]
     ByteHandlerError(#[from] byte_handler::ByteHandlerError),
     /// A slice-to-array conversion failed (e.g. when extracting a CRC-32 word).
@@ -176,9 +183,10 @@ impl Ghost {
     ///
     /// # Errors
     ///
-    /// Returns [`GhostError::CTGPFooterError`] if the SHA-1 field cannot be written.
+    /// Returns [`GhostError::CTGPFooterError`] if the SHA-1 field cannot be written,
+    /// or [`GhostError::InputDataError`] if the input data cannot be serialized.
     pub fn update_ghost_sha1(&mut self) -> Result<(), GhostError> {
-        let sha1 = compute_sha1_hex(&self.raw_data());
+        let sha1 = compute_sha1_hex(&self.raw_data()?);
         if let Some(FooterType::CTGPFooter(ctgp_footer)) = self.footer_mut() {
             ctgp_footer.set_ghost_sha1(&sha1)?;
         }
@@ -194,7 +202,7 @@ impl Ghost {
     pub fn save_to_file<T: AsRef<std::path::Path>>(&mut self, path: T) -> Result<(), GhostError> {
         self.update_ghost_sha1()?;
         let mut file = std::fs::File::create(path)?;
-        file.write_all(&self.raw_data())?;
+        file.write_all(&self.raw_data()?)?;
         Ok(())
     }
 
@@ -207,7 +215,12 @@ impl Ghost {
     /// Returns the computed raw file bytes.
     ///
     /// The result always reflects the current state of all parsed fields.
-    pub fn raw_data(&mut self) -> Vec<u8> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhostError::InputDataError`] if the input data's uncompressed
+    /// raw representation would exceed `0x2774` bytes.
+    pub fn raw_data(&mut self) -> Result<Vec<u8>, GhostError> {
         let mut buf = Vec::from(self.header.raw_data());
 
         if let Some(FooterType::CTGPFooter(_)) = &self.footer()
@@ -228,7 +241,7 @@ impl Ghost {
                 .set_compression_method(CompressionMethod::Vanilla);
         }
 
-        buf.extend_from_slice(&self.input_data.raw_data());
+        buf.extend_from_slice(&self.input_data.raw_data()?);
         let base_crc32 = crc32(&buf);
         buf.extend_from_slice(&base_crc32.to_be_bytes());
         if self.should_preserve_external_footer
@@ -238,7 +251,7 @@ impl Ghost {
         }
         let file_crc32 = crc32(&buf);
         buf.extend_from_slice(&file_crc32.to_be_bytes());
-        buf
+        Ok(buf)
     }
 
     /// Returns the parsed RKG file header.
@@ -272,9 +285,10 @@ impl Ghost {
     }
 
     /// Returns the shroomstrat of the ghost. If a CTGP or MKW-SP footer (footer version >= 1) is present
-    /// and [`Ghost::should_preserve_external_footer`] is true,it uses the info from its footer. If not,
+    /// and [`Ghost::should_preserve_external_footer`] is true, it uses the info from its footer. If not,
     /// input data is used to estimate the shroomstrat. Shroomstrat estimation may be inaccurate if the
-    /// item button is pressed during a cannon or after a respawn.
+    /// item button is pressed during a cannon, after a respawn, while being spun out by something, or
+    /// otherwise losing mushrooms early.
     pub fn shroomstrat(&self) -> Shroomstrat {
         if self.should_preserve_external_footer() && let Some(footer) = self.footer() {
             match footer {
@@ -291,7 +305,7 @@ impl Ghost {
         const MILLISECONDS_PER_FRAME: f64 = 1000f64 / 59.94f64;
         let mut current_shroom_index = 0;
         let mut shroom_usages = [0u8; 3];
-        let mut current_frames = 1;
+        let mut current_frames = 0;
         let mut previous_input = &ControllerInput::default();
 
         let mut lap_splits_ms = Vec::new();
@@ -300,25 +314,28 @@ impl Ghost {
         }
 
         for input in self.input_data().controller_inputs().iter() {
-            if current_frames >= 240 {
-                if input.item() && !previous_input.item() {
-                    let current_ms = 
-                        (MILLISECONDS_PER_FRAME * (current_frames - 240) as f64).floor() as u32;
+            if current_frames >= 240
+                && current_shroom_index < 3
+                && input.item()
+                && !previous_input.item()
+            {
+                let current_ms =
+                    (MILLISECONDS_PER_FRAME * (current_frames - 240) as f64).floor() as u32;
 
-                    let mut current_lap = 1;
-                    let mut previous_laps_ms_sum = 0;
+                let mut current_lap = 1u8;
+                let mut previous_laps_ms_sum = 0u32;
 
-                    for lap_split in lap_splits_ms.iter() {
-                        if current_ms < previous_laps_ms_sum + *lap_split {
-                            shroom_usages[current_shroom_index] = current_lap;
-                            current_shroom_index += 1;
-                            current_lap += 1;
-                        }
-                        if current_shroom_index > 2 || current_lap > self.header().lap_count() {
-                            break;
-                        }
-                        previous_laps_ms_sum += lap_split;
+                for lap_split in lap_splits_ms.iter() {
+                    if current_ms < previous_laps_ms_sum + *lap_split {
+                        break;
                     }
+                    previous_laps_ms_sum += lap_split;
+                    current_lap += 1;
+                }
+
+                if current_lap <= self.header().lap_count() {
+                    shroom_usages[current_shroom_index] = current_lap;
+                    current_shroom_index += 1;
                 }
             }
 
@@ -330,16 +347,26 @@ impl Ghost {
     }
 
     /// Returns the CRC-32 of the header and input data, excluding any footer.
-    pub fn base_crc32(&self) -> u32 {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhostError::InputDataError`] if the input data's uncompressed
+    /// raw representation would exceed `0x2774` bytes.
+    pub fn base_crc32(&self) -> Result<u32, GhostError> {
         let mut buf = Vec::from(self.header.raw_data());
-        buf.extend_from_slice(&self.input_data.raw_data());
-        crc32(&buf)
+        buf.extend_from_slice(&self.input_data.raw_data()?);
+        Ok(crc32(&buf))
     }
 
     /// Returns the CRC-32 of the entire file excluding its final 4 bytes.
-    pub fn file_crc32(&mut self) -> u32 {
-        let raw = self.raw_data();
-        crc32(&raw[..raw.len() - 4])
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhostError::InputDataError`] if the input data's uncompressed
+    /// raw representation would exceed `0x2774` bytes.
+    pub fn file_crc32(&mut self) -> Result<u32, GhostError> {
+        let raw = self.raw_data()?;
+        Ok(crc32(&raw[..raw.len() - 4]))
     }
 
     /// Returns whether an existing external footer will be preserved when saving.
@@ -353,7 +380,13 @@ impl Ghost {
     }
 }
 
-/// Used internally for writing bits to a buffer.
+/// Writes `bit_width` bits of `value` into `buf`, starting `bit_offset` bits past
+/// `byte_offset` bytes from the start of the buffer, in big-endian bit order.
+///
+/// # Panics
+///
+/// Panics if `byte_offset`, `bit_offset`, and `bit_width` together describe a range
+/// that falls outside `buf`.
 pub(crate) fn write_bits(
     buf: &mut [u8],
     byte_offset: usize,

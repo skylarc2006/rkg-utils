@@ -1,4 +1,4 @@
-/// Errors that can occur while parsing a [`FaceButton`] combination.
+/// Errors that can occur while parsing a `FaceButton` combination.
 #[derive(thiserror::Error, Debug)]
 pub enum FaceButtonError {
     /// The face button byte was non-zero but did not match any known button bit.

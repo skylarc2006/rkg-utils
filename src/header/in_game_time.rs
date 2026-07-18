@@ -20,7 +20,7 @@ pub enum InGameTimeError {
 /// minutes, seconds, and milliseconds.
 ///
 /// Not all combinations of fields are semantically meaningful; use
-/// [`is_technically_valid`](InGameTime::is_technically_valid) to check whether
+/// [`is_valid`](InGameTime::is_valid) to check whether
 /// the time falls within the bounds expected during normal gameplay.
 ///
 /// [`InGameTime`] values can be added together and summed via the standard

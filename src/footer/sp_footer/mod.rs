@@ -1,13 +1,16 @@
 // TODO: eliminate the need for raw_data to be a struct member
 use crate::{
     byte_handler::{ByteHandler, FromByteHandler},
-    footer::{ctgp_footer::exact_in_game_time::ExactInGameTime, sp_footer::sp_version::SPVersion},
-    header::in_game_time::{InGameTime, InGameTimeError},
+    footer::ctgp_footer::ExactInGameTime,
+    header::{InGameTime, InGameTimeError},
     shroomstrat::Shroomstrat,
     write_bits,
 };
 
-pub mod sp_version;
+pub(crate) mod sp_version;
+
+#[doc(inline)]
+pub use sp_version::SPVersion;
 
 /// Errors that can occur while parsing an [`SPFooter`].
 #[derive(thiserror::Error, Debug)]
@@ -445,7 +448,7 @@ impl SPFooter {
     /// Returns the per-lap mushroom usage counts (shroomstrat) for the recorded laps.
     ///
     /// Returns `None` for footer version 0, which does not include shroomstrat data.
-    pub fn shroomstrat(&self) -> Option<Shroomstrat> {
+    pub(crate) fn shroomstrat(&self) -> Option<Shroomstrat> {
         self.shroomstrat
     }
 

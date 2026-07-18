@@ -1,18 +1,23 @@
 use crate::byte_handler::{ByteHandlerError, FromByteHandler};
-use crate::footer::ctgp_footer::region::Region;
-use crate::footer::ctgp_footer::{
-    category::Category, ctgp_version::CTGPVersion, exact_in_game_time::ExactInGameTime,
-};
-use crate::header::in_game_time::InGameTime;
+use crate::header::InGameTime;
 use crate::shroomstrat::Shroomstrat;
 use crate::{byte_handler::ByteHandler, input_data::yaz1_decompress};
 use crate::{compute_sha1_hex, datetime_from_timestamp, duration_from_ticks};
 use chrono::{TimeDelta, prelude::*};
 
-pub mod category;
-pub mod ctgp_version;
-pub mod exact_in_game_time;
-pub mod region;
+pub(crate) mod category;
+pub(crate) mod ctgp_version;
+pub(crate) mod exact_in_game_time;
+pub(crate) mod region;
+
+#[doc(inline)]
+pub use category::{Category, CategoryError};
+#[doc(inline)]
+pub use ctgp_version::CTGPVersion;
+#[doc(inline)]
+pub use exact_in_game_time::ExactInGameTime;
+#[doc(inline)]
+pub use region::Region;
 
 /// Errors that can occur while parsing a [`CTGPFooter`].
 #[derive(thiserror::Error, Debug)]
@@ -58,7 +63,7 @@ pub enum CTGPFooterError {
 /// high-precision timing, version information, RTC timestamps, pause data, and various
 /// integrity/cheat-detection flags.
 ///
-/// Full documentation of CTGP footer data can be found at https://wiki.tockdom.com/wiki/CRKG_(File_Format).
+/// Full documentation of CTGP footer data can be found at <https://wiki.tockdom.com/wiki/CRKG_(File_Format)>.
 pub struct CTGPFooter {
     /// Length of the footer in bytes, excluding the trailing CRC32.
     len: usize,
@@ -788,7 +793,7 @@ impl CTGPFooter {
     }
 
     /// Returns the shroomstrat of the ghost.
-    pub fn shroomstrat(&self) -> Shroomstrat {
+    pub(crate) fn shroomstrat(&self) -> Shroomstrat {
         self.shroomstrat
     }
 

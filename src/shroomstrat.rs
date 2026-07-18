@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+/// Errors that can occur while constructing a [`Shroomstrat`].
 #[derive(thiserror::Error, Debug)]
 pub enum ShroomstratError {
     /// Shroom usages cannot be after the last lap.
@@ -10,6 +11,10 @@ pub enum ShroomstratError {
     LapCountInvalid,
 }
 
+/// Records which lap (if any) each of a ghost's three mushrooms was used on.
+///
+/// "Shroomstrat" is Mario Kart Wii community terminology for the lap-by-lap
+/// distribution of mushroom usage during a race.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Shroomstrat {
     /// The lap that the first mushroom was used on.
@@ -28,8 +33,11 @@ pub struct Shroomstrat {
 impl Shroomstrat {
     /// Creates a new [`Shroomstrat`].
     /// Values of `0` for shroom usages are treated as that shroom being unused.
-    /// Returns [`ShroomstratError`] if the lap count is 0 or any shroom usages happen past the
-    /// specified lap count.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ShroomstratError::LapCountInvalid`] if `lap_count` is 0, or
+    /// [`ShroomstratError::ShroomUsageInvalid`] if any shroom usage is past `lap_count`.
     pub fn new(
         shroom_1_usage: u8,
         shroom_2_usage: u8,
@@ -65,14 +73,17 @@ impl Shroomstrat {
         }
     }
 
+    /// Returns the lap the first mushroom was used on, or `None` if it was never used.
     pub fn shroom_1_usage(&self) -> Option<u8> {
         self.shroom_1_usage
     }
 
+    /// Returns the lap the second mushroom was used on, or `None` if it was never used.
     pub fn shroom_2_usage(&self) -> Option<u8> {
         self.shroom_2_usage
     }
 
+    /// Returns the lap the third mushroom was used on, or `None` if it was never used.
     pub fn shroom_3_usage(&self) -> Option<u8> {
         self.shroom_3_usage
     }
@@ -87,6 +98,11 @@ impl Shroomstrat {
         ]
     }
 
+    /// Returns a per-lap mushroom-usage-count vector of length `lap_count`, where
+    /// index `n` holds the number of mushrooms used on lap `n + 1`.
+    ///
+    /// For example, `[1, 0, 2]` means one mushroom on lap 1, none on lap 2, and two
+    /// on lap 3.
     pub fn to_vec(&self) -> Vec<u8> {
         let mut shroomstrat = vec![0; self.lap_count.into()];
 
@@ -105,6 +121,8 @@ impl Shroomstrat {
     }
 }
 
+/// Formats as `-`-separated per-lap mushroom usage counts, e.g. `"1-0-2"`
+/// (see [`Shroomstrat::to_vec`]).
 impl Display for Shroomstrat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let v = self.to_vec();

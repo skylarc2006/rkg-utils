@@ -61,7 +61,7 @@ impl ExactInGameTime {
     /// # Examples
     ///
     /// ```
-    /// use rkg_utils::footer::ctgp_footer::exact_in_game_time::ExactInGameTime;
+    /// use rkg_utils::footer::ctgp_footer::ExactInGameTime;
     ///
     /// let t = ExactInGameTime::new(1, 30, 500_000_000_000);
     /// assert_eq!(t.time_to_picoseconds(), 90_500_000_000_000);
@@ -78,7 +78,7 @@ impl ExactInGameTime {
 /// # Examples
 ///
 /// ```
-/// use rkg_utils::footer::ctgp_footer::exact_in_game_time::ExactInGameTime;
+/// use rkg_utils::footer::ctgp_footer::ExactInGameTime;
 ///
 /// let t = ExactInGameTime::new(1, 9, 123_456_789_000);
 /// assert_eq!(t.to_string(), "01:09.123456789000");

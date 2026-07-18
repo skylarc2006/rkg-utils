@@ -5,7 +5,7 @@
 ///
 /// # Returns
 /// The calculated CRC16 value
-pub fn crc16(data: &[u8]) -> u16 {
+pub(crate) fn crc16(data: &[u8]) -> u16 {
     let mut crc: u16 = 0x0000; // Initial value for XModem variant
     let polynomial: u16 = 0x1021; // Standard CCITT polynomial
 
@@ -50,7 +50,7 @@ fn make_crc_table() -> [u32; 256] {
 ///
 /// # Returns
 /// The calculated CRC32 value
-pub fn crc32(data: &[u8]) -> u32 {
+pub(crate) fn crc32(data: &[u8]) -> u32 {
     static CRC_TABLE: std::sync::OnceLock<[u32; 256]> = std::sync::OnceLock::new();
     let crc_table = CRC_TABLE.get_or_init(make_crc_table);
 

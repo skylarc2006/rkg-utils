@@ -2,18 +2,9 @@ use crate::{
     byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
     crc::crc16,
     header::{
-        combo::{Combo, ComboError, transmission::Transmission},
-        controller::{Controller, ControllerError},
-        date::{Date, DateError},
-        ghost_type::{GhostType, GhostTypeError},
-        in_game_time::{InGameTime, InGameTimeError},
-        location::{
-            Location,
-            constants::{Country, CountryError, SubregionError, Version},
-        },
-        mii::{Mii, MiiError},
-        slot_id::{SlotId, SlotIdError},
-        transmission_mod::{TransmissionMod, TransmissionModError},
+        combo::{ComboError, Transmission},
+        location::constants::{Country, CountryError, SubregionError, Version},
+        mii::MiiError,
     },
     write_bits,
 };
@@ -21,14 +12,34 @@ use crate::{
 use std::io::Read;
 
 pub mod combo;
-pub mod controller;
-pub mod date;
-pub mod ghost_type;
-pub mod in_game_time;
 pub mod location;
 pub mod mii;
-pub mod slot_id;
-pub mod transmission_mod;
+
+pub(crate) mod controller;
+pub(crate) mod date;
+pub(crate) mod ghost_type;
+pub(crate) mod in_game_time;
+pub(crate) mod slot_id;
+pub(crate) mod transmission_mod;
+
+#[doc(inline)]
+pub use combo::Combo;
+#[doc(inline)]
+pub use controller::{Controller, ControllerError};
+#[doc(inline)]
+pub use date::{Date, DateError};
+#[doc(inline)]
+pub use ghost_type::{GhostType, GhostTypeError};
+#[doc(inline)]
+pub use in_game_time::{InGameTime, InGameTimeError};
+#[doc(inline)]
+pub use location::Location;
+#[doc(inline)]
+pub use mii::Mii;
+#[doc(inline)]
+pub use slot_id::{SlotId, SlotIdError};
+#[doc(inline)]
+pub use transmission_mod::{TransmissionMod, TransmissionModError};
 
 /// Errors that can occur while parsing or modifying a [`Header`].
 #[derive(thiserror::Error, Debug)]

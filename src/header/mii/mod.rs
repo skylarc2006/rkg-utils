@@ -2,39 +2,51 @@ use chrono::{DateTime, Duration, NaiveDateTime};
 
 use crate::{
     byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
-    header::mii::{
-        birthday::{Birthday, BirthdayError},
-        build::{Build, BuildError},
-        eyebrows::{Eyebrows, EyebrowsError},
-        eyes::{Eyes, EyesError},
-        facial_hair::{FacialHair, FacialHairError},
-        favorite_color::{FavoriteColor, FavoriteColorError},
-        glasses::{Glasses, GlassesError},
-        hair::{Hair, HairError},
-        head::{Head, HeadError},
-        lips::{Lips, LipsError},
-        mii_type::{MiiType, MiiTypeError},
-        mole::{Mole, MoleError},
-        nose::{Nose, NoseError},
-    },
     write_bits,
 };
 
 use std::io::{Read, Write};
 
-pub mod birthday;
-pub mod build;
-pub mod eyebrows;
-pub mod eyes;
-pub mod facial_hair;
-pub mod favorite_color;
-pub mod glasses;
-pub mod hair;
-pub mod head;
-pub mod lips;
-pub mod mii_type;
-pub mod mole;
-pub mod nose;
+pub(crate) mod birthday;
+pub(crate) mod build;
+pub(crate) mod eyebrows;
+pub(crate) mod eyes;
+pub(crate) mod facial_hair;
+pub(crate) mod favorite_color;
+pub(crate) mod glasses;
+pub(crate) mod hair;
+pub(crate) mod head;
+pub(crate) mod lips;
+pub(crate) mod mii_type;
+pub(crate) mod mole;
+pub(crate) mod nose;
+
+#[doc(inline)]
+pub use birthday::{Birthday, BirthdayError};
+#[doc(inline)]
+pub use build::{Build, BuildError};
+#[doc(inline)]
+pub use eyebrows::{EyebrowType, Eyebrows, EyebrowsError};
+#[doc(inline)]
+pub use eyes::{EyeColor, EyeType, Eyes, EyesError};
+#[doc(inline)]
+pub use facial_hair::{BeardType, FacialHair, FacialHairError, MustacheType};
+#[doc(inline)]
+pub use favorite_color::{FavoriteColor, FavoriteColorError};
+#[doc(inline)]
+pub use glasses::{Glasses, GlassesColor, GlassesError, GlassesType};
+#[doc(inline)]
+pub use hair::{Hair, HairColor, HairError, HairType};
+#[doc(inline)]
+pub use head::{FaceFeatures, Head, HeadError, HeadShape, SkinTone};
+#[doc(inline)]
+pub use lips::{Lips, LipsColor, LipsError, LipsType};
+#[doc(inline)]
+pub use mii_type::{MiiType, MiiTypeError};
+#[doc(inline)]
+pub use mole::{Mole, MoleError};
+#[doc(inline)]
+pub use nose::{Nose, NoseError, NoseType};
 
 /// Errors that can occur while parsing or modifying a [`Mii`].
 #[derive(thiserror::Error, Debug)]
@@ -394,8 +406,6 @@ impl Mii {
 
     /// Sets the Mii's birthday and updates the raw data accordingly.
     pub fn set_birthday(&mut self, birthday: Birthday) {
-        // "public fortnite" - fawwe
-
         self.birthday = birthday;
 
         let month = birthday.month().unwrap_or(0) as u64;
@@ -499,7 +509,6 @@ impl Mii {
     ///
     /// Note: the valid range of the timestamp has not been fully determined.
     pub fn set_creation_date(&mut self, creation_date: NaiveDateTime) {
-        // TODO: determine limits for timestamp
         let raw_data = self.raw_data_mut();
         write_bits(
             raw_data,

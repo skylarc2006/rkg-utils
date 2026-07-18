@@ -1,18 +1,24 @@
-use crate::input_data::{
-    compression_method::CompressionMethod,
-    controller_input::ControllerInput,
-    dpad_button::{DPadButton, DPadButtonError},
-    drift_flag::DriftFlag,
-    face_button::{FaceButton, FaceButtonError, FaceButtons},
-    stick_input::{StickInput, StickInputError},
-};
+use crate::input_data::face_button::{FaceButton, FaceButtons};
 
-pub mod compression_method;
-pub mod controller_input;
-pub mod dpad_button;
-pub mod drift_flag;
-pub mod face_button;
-pub mod stick_input;
+pub(crate) mod compression_method;
+pub(crate) mod controller_input;
+pub(crate) mod dpad_button;
+pub(crate) mod drift_flag;
+pub(crate) mod face_button;
+pub(crate) mod stick_input;
+
+#[doc(inline)]
+pub use compression_method::CompressionMethod;
+#[doc(inline)]
+pub use controller_input::{ControllerInput, ControllerInputError};
+#[doc(inline)]
+pub use dpad_button::{DPadButton, DPadButtonError};
+#[doc(inline)]
+pub use drift_flag::DriftFlag;
+#[doc(inline)]
+pub use face_button::FaceButtonError;
+#[doc(inline)]
+pub use stick_input::{StickInput, StickInputError};
 
 /// Errors that can occur while parsing [`InputData`].
 #[derive(thiserror::Error, Debug)]
@@ -20,6 +26,9 @@ pub enum InputDataError {
     /// Input data is impossibly short.
     #[error("Input data length is too short")]
     InputDataLengthTooShort,
+    /// Input data is too long.
+    #[error("Decompressed input data length is too long")]
+    InputDataLengthTooLong,
     /// Input data is malformed.
     #[error("Input data is malformed")]
     InputDataMalformed,
@@ -47,7 +56,10 @@ pub struct InputData {
 impl InputData {
     /// Constructs input data from a `Vec<ControllerInput>` and a compressed flag.
     ///
+    /// # Errors
+    ///
     /// Returns [`InputDataError::InputDataLengthTooShort`] if `controller_inputs` is empty.
+    /// Returns [`InputDataError::InputDataLengthTooLong`] if the uncompressed raw data representation exceeds `0x2774` bytes in size.
     pub fn new(
         controller_inputs: Vec<ControllerInput>,
         compressed: bool,
@@ -55,11 +67,17 @@ impl InputData {
         if controller_inputs.is_empty() {
             return Err(InputDataError::InputDataLengthTooShort);
         }
-        Ok(Self {
+
+        let mut input_data = Self {
             controller_inputs,
-            compressed,
+            compressed: false,
             compression_method: CompressionMethod::Vanilla,
-        })
+        };
+
+        input_data.raw_data()?;
+        input_data.set_compressed(compressed);
+
+        Ok(input_data)
     }
 
     /// Parses controller input data from raw RKG bytes starting at offset `0x88`.
@@ -73,6 +91,9 @@ impl InputData {
     ///
     /// Returns an [`InputDataError`] variant if any individual input entry
     /// fails to parse.
+    ///
+    /// Returns [`InputDataError::InputDataLengthTooLong`] if the uncompressed raw
+    /// data representation exceeds `0x2774` bytes in size.
     pub fn new_from_bytes(input_data: &[u8]) -> Result<Self, InputDataError> {
         if input_data.len() < 0x08 {
             return Err(InputDataError::InputDataLengthTooShort);
@@ -87,6 +108,10 @@ impl InputData {
             compressed = false;
             Vec::from(input_data)
         };
+
+        if input_data.len() > 0x2774 {
+            return Err(InputDataError::InputDataLengthTooLong)
+        }
 
         let read_u16 = |i: usize| u16::from_be_bytes(input_data[i..i + 2].try_into().unwrap());
         let face_button_input_count = read_u16(0x00);
@@ -310,7 +335,11 @@ impl InputData {
     /// for face/stick, 4095 for dpad) is split into multiple entries. If
     /// `compressed` is set the result is Yaz1-compressed; otherwise it is
     /// zero-padded to `0x2774` bytes.
-    pub fn raw_data(&self) -> Vec<u8> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InputDataError::InputDataLengthTooLong`] if the uncompressed raw data representation exceeds `0x2774` bytes in size.
+    pub fn raw_data(&self) -> Result<Vec<u8>, InputDataError> {
         let mut raw_data = Vec::new();
 
         // Input data header
@@ -390,22 +419,28 @@ impl InputData {
             }
         }
 
+        if raw_data.len() > 0x2774 {
+            return Err(InputDataError::InputDataLengthTooLong);
+        }
+
         if self.compressed() {
             match self.compression_method() {
-                CompressionMethod::CTGP => ctgp_compress(&raw_data),
-                CompressionMethod::Vanilla => yaz1_compress(&raw_data),
-                CompressionMethod::SP => sp_compress(&raw_data),
+                CompressionMethod::CTGP => Ok(ctgp_compress(&raw_data)),
+                CompressionMethod::Vanilla => Ok(yaz1_compress(&raw_data)),
+                CompressionMethod::SP => Ok(sp_compress(&raw_data)),
             }
         } else {
             raw_data.resize(0x2774, 0x00);
-            raw_data
+            Ok(raw_data)
         }
     }
 
+    /// Returns the compression method used when serializing this input data.
     pub fn compression_method(&self) -> CompressionMethod {
         self.compression_method
     }
 
+    /// Sets the compression method to use when serializing this input data.
     pub fn set_compression_method(&mut self, compression_method: CompressionMethod) {
         self.compression_method = compression_method
     }

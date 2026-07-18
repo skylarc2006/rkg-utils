@@ -1,45 +1,25 @@
 use chrono::NaiveDateTime;
 
 use crate::{
-    Ghost, GhostError,
+    Combo, ControllerInput, Ghost, GhostError, Header, HeaderError, InputData, InputDataError, Mii,
+    Shroomstrat,
     crc::{crc16, crc32},
-    footer::{FooterType, ctgp_footer::CTGPFooter},
+    footer::{CTGPFooter, FooterType},
     header::{
-        Header, HeaderError,
-        combo::{Combo, ComboError, character::Character, vehicle::Vehicle},
-        controller::Controller,
-        date::{Date, DateError},
-        ghost_type::{GhostType, GhostTypeError},
-        in_game_time::{InGameTime, InGameTimeError},
+        Controller, Date, DateError, GhostType, GhostTypeError, InGameTime, InGameTimeError,
+        SlotId, SlotIdError, TransmissionMod,
+        combo::{Character, ComboError, Vehicle},
         location::{Location, constants::*},
         mii::{
-            Mii,
-            birthday::Birthday,
-            build::Build,
-            eyebrows::{EyebrowType, Eyebrows},
-            eyes::{EyeColor, EyeType, Eyes},
-            facial_hair::{BeardType, FacialHair, MustacheType},
-            favorite_color::FavoriteColor,
-            glasses::{Glasses, GlassesColor, GlassesType},
-            hair::{Hair, HairColor, HairType},
-            head::{FaceFeatures, Head, HeadShape, SkinTone},
-            lips::{Lips, LipsColor, LipsType},
-            mii_type::MiiType,
-            mole::Mole,
-            nose::{Nose, NoseType},
+            BeardType, Birthday, Build, EyeColor, EyeType, EyebrowType, Eyebrows, Eyes,
+            FaceFeatures, FacialHair, FavoriteColor, Glasses, GlassesColor, GlassesType, Hair,
+            HairColor, HairType, Head, HeadShape, Lips, LipsColor, LipsType, MiiType, Mole,
+            MustacheType, Nose, NoseType, SkinTone,
         },
-        slot_id::{SlotId, SlotIdError},
-        transmission_mod::TransmissionMod,
     },
     input_data::{
-        InputData, InputDataError,
-        controller_input::ControllerInput,
-        dpad_button::DPadButton,
-        drift_flag::DriftFlag,
-        stick_input::{StickInput, StickInputError},
-        yaz1_compress, yaz1_decompress,
+        DPadButton, DriftFlag, StickInput, StickInputError, yaz1_compress, yaz1_decompress,
     },
-    shroomstrat::Shroomstrat,
     write_bits,
 };
 use std::io::Read;
@@ -620,7 +600,10 @@ fn print_full_ghost() {
     println!("Controller: {:?}", ghost.header().controller());
     println!("Is Compressed: {}", ghost.header().is_compressed());
     println!("Ghost Type: {:?}", ghost.header().ghost_type());
-    println!("Is Automatic Drift: {}", ghost.header().is_automatic_drift());
+    println!(
+        "Is Automatic Drift: {}",
+        ghost.header().is_automatic_drift()
+    );
     println!(
         "Decompressed Input Data Length: {}",
         ghost.header().decompressed_input_data_length()
@@ -868,7 +851,7 @@ fn write_to_ghost() {
 
     // new ghost asserts
     ghost.update_ghost_sha1().unwrap();
-    let mut ghost = Ghost::new_from_bytes(&ghost.raw_data()).unwrap();
+    let mut ghost = Ghost::new_from_bytes(&ghost.raw_data().unwrap()).unwrap();
 
     // General ghost info
     assert_eq!(ghost.header().finish_time().minutes(), 1);
@@ -997,6 +980,7 @@ fn write_to_ghost() {
 
 // This test requires a "ctgp_ghost_collection" folder not included in the rkg-utils repository, as it's 6.5k ghost files.
 // Downloadable here: https://drive.google.com/file/d/1g-aY0mcBcMq9Zse0dkQEmZqHxV_UhmXM/view?usp=sharing
+/*
 #[test]
 fn bulk_ghost_collection() {
     for entry in std::fs::read_dir("./test_ghosts/ctgp_ghost_collection").unwrap() {
@@ -1028,10 +1012,10 @@ fn bulk_ghost_collection() {
                     entry.path()
                 );
             }
-            
         }
     }
 }
+*/
 
 #[test]
 fn current_wr_ghosts() {
@@ -1080,10 +1064,13 @@ fn test_compare_saved_ghost() {
 
     assert_eq!(ghost1.header().raw_data(), ghost2.header().raw_data());
     assert_eq!(
-        ghost1.input_data().raw_data(),
-        ghost2.input_data().raw_data()
+        ghost1.input_data().raw_data().unwrap(),
+        ghost2.input_data().raw_data().unwrap()
     );
-    assert_eq!(ghost1.file_crc32(), ghost2.file_crc32());
+    assert_eq!(
+        ghost1.file_crc32().unwrap(),
+        ghost2.file_crc32().unwrap()
+    );
     assert_eq!(
         ghost1.footer().as_ref().unwrap().raw_data(),
         ghost2.footer().as_ref().unwrap().raw_data()
@@ -1160,10 +1147,13 @@ fn test_sp_ghost_save() {
 
     assert_eq!(ghost1.header().raw_data(), ghost2.header().raw_data());
     assert_eq!(
-        ghost1.input_data().raw_data(),
-        ghost2.input_data().raw_data()
+        ghost1.input_data().raw_data().unwrap(),
+        ghost2.input_data().raw_data().unwrap()
     );
-    assert_eq!(ghost1.file_crc32(), ghost2.file_crc32());
+    assert_eq!(
+        ghost1.file_crc32().unwrap(),
+        ghost2.file_crc32().unwrap()
+    );
     assert_eq!(
         ghost1.footer().as_ref().unwrap().raw_data(),
         ghost2.footer().as_ref().unwrap().raw_data()
@@ -2233,7 +2223,7 @@ fn input_data_illegal_drift_input() {
 fn input_data_raw_data_reparse() {
     let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let original_inputs = ghost.input_data().controller_inputs().to_vec();
-    let raw = ghost.input_data().raw_data();
+    let raw = ghost.input_data().raw_data().unwrap();
     let reparsed = InputData::new_from_bytes(&raw).unwrap();
     assert_eq!(reparsed.controller_inputs(), original_inputs.as_slice());
 }
@@ -2381,7 +2371,10 @@ fn header_lap_split_time_out_of_bounds() {
 fn header_lap_splits_sum_to_finish_time() {
     let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let total: InGameTime = header.lap_split_times().iter().copied().sum();
-    assert_eq!(total.to_milliseconds(), header.finish_time().to_milliseconds());
+    assert_eq!(
+        total.to_milliseconds(),
+        header.finish_time().to_milliseconds()
+    );
 }
 
 #[test]
@@ -2577,31 +2570,31 @@ fn ghost_new_decompressed_length_correct() {
 #[test]
 fn ghost_file_crc32_valid() {
     let mut ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
-    let raw = ghost.raw_data();
+    let raw = ghost.raw_data().unwrap();
     let expected = crc32(&raw[..raw.len() - 4]);
-    assert_eq!(ghost.file_crc32(), expected);
+    assert_eq!(ghost.file_crc32().unwrap(), expected);
 }
 
 #[test]
 fn ghost_base_crc32_is_prefix_crc() {
     let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let mut buf = Vec::from(ghost.header().raw_data());
-    buf.extend_from_slice(&ghost.input_data().raw_data());
-    assert_eq!(ghost.base_crc32(), crc32(&buf));
+    buf.extend_from_slice(&ghost.input_data().raw_data().unwrap());
+    assert_eq!(ghost.base_crc32().unwrap(), crc32(&buf));
 }
 
 #[test]
 fn ghost_raw_data_last_4_bytes_are_file_crc32() {
     let mut ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
-    let raw = ghost.raw_data();
+    let raw = ghost.raw_data().unwrap();
     let stored = u32::from_be_bytes(raw[raw.len() - 4..].try_into().unwrap());
-    assert_eq!(stored, ghost.file_crc32());
+    assert_eq!(stored, ghost.file_crc32().unwrap());
 }
 
 #[test]
 fn ghost_raw_data_reparse_identical() {
     let mut ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
-    let raw = ghost.raw_data();
+    let raw = ghost.raw_data().unwrap();
     let reparsed = Ghost::new_from_bytes(&raw).unwrap();
     assert_eq!(reparsed.header().finish_time().to_string(), "01:03.904");
     assert_eq!(reparsed.header().slot_id(), SlotId::LuigiCircuit);
@@ -2621,9 +2614,9 @@ fn ghost_zero_finish_time() {
 #[test]
 fn ghost_preserve_footer_affects_raw_data_size() {
     let mut ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
-    let raw_with_footer = ghost.raw_data();
+    let raw_with_footer = ghost.raw_data().unwrap();
     ghost.set_should_preserve_external_footer(false);
-    let raw_without_footer = ghost.raw_data();
+    let raw_without_footer = ghost.raw_data().unwrap();
     // Footer is present, so with-footer should be larger
     assert!(raw_with_footer.len() > raw_without_footer.len());
 }

@@ -20,6 +20,8 @@ pub struct StickInput {
 impl StickInput {
     /// Constructs a new `StickInput`.
     ///
+    /// # Errors
+    ///
     /// Returns [`StickInputError::InvalidStickInput`] if either the x or y position exceed 14.
     pub fn new(x: u8, y: u8) -> Result<Self, StickInputError> {
         if x > 14 || y > 14 {
@@ -97,10 +99,16 @@ impl StickInput {
         false
     }
 
+    /// Returns the raw x-axis value (0–14).
     pub fn x(&self) -> u8 {
         self.x
     }
 
+    /// Sets the raw x-axis value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StickInputError::InvalidStickInput`] if `x` exceeds 14.
     pub fn set_x(&mut self, x: u8) -> Result<(), StickInputError> {
         if x > 14 {
             Err(StickInputError::InvalidStickInput)
@@ -110,10 +118,16 @@ impl StickInput {
         }
     }
 
+    /// Returns the raw y-axis value (0–14).
     pub fn y(&self) -> u8 {
         self.y
     }
 
+    /// Sets the raw y-axis value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StickInputError::InvalidStickInput`] if `y` exceeds 14.
     pub fn set_y(&mut self, y: u8) -> Result<(), StickInputError> {
         if y > 14 {
             Err(StickInputError::InvalidStickInput)
