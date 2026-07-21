@@ -2,11 +2,11 @@
 //! Mario Kart Wii's native Ghost Data.
 //!
 //! Features:
-//! - [x] Reading and Writing Vanilla Game Data (including embedded Mii data)
-//! - [x] Creating new RKGD Ghost Data files
-//! - [x] Reading and Writing Pulsar (Retro Rewind) Modified Data
-//! - [x] Reading and Writing CTGP Modified Data
-//! - [x] Reading and Writing MKW-SP Modified Data
+//! - Reading and Writing Vanilla Game Data (including embedded Mii data)
+//! - Creating new RKGD Ghost Data files
+//! - Reading and Writing Pulsar (Retro Rewind) Modified Data
+//! - Reading and Writing CTGP Modified Data
+//! - Reading and Writing MKW-SP Modified Data
 
 use std::{
     array::TryFromSliceError,
