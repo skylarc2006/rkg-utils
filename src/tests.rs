@@ -1175,6 +1175,13 @@ fn input_at_frame_test() {
 }
 
 #[test]
+fn test_default_mii() {
+    let ghost = Ghost::new_from_file("./test_ghosts/rMC3_no name_1m19s817.rkg").unwrap();
+    println!("{:#?}", ghost.header().mii())
+
+}
+
+#[test]
 fn input_functions() {
     let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
     let input_data = ghost.input_data();

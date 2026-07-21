@@ -395,7 +395,7 @@ impl InputData {
     /// held across the input sequence (a run where `held` is `true` with no
     /// previous run also counts as a press).
     ///
-    /// For example, `press_count(ControllerInput::item)` counts item uses, and
+    /// For example, `press_count(|input| input.item())` counts item uses, and
     /// `press_count(|input| input.dpad() != DPadButton::None)` counts D-Pad presses.
     pub fn press_count(&self, held: impl Fn(&ControllerInput) -> bool) -> u32 {
         let mut count = 0u32;
