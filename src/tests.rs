@@ -1067,10 +1067,7 @@ fn test_compare_saved_ghost() {
         ghost1.input_data().raw_data().unwrap(),
         ghost2.input_data().raw_data().unwrap()
     );
-    assert_eq!(
-        ghost1.file_crc32().unwrap(),
-        ghost2.file_crc32().unwrap()
-    );
+    assert_eq!(ghost1.file_crc32().unwrap(), ghost2.file_crc32().unwrap());
     assert_eq!(
         ghost1.footer().as_ref().unwrap().raw_data(),
         ghost2.footer().as_ref().unwrap().raw_data()
@@ -1150,10 +1147,7 @@ fn test_sp_ghost_save() {
         ghost1.input_data().raw_data().unwrap(),
         ghost2.input_data().raw_data().unwrap()
     );
-    assert_eq!(
-        ghost1.file_crc32().unwrap(),
-        ghost2.file_crc32().unwrap()
-    );
+    assert_eq!(ghost1.file_crc32().unwrap(), ghost2.file_crc32().unwrap());
     assert_eq!(
         ghost1.footer().as_ref().unwrap().raw_data(),
         ghost2.footer().as_ref().unwrap().raw_data()
@@ -1179,6 +1173,53 @@ fn input_at_frame_test() {
     println!("Input at frame {}:", frame);
     println!("{:#?}", ghost.input_data().get_input_at_frame(frame))
 }
+
+#[test]
+fn input_functions() {
+    let ghost = Ghost::new_from_file("./test_ghosts/JC_LC_Compressed.rkg").unwrap();
+    let input_data = ghost.input_data();
+
+    println!(
+        "{} by {}:\n",
+        ghost.header().finish_time(),
+        ghost.header().mii().name()
+    );
+    println!(
+        "Total frame duration: {} ({} ms)",
+        input_data.total_frame_duration(),
+        input_data.total_frame_duration() as f32 / 59.94 * 1000.0
+    );
+    let idx = input_data.input_index_at_frame(259).unwrap();
+    println!(
+        "Input at frame 259: {:#?}",
+        input_data.controller_inputs().get(idx).unwrap()
+    );
+    println!(
+        "Input at frame 259: {:#?}",
+        input_data.get_input_at_frame(259)
+    );
+    println!(
+        "Illegal input frames: {:#?}",
+        input_data.illegal_input_frames()
+    );
+    println!(
+        "Total A button hold duration: {}",
+        input_data.total_hold_duration(|input| input.accelerator())
+    );
+    println!(
+        "Total drift duration: {}",
+        input_data.total_drift_duration()
+    );
+    println!(
+        "Right nudge count: {}",
+        input_data.press_count(|input| input.stick().x() > 7)
+    );
+    println!(
+        "Acceleration press count: {}",
+        input_data.press_count(|input| input.accelerator())
+    );
+}
+
 /*
 #[test]
 fn ninrankings_ghost_collection() {

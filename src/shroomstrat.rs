@@ -13,8 +13,8 @@ pub enum ShroomstratError {
 
 /// Records which lap (if any) each of a ghost's three mushrooms was used on.
 ///
-/// "Shroomstrat" is Mario Kart Wii community terminology for the lap-by-lap
-/// distribution of mushroom usage during a race.
+/// "Shroomstrat" is a term used for the lap-by-lap distribution of mushroom
+/// usage during a race.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Shroomstrat {
     /// The lap that the first mushroom was used on.

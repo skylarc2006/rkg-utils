@@ -1,4 +1,5 @@
 use crate::input_data::face_button::{FaceButton, FaceButtons};
+use std::ops::Range;
 
 pub(crate) mod compression_method;
 pub(crate) mod controller_input;
@@ -110,7 +111,7 @@ impl InputData {
         };
 
         if input_data.len() > 0x2774 {
-            return Err(InputDataError::InputDataLengthTooLong)
+            return Err(InputDataError::InputDataLengthTooLong);
         }
 
         let read_u16 = |i: usize| u16::from_be_bytes(input_data[i..i + 2].try_into().unwrap());
@@ -285,46 +286,126 @@ impl InputData {
     ///
     /// Returns `None` if the frame is 0 or otherwise out-of-range.
     pub fn get_input_at_frame(&self, frame: u32) -> Option<ControllerInput> {
+        self.input_index_at_frame(frame)
+            .map(|idx| self.controller_inputs[idx])
+    }
+
+    /// Returns the total duration, in frames, of the entire input sequence.
+    pub fn total_frame_duration(&self) -> u32 {
+        self.controller_inputs
+            .iter()
+            .map(ControllerInput::frame_duration)
+            .sum()
+    }
+
+    /// Returns the index into [`controller_inputs`](Self::controller_inputs) of the run
+    /// active at a specified frame in the race.
+    ///
+    /// Returns `None` if the frame is 0 or otherwise out-of-range.
+    pub fn input_index_at_frame(&self, frame: u32) -> Option<usize> {
         if frame == 0 {
             return None;
         }
-        let mut elapsed = 0u32;
-        for input in &self.controller_inputs {
-            elapsed += input.frame_duration();
-            if frame <= elapsed {
-                return Some(*input);
-            }
-        }
-        None
+        self.iter_frame_ranges()
+            .position(|(range, _)| range.contains(&frame))
     }
 
+    /// Returns the frame range (start inclusive, end exclusive) covered by the
+    /// controller input run at `idx`.
+    ///
+    /// Returns `None` if `idx` is out-of-range.
+    pub fn frame_range_at_index(&self, idx: usize) -> Option<Range<u32>> {
+        self.iter_frame_ranges().nth(idx).map(|(range, _)| range)
+    }
+
+    /// Returns an iterator over each controller input run alongside the frame
+    /// range (start inclusive, end exclusive) it covers.
+    pub fn iter_frame_ranges(&self) -> impl Iterator<Item = (Range<u32>, &ControllerInput)> {
+        let mut elapsed = 0u32;
+        self.controller_inputs.iter().map(move |input| {
+            let start = elapsed + 1;
+            elapsed += input.frame_duration();
+            (start..elapsed + 1, input)
+        })
+    }
 
     /// Returns `true` if any input in the sequence is illegal under normal race conditions.
+    ///
+    /// See [`illegal_input_frames`](Self::illegal_input_frames) for the conditions checked.
+    pub fn contains_illegal_brake_or_drift_inputs(&self) -> bool {
+        !self.illegal_input_frames().is_empty()
+    }
+
+    /// Returns the starting frame of each contiguous input run that is illegal under
+    /// normal race conditions.
     ///
     /// Two conditions are checked: a drift flag set without the brake button held,
     /// and a brake + accelerator combination where the drift flag is absent despite
     /// the previous frame having accelerator but no brake (indicating the game should
     /// have set the drift flag automatically).
-    pub fn contains_illegal_brake_or_drift_inputs(&self) -> bool {
+    pub fn illegal_input_frames(&self) -> Vec<u32> {
         let effective_drifts = effective_drift_flags(self.controller_inputs());
-        for (idx, current_input) in self.controller_inputs().iter().enumerate() {
-            if effective_drifts[idx] && !current_input.brake() {
+        let mut illegal_frames = Vec::new();
+        for (idx, (range, current_input)) in self.iter_frame_ranges().enumerate() {
+            let illegal = if effective_drifts[idx] && !current_input.brake() {
                 // Illegal drift input
-                return true;
+                true
             } else if idx > 0 {
                 let previous_input = self.controller_inputs()[idx - 1];
-                if current_input.brake()
+                // Illegal brake input (drift flag isn't 1 when it should be)
+                current_input.brake()
                     && current_input.accelerator()
                     && !effective_drifts[idx]
                     && previous_input.accelerator()
                     && !previous_input.brake()
-                {
-                    // Illegal brake input (drift flag isn't 1 when it should be)
-                    return true;
-                }
+            } else {
+                false
+            };
+            if illegal {
+                illegal_frames.push(range.start);
             }
         }
-        false
+        illegal_frames
+    }
+
+    /// Returns the total number of frames for which `held` evaluates to `true`.
+    ///
+    /// For example, `total_hold_duration(ControllerInput::accelerator)` returns
+    /// the total number of frames the accelerator button is held.
+    pub fn total_hold_duration(&self, held: impl Fn(&ControllerInput) -> bool) -> u32 {
+        self.controller_inputs
+            .iter()
+            .filter(|input| held(input))
+            .map(ControllerInput::frame_duration)
+            .sum()
+    }
+
+    /// Returns the total number of frames drift is effectively active, accounting
+    /// for auto-detected drift flags (see [`DriftFlag::AutoDetect`]).
+    pub fn total_drift_duration(&self) -> u32 {
+        effective_drift_flags(self.controller_inputs())
+            .iter()
+            .zip(self.controller_inputs())
+            .filter(|&(&drifting, _)| drifting)
+            .map(|(_, input)| input.frame_duration())
+            .sum()
+    }
+
+    /// Returns the number of distinct times `held` transitions from not-held to
+    /// held across the input sequence (a run where `held` is `true` with no
+    /// previous run also counts as a press).
+    ///
+    /// For example, `press_count(ControllerInput::item)` counts item uses, and
+    /// `press_count(|input| input.dpad() != DPadButton::None)` counts D-Pad presses.
+    pub fn press_count(&self, held: impl Fn(&ControllerInput) -> bool) -> u32 {
+        let mut count = 0u32;
+        for (idx, input) in self.controller_inputs.iter().enumerate() {
+            let previously_held = idx > 0 && held(&self.controller_inputs[idx - 1]);
+            if held(input) && !previously_held {
+                count += 1;
+            }
+        }
+        count
     }
 
     /// Serializes the input data back to the binary format used in an RKG file.

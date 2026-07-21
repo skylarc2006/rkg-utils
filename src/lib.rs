@@ -1,15 +1,12 @@
-//! This crate is meant to be a library to completely and coherently access the data in RKGD files,
+//! This crate is a library to completely and coherently access the data in RKGD files,
 //! Mario Kart Wii's native Ghost Data.
 //!
 //! Features:
 //! - [x] Reading and Writing Vanilla Game Data (including embedded Mii data)
-//! - [x] Reading and Writing CTGP Modified Data
+//! - [x] Creating new RKGD Ghost Data files
 //! - [x] Reading and Writing Pulsar (Retro Rewind) Modified Data
+//! - [x] Reading and Writing CTGP Modified Data
 //! - [x] Reading and Writing MKW-SP Modified Data
-//! - [ ] Implementing `TryFrom<_>` for T where T: `Into<ByteHandler>`, relies on <https://github.com/rust-lang/rust/issues/31844> currently
-//! - [ ] Represent at a Type-system level which types can convert from `T1` (Bytes) to `crate::byte_handler::ByteHandler` to `T2` (Typed Structs)
-//! - [ ] Optimize Little-Endian calculations with `crate::byte_handler::ByteHandler`
-//! - [ ] Figure out whether Big-Endian works with `crate::byte_handler::ByteHandler`
 
 use std::{
     array::TryFromSliceError,
@@ -290,14 +287,16 @@ impl Ghost {
     /// item button is pressed during a cannon, after a respawn, while being spun out by something, or
     /// otherwise losing mushrooms early.
     pub fn shroomstrat(&self) -> Shroomstrat {
-        if self.should_preserve_external_footer() && let Some(footer) = self.footer() {
+        if self.should_preserve_external_footer()
+            && let Some(footer) = self.footer()
+        {
             match footer {
                 FooterType::CTGPFooter(f) => return f.shroomstrat(),
                 FooterType::SPFooter(f) => {
                     if f.footer_version() >= 1 {
                         return f.shroomstrat().unwrap();
                     }
-                },
+                }
                 FooterType::Unknown(_) => (),
             }
         }
@@ -343,7 +342,13 @@ impl Ghost {
             previous_input = input;
         }
 
-        Shroomstrat::new(shroom_usages[0], shroom_usages[1], shroom_usages[2], self.header().lap_count()).unwrap()
+        Shroomstrat::new(
+            shroom_usages[0],
+            shroom_usages[1],
+            shroom_usages[2],
+            self.header().lap_count(),
+        )
+        .unwrap()
     }
 
     /// Returns the CRC-32 of the header and input data, excluding any footer.
