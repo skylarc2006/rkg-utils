@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the nose customization options of a Mii,
 /// including nose style, size, and vertical position.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Nose {
     /// Vertical position of the nose (0–18).
     y: u8,

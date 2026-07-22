@@ -1,9 +1,6 @@
 use chrono::{DateTime, Duration, NaiveDateTime};
 
-use crate::{
-    byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
-    write_bits,
-};
+use crate::byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler};
 
 use std::io::{Read, Write};
 
@@ -107,22 +104,20 @@ pub enum MiiError {
 /// A fully parsed Mii character, as stored in the Wii's Mii data format.
 ///
 /// Holds all customization fields decoded from the 74-byte (`0x4A`) Mii binary
-/// block, along with a copy of the original raw bytes. Any setter method updates
-/// both the parsed field and the corresponding bits in [`raw_data`](Mii::raw_data),
-/// and sets [`is_modified`](Mii::is_modified) to `true`.
+/// block.
 ///
 /// The binary layout is documented at <http://wiibrew.org/wiki/Mii_Data#Mii_format>.
 #[derive(Debug, Clone)]
 pub struct Mii {
-    /// The raw 74-byte Mii data block, kept in sync with all parsed fields.
-    raw_data: [u8; 0x4A],
-    /// Whether any field has been modified since the Mii was parsed.
-    is_modified: bool,
+    /// Bytes/bits from the original data not derived from any field above,
+    /// OR'd back into the corresponding position when rebuilding [`raw_data`](Mii::raw_data).
+    /// All zero for a [`Mii`] built with [`new`](Mii::new).
+    reserved: [u8; 0x4A],
     /// Whether the Mii is female (`true`) or male (`false`).
     is_girl: bool,
     /// The Mii's birthday.
     birthday: Birthday,
-    /// The Mii's favorite color, used to tint outfits and UI elements.
+    /// The Mii's favorite color, used to set outfit color.
     favorite_color: FavoriteColor,
     /// Whether this Mii has been marked as a favorite.
     is_favorite: bool,
@@ -140,7 +135,7 @@ pub struct Mii {
     system_id: u32,
     /// The Mii's head shape, skin tone, and facial feature overlay.
     head: Head,
-    /// Whether StreetPass/Mingle is disabled for this Mii.
+    /// Whether Mingle is disabled for this Mii.
     mingle_off: bool,
     /// Whether this Mii was downloaded from the Mii Channel.
     downloaded: bool,
@@ -177,7 +172,7 @@ impl Mii {
         creation_date: NaiveDateTime,
         system_id: u32,
         head: Head,
-        mingle_off: bool,
+        mingle_enabled: bool,
         downloaded: bool,
         hair: Hair,
         eyebrows: Eyebrows,
@@ -192,43 +187,9 @@ impl Mii {
         let mii_id_prefix = (u8::from(mii_type) as u32) << 29;
         let creation_date_timestamp = timestamp_from_creation_date(creation_date) & 0x1FFFFFFF;
         let mii_id = mii_id_prefix | creation_date_timestamp;
-        let mut raw_data = Vec::with_capacity(0x4A);
-
-        let mut mii_info_bytes = <[u8; 2]>::from(birthday);
-        mii_info_bytes[0] |= (is_girl as u8) << 6;
-        mii_info_bytes[1] |= u8::from(favorite_color) << 1;
-        mii_info_bytes[1] |= is_favorite as u8;
-
-        raw_data.extend_from_slice(&mii_info_bytes);
-        let mut name_bytes = [0u8; 0x14];
-        let name_utf16 = string_to_utf16be(&name);
-        name_bytes[..name_utf16.len()].copy_from_slice(&name_utf16);
-        raw_data.extend_from_slice(&name_bytes);
-        raw_data.extend_from_slice(&<[u8; 2]>::from(build));
-        raw_data.extend_from_slice(&mii_id.to_be_bytes());
-        raw_data.extend_from_slice(&system_id.to_be_bytes());
-
-        let mut head_bytes = <[u8; 2]>::from(head);
-        head_bytes[1] |= (mingle_off as u8) << 2;
-        head_bytes[1] |= downloaded as u8;
-        raw_data.extend_from_slice(&head_bytes);
-
-        raw_data.extend_from_slice(&<[u8; 2]>::from(hair));
-        raw_data.extend_from_slice(&<[u8; 4]>::from(eyebrows));
-        raw_data.extend_from_slice(&<[u8; 4]>::from(eyes));
-        raw_data.extend_from_slice(&<[u8; 2]>::from(nose));
-        raw_data.extend_from_slice(&<[u8; 2]>::from(lips));
-        raw_data.extend_from_slice(&<[u8; 2]>::from(glasses));
-        raw_data.extend_from_slice(&<[u8; 2]>::from(facial_hair));
-        raw_data.extend_from_slice(&<[u8; 2]>::from(mole));
-        let mut creator_name_bytes = [0u8; 0x14];
-        let creator_utf16 = string_to_utf16be(&creator_name);
-        creator_name_bytes[..creator_utf16.len()].copy_from_slice(&creator_utf16);
-        raw_data.extend_from_slice(&creator_name_bytes);
 
         Self {
-            raw_data: raw_data.try_into().unwrap(),
-            is_modified: false,
+            reserved: [0u8; 0x4A],
             is_girl,
             birthday,
             favorite_color,
@@ -240,7 +201,7 @@ impl Mii {
             mii_id,
             system_id,
             head,
-            mingle_off,
+            mingle_off: !mingle_enabled,
             downloaded,
             hair,
             eyebrows,
@@ -303,11 +264,8 @@ impl Mii {
 
         let creator_name = utf16be_to_string(&raw_data[0x36..=0x49])?;
 
-        let is_modified = false;
-
-        Ok(Self {
-            raw_data,
-            is_modified,
+        let mut mii = Self {
+            reserved: [0u8; 0x4A],
             is_girl,
             birthday,
             favorite_color,
@@ -330,7 +288,18 @@ impl Mii {
             facial_hair,
             mole,
             creator_name,
-        })
+        };
+
+        // Any bit not derived from a parsed field above (unused padding bits within
+        // packed fields, and leftover bytes after the name fields' null terminators)
+        // is captured here, so raw_data() has exactly the same output for an
+        // unmodified Mii.
+        let clean = mii.field_bytes();
+        for i in 0..0x4A {
+            mii.reserved[i] = raw_data[i] ^ clean[i];
+        }
+
+        Ok(mii)
     }
 
     /// Parses a [`Mii`] from a raw Mii file or an RKG ghost file.
@@ -367,24 +336,64 @@ impl Mii {
     /// Returns [`MiiError::IOError`] if the file cannot be created or written.
     pub fn save_to_file<T: AsRef<std::path::Path>>(&self, path: T) -> Result<(), MiiError> {
         let mut file = std::fs::File::create(path)?;
-        file.write_all(self.raw_data())?;
+        file.write_all(&self.raw_data())?;
 
         Ok(())
     }
 
-    /// Returns the raw 74-byte Mii data block.
-    pub fn raw_data(&self) -> &[u8] {
-        &self.raw_data
+    /// Returns the raw 74-byte Mii data block, computed from the current field values.
+    ///
+    /// Bits not derived from any field (unused padding bits within packed fields,
+    /// and leftover bytes after the name fields' null terminators) are filled in from
+    /// whatever was captured when this [`Mii`] was parsed (all zero otherwise), so a
+    /// freshly parsed, unmodified [`Mii`] round-trips back to its original bytes exactly.
+    pub fn raw_data(&self) -> [u8; 0x4A] {
+        let mut raw_data = self.field_bytes();
+        for (byte, reserved) in raw_data.iter_mut().zip(self.reserved.iter()) {
+            *byte |= *reserved;
+        }
+        raw_data
     }
 
-    /// Returns a mutable reference to the raw 74-byte Mii data block.
-    pub fn raw_data_mut(&mut self) -> &mut [u8] {
-        &mut self.raw_data
-    }
+    /// Builds the raw 74-byte Mii data block from the parsed fields alone, mirroring
+    /// the field layout read by [`new_from_bytes`](Mii::new_from_bytes) in reverse.
+    /// Bits not owned by any field are left as `0`.
+    fn field_bytes(&self) -> [u8; 0x4A] {
+        let mut raw_data = Vec::with_capacity(0x4A);
 
-    /// Returns whether any field has been modified since the Mii was parsed.
-    pub fn is_modified(&self) -> bool {
-        self.is_modified
+        let mut mii_info_bytes = <[u8; 2]>::from(self.birthday);
+        mii_info_bytes[0] |= (self.is_girl as u8) << 6;
+        mii_info_bytes[1] |= u8::from(self.favorite_color) << 1;
+        mii_info_bytes[1] |= !self.is_favorite as u8;
+
+        raw_data.extend_from_slice(&mii_info_bytes);
+        let mut name_bytes = [0u8; 0x14];
+        let name_utf16 = string_to_utf16be(&self.name);
+        name_bytes[..name_utf16.len()].copy_from_slice(&name_utf16);
+        raw_data.extend_from_slice(&name_bytes);
+        raw_data.extend_from_slice(&<[u8; 2]>::from(self.build));
+        raw_data.extend_from_slice(&self.mii_id.to_be_bytes());
+        raw_data.extend_from_slice(&self.system_id.to_be_bytes());
+
+        let mut head_bytes = <[u8; 2]>::from(self.head);
+        head_bytes[1] |= (self.mingle_off as u8) << 2;
+        head_bytes[1] |= self.downloaded as u8;
+        raw_data.extend_from_slice(&head_bytes);
+
+        raw_data.extend_from_slice(&<[u8; 2]>::from(self.hair));
+        raw_data.extend_from_slice(&<[u8; 4]>::from(self.eyebrows));
+        raw_data.extend_from_slice(&<[u8; 4]>::from(self.eyes));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(self.nose));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(self.lips));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(self.glasses));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(self.facial_hair));
+        raw_data.extend_from_slice(&<[u8; 2]>::from(self.mole));
+        let mut creator_name_bytes = [0u8; 0x14];
+        let creator_utf16 = string_to_utf16be(&self.creator_name);
+        creator_name_bytes[..creator_utf16.len()].copy_from_slice(&creator_utf16);
+        raw_data.extend_from_slice(&creator_name_bytes);
+
+        raw_data.try_into().unwrap()
     }
 
     /// Returns whether the Mii is female.
@@ -392,11 +401,9 @@ impl Mii {
         self.is_girl
     }
 
-    /// Sets whether the Mii is female and updates the raw data accordingly.
+    /// Sets whether the Mii is female.
     pub fn set_is_girl(&mut self, is_girl: bool) {
         self.is_girl = is_girl;
-        write_bits(self.raw_data_mut(), 0x00, 1, 1, is_girl as u64);
-        self.is_modified = true;
     }
 
     /// Returns the Mii's birthday.
@@ -404,17 +411,9 @@ impl Mii {
         self.birthday
     }
 
-    /// Sets the Mii's birthday and updates the raw data accordingly.
+    /// Sets the Mii's birthday.
     pub fn set_birthday(&mut self, birthday: Birthday) {
         self.birthday = birthday;
-
-        let month = birthday.month().unwrap_or(0) as u64;
-        let day = birthday.day().unwrap_or(0) as u64;
-
-        write_bits(self.raw_data_mut(), 0x00, 2, 4, month);
-        write_bits(self.raw_data_mut(), 0x00, 6, 5, day);
-
-        self.is_modified = true;
     }
 
     /// Returns the Mii's favorite color.
@@ -422,17 +421,9 @@ impl Mii {
         self.favorite_color
     }
 
-    /// Sets the Mii's favorite color and updates the raw data accordingly.
+    /// Sets the Mii's favorite color.
     pub fn set_favorite_color(&mut self, favorite_color: FavoriteColor) {
         self.favorite_color = favorite_color;
-        write_bits(
-            self.raw_data_mut(),
-            0x01,
-            3,
-            4,
-            u8::from(favorite_color) as u64,
-        );
-        self.is_modified = true;
     }
 
     /// Returns whether this Mii has been marked as a favorite.
@@ -440,11 +431,9 @@ impl Mii {
         self.is_favorite
     }
 
-    /// Sets whether this Mii is marked as a favorite and updates the raw data accordingly.
+    /// Sets whether this Mii is marked as a favorite.
     pub fn set_is_favorite(&mut self, is_favorite: bool) {
         self.is_favorite = is_favorite;
-        write_bits(self.raw_data_mut(), 0x01, 7, 1, is_favorite as u64);
-        self.is_modified = true;
     }
 
     /// Returns the Mii's display name.
@@ -452,7 +441,7 @@ impl Mii {
         &self.name
     }
 
-    /// Sets the Mii's display name and updates the raw data accordingly.
+    /// Sets the Mii's display name.
     ///
     /// Names longer than 10 characters are silently ignored.
     pub fn set_name(&mut self, name: &str) {
@@ -460,11 +449,7 @@ impl Mii {
             return;
         }
         self.name = name.to_string();
-        let name_bytes = string_to_utf16be(name);
-        let mut padded = [0u8; 0x14];
-        padded[..name_bytes.len()].copy_from_slice(&name_bytes);
-        self.raw_data_mut()[0x02..0x16].copy_from_slice(&padded);
-        self.is_modified = true;
+        self.reserved[0x02..0x16].fill(0);
     }
 
     /// Returns the Mii's body proportions (height and weight).
@@ -472,14 +457,9 @@ impl Mii {
         self.build
     }
 
-    /// Sets the Mii's body proportions and updates the raw data accordingly.
+    /// Sets the Mii's body proportions.
     pub fn set_build(&mut self, build: Build) {
         self.build = build;
-
-        write_bits(self.raw_data_mut(), 0x16, 1, 7, build.height() as u64);
-        write_bits(self.raw_data_mut(), 0x17, 1, 7, build.weight() as u64);
-
-        self.is_modified = true;
     }
 
     /// Returns whether this is a normal, foreign, or special Mii.
@@ -487,16 +467,14 @@ impl Mii {
         self.mii_type
     }
 
-    /// Sets the Mii type and updates the type bits in the raw Mii ID field.
+    /// Sets the Mii type and updates the type bits in the Mii ID.
     ///
     /// Does nothing if the type is already set to the given value.
     pub fn set_mii_type(&mut self, mii_type: MiiType) {
         if self.mii_type() == mii_type {
             return;
         }
-        let raw_data = self.raw_data_mut();
-        write_bits(raw_data, 0x18, 0, 3, u8::from(mii_type) as u64);
-        self.mii_id = u32::from_be_bytes(raw_data[0x18..0x1C].try_into().unwrap());
+        self.mii_id = (self.mii_id & 0x1FFF_FFFF) | ((u8::from(mii_type) as u32) << 29);
         self.mii_type = mii_type;
     }
 
@@ -505,19 +483,12 @@ impl Mii {
         self.creation_date
     }
 
-    /// Sets the Mii's creation date and updates the timestamp bits in the raw Mii ID field.
+    /// Sets the Mii's creation date and updates the timestamp bits in the Mii ID.
     ///
     /// Note: the valid range of the timestamp has not been fully determined.
     pub fn set_creation_date(&mut self, creation_date: NaiveDateTime) {
-        let raw_data = self.raw_data_mut();
-        write_bits(
-            raw_data,
-            0x18,
-            3,
-            29,
-            timestamp_from_creation_date(creation_date) as u64,
-        );
-        self.mii_id = u32::from_be_bytes(raw_data[0x18..0x1C].try_into().unwrap());
+        let creation_date_timestamp = timestamp_from_creation_date(creation_date) & 0x1FFFFFFF;
+        self.mii_id = (self.mii_id & 0xE000_0000) | creation_date_timestamp;
         self.creation_date = creation_date;
     }
 
@@ -531,11 +502,9 @@ impl Mii {
         self.system_id
     }
 
-    /// Sets the system ID and updates the raw data accordingly.
+    /// Sets the system ID.
     pub fn set_system_id(&mut self, system_id: u32) {
         self.system_id = system_id;
-        self.raw_data_mut()[0x1C..0x20].copy_from_slice(&system_id.to_be_bytes());
-        self.is_modified = true;
     }
 
     /// Returns the Mii's head shape, skin tone, and facial feature overlay.
@@ -543,45 +512,19 @@ impl Mii {
         self.head
     }
 
-    /// Sets the Mii's head options and updates the raw data accordingly.
+    /// Sets the Mii's head options.
     pub fn set_head(&mut self, head: Head) {
         self.head = head;
-
-        write_bits(
-            self.raw_data_mut(),
-            0x20,
-            0,
-            3,
-            u8::from(head.shape()) as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x20,
-            3,
-            3,
-            u8::from(head.skin_tone()) as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x20,
-            6,
-            4,
-            u8::from(head.face_features()) as u64,
-        );
-
-        self.is_modified = true;
     }
 
-    /// Returns whether StreetPass/Mingle is enabled for this Mii.
+    /// Returns whether Mingle is enabled for this Mii.
     pub fn is_mingle_enabled(&self) -> bool {
         !self.mingle_off
     }
 
-    /// Sets whether StreetPass/Mingle is enabled for this Mii and updates the raw data accordingly.
+    /// Sets whether Mingle is enabled for this Mii.
     pub fn set_mingle_enabled(&mut self, enabled: bool) {
         self.mingle_off = !enabled;
-        write_bits(self.raw_data_mut(), 0x21, 5, 1, !enabled as u64);
-        self.is_modified = true;
     }
 
     /// Returns whether this Mii was downloaded from the Mii Channel.
@@ -589,11 +532,9 @@ impl Mii {
         self.downloaded
     }
 
-    /// Sets whether this Mii was downloaded from the Mii Channel and updates the raw data accordingly.
+    /// Sets whether this Mii was downloaded from the Mii Channel.
     pub fn set_downloaded(&mut self, downloaded: bool) {
         self.downloaded = downloaded;
-        write_bits(self.raw_data_mut(), 0x21, 7, 1, downloaded as u64);
-        self.is_modified = true;
     }
 
     /// Returns the Mii's hair style, color, and flip setting.
@@ -601,27 +542,9 @@ impl Mii {
         self.hair
     }
 
-    /// Sets the Mii's hair options and updates the raw data accordingly.
+    /// Sets the Mii's hair options.
     pub fn set_hair(&mut self, hair: Hair) {
         self.hair = hair;
-
-        write_bits(
-            self.raw_data_mut(),
-            0x22,
-            0,
-            7,
-            u8::from(hair.hair_type()) as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x22,
-            7,
-            3,
-            u8::from(hair.hair_color()) as u64,
-        );
-        write_bits(self.raw_data_mut(), 0x23, 2, 1, hair.is_flipped() as u64);
-
-        self.is_modified = true;
     }
 
     /// Returns the Mii's eyebrow options.
@@ -629,30 +552,9 @@ impl Mii {
         self.eyebrows
     }
 
-    /// Sets the Mii's eyebrow options and updates the raw data accordingly.
+    /// Sets the Mii's eyebrow options.
     pub fn set_eyebrows(&mut self, eyebrows: Eyebrows) {
         self.eyebrows = eyebrows;
-
-        write_bits(
-            self.raw_data_mut(),
-            0x24,
-            0,
-            5,
-            u8::from(eyebrows.eyebrow_type()) as u64,
-        );
-        write_bits(self.raw_data_mut(), 0x24, 5, 5, eyebrows.rotation() as u64);
-        write_bits(
-            self.raw_data_mut(),
-            0x26,
-            0,
-            3,
-            u8::from(eyebrows.eyebrow_color()) as u64,
-        );
-        write_bits(self.raw_data_mut(), 0x26, 3, 4, eyebrows.size() as u64);
-        write_bits(self.raw_data_mut(), 0x26, 7, 5, eyebrows.y() as u64);
-        write_bits(self.raw_data_mut(), 0x27, 4, 4, eyebrows.x() as u64);
-
-        self.is_modified = true;
     }
 
     /// Returns the Mii's eye options.
@@ -660,30 +562,9 @@ impl Mii {
         self.eyes
     }
 
-    /// Sets the Mii's eye options and updates the raw data accordingly.
+    /// Sets the Mii's eye options.
     pub fn set_eyes(&mut self, eyes: Eyes) {
         self.eyes = eyes;
-
-        write_bits(
-            self.raw_data_mut(),
-            0x28,
-            0,
-            6,
-            u8::from(eyes.eye_type()) as u64,
-        );
-        write_bits(self.raw_data_mut(), 0x28, 6, 5, eyes.rotation() as u64);
-        write_bits(self.raw_data_mut(), 0x29, 3, 5, eyes.y() as u64);
-        write_bits(
-            self.raw_data_mut(),
-            0x2A,
-            0,
-            3,
-            u8::from(eyes.eye_color()) as u64,
-        );
-        write_bits(self.raw_data_mut(), 0x2A, 3, 4, eyes.size() as u64);
-        write_bits(self.raw_data_mut(), 0x2A, 7, 4, eyes.x() as u64);
-
-        self.is_modified = true;
     }
 
     /// Returns the Mii's nose options.
@@ -691,21 +572,9 @@ impl Mii {
         self.nose
     }
 
-    /// Sets the Mii's nose options and updates the raw data accordingly.
+    /// Sets the Mii's nose options.
     pub fn set_nose(&mut self, nose: Nose) {
         self.nose = nose;
-
-        write_bits(
-            self.raw_data_mut(),
-            0x2C,
-            0,
-            4,
-            u8::from(nose.nose_type()) as u64,
-        );
-        write_bits(self.raw_data_mut(), 0x2C, 4, 4, nose.size() as u64);
-        write_bits(self.raw_data_mut(), 0x2D, 0, 5, nose.y() as u64);
-
-        self.is_modified = true;
     }
 
     /// Returns the Mii's lip options.
@@ -713,28 +582,9 @@ impl Mii {
         self.lips
     }
 
-    /// Sets the Mii's lip options and updates the raw data accordingly.
+    /// Sets the Mii's lip options.
     pub fn set_lips(&mut self, lips: Lips) {
         self.lips = lips;
-
-        write_bits(
-            self.raw_data_mut(),
-            0x2E,
-            0,
-            5,
-            u8::from(lips.lips_type()) as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x2E,
-            5,
-            2,
-            u8::from(lips.lips_color()) as u64,
-        );
-        write_bits(self.raw_data_mut(), 0x2E, 7, 4, lips.size() as u64);
-        write_bits(self.raw_data_mut(), 0x2F, 3, 5, lips.y() as u64);
-
-        self.is_modified = true;
     }
 
     /// Returns the Mii's glasses options.
@@ -742,28 +592,9 @@ impl Mii {
         self.glasses
     }
 
-    /// Sets the Mii's glasses options and updates the raw data accordingly.
+    /// Sets the Mii's glasses options.
     pub fn set_glasses(&mut self, glasses: Glasses) {
         self.glasses = glasses;
-
-        write_bits(
-            self.raw_data_mut(),
-            0x30,
-            0,
-            4,
-            u8::from(glasses.glasses_type()) as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x30,
-            4,
-            3,
-            u8::from(glasses.glasses_color()) as u64,
-        );
-        write_bits(self.raw_data_mut(), 0x30, 7, 4, glasses.size() as u64);
-        write_bits(self.raw_data_mut(), 0x31, 3, 5, glasses.y() as u64);
-
-        self.is_modified = true;
     }
 
     /// Returns the Mii's facial hair options.
@@ -771,47 +602,9 @@ impl Mii {
         self.facial_hair
     }
 
-    /// Sets the Mii's facial hair options and updates the raw data accordingly.
+    /// Sets the Mii's facial hair options.
     pub fn set_facial_hair(&mut self, facial_hair: FacialHair) {
         self.facial_hair = facial_hair;
-
-        write_bits(
-            self.raw_data_mut(),
-            0x32,
-            0,
-            2,
-            u8::from(facial_hair.mustache_type()) as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x32,
-            2,
-            2,
-            u8::from(facial_hair.beard_type()) as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x32,
-            4,
-            3,
-            u8::from(facial_hair.color()) as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x32,
-            7,
-            4,
-            facial_hair.mustache_size() as u64,
-        );
-        write_bits(
-            self.raw_data_mut(),
-            0x33,
-            3,
-            5,
-            facial_hair.mustache_y() as u64,
-        );
-
-        self.is_modified = true;
     }
 
     /// Returns the Mii's mole options.
@@ -819,16 +612,9 @@ impl Mii {
         self.mole
     }
 
-    /// Sets the Mii's mole options and updates the raw data accordingly.
+    /// Sets the Mii's mole options.
     pub fn set_mole(&mut self, mole: Mole) {
         self.mole = mole;
-
-        write_bits(self.raw_data_mut(), 0x34, 0, 1, mole.has_mole() as u64);
-        write_bits(self.raw_data_mut(), 0x34, 1, 4, mole.size() as u64);
-        write_bits(self.raw_data_mut(), 0x34, 5, 5, mole.y() as u64);
-        write_bits(self.raw_data_mut(), 0x35, 2, 5, mole.x() as u64);
-
-        self.is_modified = true;
     }
 
     /// Returns the name of the player who created this Mii.
@@ -836,7 +622,7 @@ impl Mii {
         &self.creator_name
     }
 
-    /// Sets the creator name and updates the raw data accordingly.
+    /// Sets the creator name.
     ///
     /// Names longer than 10 characters are silently ignored.
     pub fn set_creator_name(&mut self, creator_name: &str) {
@@ -844,14 +630,72 @@ impl Mii {
             return;
         }
         self.creator_name = creator_name.to_string();
+        self.reserved[0x36..0x4A].fill(0);
+    }
+}
 
-        let creator_name_bytes = string_to_utf16be(creator_name);
+impl Default for Mii {
+    fn default() -> Self {
+        Self::new(
+            false,
+            Birthday::new(0, 0).unwrap(),
+            FavoriteColor::Red,
+            true,
+            String::from("no name"),
+            Build::new(64, 64).unwrap(),
+            MiiType::Normal,
+            NaiveDateTime::parse_from_str("2006-01-01 00:00:08", "%Y-%m-%d %H:%M:%S").unwrap(),
+            3976168146,
+            Head::new(HeadShape::Sharp, SkinTone::Natural, FaceFeatures::None),
+            false,
+            false,
+            Hair::new(HairType::NormalLong, HairColor::Chocolate, false),
+            Eyebrows::new(
+                6,
+                4,
+                2,
+                10,
+                HairColor::Chocolate,
+                EyebrowType::FlatAngledLarge,
+            )
+            .unwrap(),
+            Eyes::new(4, 4, 2, 12, EyeColor::Black, EyeType::Normal).unwrap(),
+            Nose::new(9, 4, NoseType::Normal).unwrap(),
+            Lips::new(13, 4, LipsType::Neutral, LipsColor::Orange).unwrap(),
+            Glasses::new(10, 4, GlassesType::None, GlassesColor::Black).unwrap(),
+            FacialHair::new(BeardType::None, MustacheType::None, HairColor::Black, 4, 10).unwrap(),
+            Mole::new(false, 2, 20, 4).unwrap(),
+            String::new(),
+        )
+    }
+}
 
-        let mut padded = [0u8; 0x14];
-        padded[..creator_name_bytes.len()].copy_from_slice(&creator_name_bytes);
-        self.raw_data_mut()[0x36..0x4A].copy_from_slice(&padded);
-
-        self.is_modified = true;
+/// Compares Miis by their decoded fields only; `reserved` (leftover, meaningless
+/// padding bits from the original data) is deliberately excluded.
+impl PartialEq for Mii {
+    fn eq(&self, other: &Self) -> bool {
+        self.is_girl == other.is_girl
+            && self.birthday == other.birthday
+            && self.favorite_color == other.favorite_color
+            && self.is_favorite == other.is_favorite
+            && self.name == other.name
+            && self.build == other.build
+            && self.mii_type == other.mii_type
+            && self.creation_date == other.creation_date
+            && self.mii_id == other.mii_id
+            && self.system_id == other.system_id
+            && self.head == other.head
+            && self.mingle_off == other.mingle_off
+            && self.downloaded == other.downloaded
+            && self.hair == other.hair
+            && self.eyebrows == other.eyebrows
+            && self.eyes == other.eyes
+            && self.nose == other.nose
+            && self.lips == other.lips
+            && self.glasses == other.glasses
+            && self.facial_hair == other.facial_hair
+            && self.mole == other.mole
+            && self.creator_name == other.creator_name
     }
 }
 

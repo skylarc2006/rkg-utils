@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the head customization options of a Mii,
 /// including face shape, skin tone, and facial feature overlay.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Head {
     /// Face/head shape.
     shape: HeadShape,

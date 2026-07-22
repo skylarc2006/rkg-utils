@@ -324,8 +324,8 @@ impl Header {
             write_bits(&mut raw_data, 0x36, 0, 16, 0xFFFF);
         }
 
-        raw_data[0x3C..0x3C + 0x4A].copy_from_slice(self.mii.raw_data());
-        let mii_crc16 = crc16(self.mii.raw_data());
+        raw_data[0x3C..0x3C + 0x4A].copy_from_slice(&self.mii.raw_data());
+        let mii_crc16 = crc16(&self.mii.raw_data());
         raw_data[0x86..0x88].copy_from_slice(&mii_crc16.to_be_bytes());
         raw_data
     }
@@ -497,7 +497,7 @@ impl Header {
 
     /// Returns the CRC-16 checksum of the embedded Mii data, computed on the fly.
     pub fn mii_crc16(&self) -> u16 {
-        crc16(self.mii.raw_data())
+        crc16(&self.mii.raw_data())
     }
 
     /// Returns the transmission of the combo adjusted depending on transmission mod.

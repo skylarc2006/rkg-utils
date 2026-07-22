@@ -4,7 +4,7 @@ use crate::byte_handler::{ByteHandlerError, FromByteHandler};
 
 /// Represents the mole customization options of a Mii,
 /// including whether a mole is shown and its position and size.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Mole {
     /// Whether the mole is visible on the Mii's face.
     has_mole: bool,

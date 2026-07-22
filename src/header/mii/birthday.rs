@@ -24,7 +24,7 @@ pub enum BirthdayError {
 ///
 /// Both fields are `None` when the Mii's birthday is not set (i.e. month byte is 0).
 /// A month without a day is not a valid state and will be rejected by [`Birthday::new`].
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Birthday {
     /// The month of the birthday (1–12), or `None` if not set.
     month: Option<u8>,

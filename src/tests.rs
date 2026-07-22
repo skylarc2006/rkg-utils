@@ -125,8 +125,8 @@ fn test_rkg_header() {
 
 #[test]
 fn print_rkg_header() {
-    let header = Header::new_from_path("./test_ghosts/JC_LC_Compressed_Copy.rkg")
-        .expect("Couldn't read header");
+    let header =
+        Header::new_from_path("./test_ghosts/vanilla8laps.rkg").expect("Couldn't read header");
 
     println!("Track: {}", header.slot_id());
     println!("Time: {}", header.finish_time());
@@ -1177,8 +1177,7 @@ fn input_at_frame_test() {
 #[test]
 fn test_default_mii() {
     let ghost = Ghost::new_from_file("./test_ghosts/rMC3_no name_1m19s817.rkg").unwrap();
-    println!("{:#?}", ghost.header().mii())
-
+    assert_eq!(ghost.header().mii(), &Mii::default())
 }
 
 #[test]
