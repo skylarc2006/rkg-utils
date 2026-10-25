@@ -2,7 +2,7 @@ use crate::{
     byte_handler::{ByteHandler, ByteHandlerError, FromByteHandler},
     crc::crc16,
     header::{
-        combo::{ComboError, Transmission},
+        combo::ComboError,
         location::constants::{Country, CountryError, SubregionError, Version},
         mii::MiiError,
     },
@@ -20,7 +20,6 @@ pub(crate) mod date;
 pub(crate) mod ghost_type;
 pub(crate) mod in_game_time;
 pub(crate) mod slot_id;
-pub(crate) mod transmission_mod;
 
 #[doc(inline)]
 pub use combo::Combo;
@@ -38,8 +37,6 @@ pub use location::Location;
 pub use mii::Mii;
 #[doc(inline)]
 pub use slot_id::{SlotId, SlotIdError};
-#[doc(inline)]
-pub use transmission_mod::{TransmissionMod, TransmissionModError};
 
 /// Errors that can occur while parsing or modifying a [`Header`].
 #[derive(thiserror::Error, Debug)]
@@ -71,9 +68,6 @@ pub enum HeaderError {
     /// The controller field could not be parsed.
     #[error("Controller Error: {0}")]
     ControllerError(#[from] ControllerError),
-    /// The transmission mod field could not be parsed.
-    #[error("Transmission Mod Error: {0}")]
-    TransmissionModError(#[from] TransmissionModError),
     /// The ghost type field could not be parsed.
     #[error("Ghost Type Error: {0}")]
     GhostTypeError(#[from] GhostTypeError),
@@ -113,8 +107,6 @@ pub struct Header {
     controller: Controller,
     /// Whether the ghost's input data is Yaz compressed.
     is_compressed: bool,
-    /// The Retro Rewind transmission override active when the ghost was recorded.
-    transmission_mod: TransmissionMod,
     /// The storage slot or origin category of the ghost.
     ghost_type: GhostType,
     /// Whether automatic drift (as opposed to manual) was used.
@@ -139,7 +131,6 @@ impl Header {
         combo: Combo,
         date_set: Date,
         controller: Controller,
-        transmission_mod: TransmissionMod,
         ghost_type: GhostType,
         is_automatic_drift: bool,
         lap_count: u8,
@@ -154,7 +145,6 @@ impl Header {
             date_set,
             controller,
             is_compressed: false,
-            transmission_mod,
             ghost_type,
             is_automatic_drift,
             decompressed_input_data_length: 0,
@@ -201,7 +191,6 @@ impl Header {
         let date_set = Date::from_byte_handler(&header_data[0x09..=0x0B])?;
         let controller = Controller::from_byte_handler(header_data[0x0B])?;
         let is_compressed = ByteHandler::from(header_data[0x0C]).read_bool(3);
-        let transmission_mod = TransmissionMod::from_byte_handler(header_data[0x0C])?;
         let ghost_type = GhostType::from_byte_handler(&header_data[0x0C..=0x0D])?;
         let is_automatic_drift = ByteHandler::from(header_data[0x0D]).read_bool(1);
         let decompressed_input_data_length =
@@ -248,7 +237,6 @@ impl Header {
             date_set,
             controller,
             is_compressed,
-            transmission_mod,
             ghost_type,
             is_automatic_drift,
             decompressed_input_data_length,
@@ -291,13 +279,6 @@ impl Header {
         write_bits(&mut raw_data, 0x0A, 7, 5, self.date_set.day() as u64);
         write_bits(&mut raw_data, 0x0B, 4, 4, u8::from(self.controller) as u64);
         write_bits(&mut raw_data, 0x0C, 4, 1, self.is_compressed as u64);
-        write_bits(
-            &mut raw_data,
-            0x0C,
-            5,
-            2,
-            u8::from(self.transmission_mod) as u64,
-        );
         write_bits(&mut raw_data, 0x0C, 7, 7, u8::from(self.ghost_type) as u64);
         write_bits(&mut raw_data, 0x0D, 6, 1, self.is_automatic_drift as u64);
         raw_data[0x0E..0x10].copy_from_slice(&self.decompressed_input_data_length.to_be_bytes());
@@ -391,16 +372,6 @@ impl Header {
     /// RKG file layer, not set directly by callers.
     pub(crate) fn set_compressed(&mut self, is_compressed: bool) {
         self.is_compressed = is_compressed;
-    }
-
-    /// Returns the Retro Rewind (Pulsar) transmission override active for this ghost.
-    pub fn transmission_mod(&self) -> TransmissionMod {
-        self.transmission_mod
-    }
-
-    /// Sets the transmission mod.
-    pub fn set_transmission_mod(&mut self, transmission_mod: TransmissionMod) {
-        self.transmission_mod = transmission_mod;
     }
 
     /// Returns the ghost type of this ghost.
@@ -498,19 +469,6 @@ impl Header {
     /// Returns the CRC-16 checksum of the embedded Mii data, computed on the fly.
     pub fn mii_crc16(&self) -> u16 {
         crc16(&self.mii.raw_data())
-    }
-
-    /// Returns the transmission of the combo adjusted depending on transmission mod.
-    pub const fn transmission_adjusted(&self) -> Transmission {
-        match self.transmission_mod {
-            TransmissionMod::Vanilla => self.combo.get_transmission(),
-            TransmissionMod::AllInside => Transmission::Inside,
-            TransmissionMod::AllOutside => Transmission::Outside,
-            TransmissionMod::AllBikeInside if self.combo.vehicle().is_bike() => {
-                Transmission::Inside
-            }
-            TransmissionMod::AllBikeInside => Transmission::Outside,
-        }
     }
 }
 

@@ -7,7 +7,7 @@ use crate::{
     footer::{CTGPFooter, FooterType},
     header::{
         Controller, Date, DateError, GhostType, GhostTypeError, InGameTime, InGameTimeError,
-        SlotId, SlotIdError, TransmissionMod,
+        SlotId, SlotIdError,
         combo::{Character, ComboError, Vehicle},
         location::{Location, constants::*},
         mii::{
@@ -1729,37 +1729,6 @@ fn ghost_type_out_of_range() {
     assert!(GhostType::try_from(0xFFu8).is_err());
 }
 
-// ===== TransmissionMod Tests =====
-
-#[test]
-fn transmission_mod_all() {
-    for (byte, tm) in [
-        (0u8, TransmissionMod::Vanilla),
-        (1, TransmissionMod::AllInside),
-        (2, TransmissionMod::AllBikeInside),
-        (3, TransmissionMod::AllOutside),
-    ] {
-        assert_eq!(u8::from(tm), byte);
-        assert_eq!(TransmissionMod::try_from(byte).unwrap(), tm);
-    }
-}
-
-#[test]
-fn transmission_mod_invalid_byte() {
-    assert!(TransmissionMod::try_from(4).is_err());
-}
-
-#[test]
-fn transmission_mod_display() {
-    assert_eq!(TransmissionMod::Vanilla.to_string(), "Vanilla");
-    assert_eq!(TransmissionMod::AllInside.to_string(), "All Inside");
-    assert_eq!(
-        TransmissionMod::AllBikeInside.to_string(),
-        "All Bikes Inside"
-    );
-    assert_eq!(TransmissionMod::AllOutside.to_string(), "All Outside");
-}
-
 // ===== Combo Tests =====
 
 #[test]
@@ -2366,7 +2335,6 @@ fn header_from_jc_lc_compressed() {
     assert!(header.is_automatic_drift());
     assert_eq!(header.controller(), Controller::Classic);
     assert_eq!(header.ghost_type(), GhostType::ExpertStaff);
-    assert_eq!(header.transmission_mod(), TransmissionMod::Vanilla);
     assert_eq!(header.decompressed_input_data_length(), 1856);
     assert_eq!(header.location().country(), Country::NotSet);
 }
