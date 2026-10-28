@@ -234,9 +234,9 @@ impl FromByteHandler for Eyes {
             EyeColor::try_from(handler.copy_byte(2) >> 5).map_err(|_| EyesError::ColorInvalid)?;
         let y = handler.copy_byte(1) & 0x1F;
         handler.shift_right(5);
-        let rotation = handler.copy_byte(1) & 0x1F;
+        let rotation = handler.copy_byte(1) & 0x07;
         let x = handler.copy_byte(3) & 0x0F;
-        let size = handler.copy_byte(3) >> 4;
+        let size = (handler.copy_byte(3) >> 4) & 0x07;
 
         Self::new(rotation, size, x, y, eye_color, eye_type)
     }

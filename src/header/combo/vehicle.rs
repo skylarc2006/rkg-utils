@@ -249,7 +249,6 @@ impl Vehicle {
             | Self::BitBike
             | Self::StandardBikeS
             | Self::StandardBikeM
-            | Self::Jetsetter
             | Self::Sugarscoot
             | Self::ZipZip
             | Self::DolphinDasher
@@ -270,6 +269,7 @@ impl Vehicle {
             | Self::StandardKartL
             | Self::FlameFlyer
             | Self::PiranhaProwler
+            | Self::Jetsetter
             | Self::Honeycoupe => false,
         }
     }

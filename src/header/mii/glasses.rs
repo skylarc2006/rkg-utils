@@ -145,7 +145,7 @@ impl FromByteHandler for Glasses {
         handler.shift_right(1);
         let glasses_color = GlassesColor::try_from(handler.copy_byte(0) & 0x07)
             .map_err(|_| GlassesError::ColorInvalid)?;
-        let size = handler.copy_byte(1) >> 4;
+        let size = (handler.copy_byte(1) >> 4) & 0x07;
 
         Self::new(y, size, glasses_type, glasses_color)
     }

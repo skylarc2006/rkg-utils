@@ -214,6 +214,6 @@ impl FromByteHandler for GhostType {
     {
         let mut handler = handler.try_into()?;
         handler.shift_right(2);
-        handler.copy_byte(1).try_into()
+        (handler.copy_byte(1) & 0x7F).try_into()
     }
 }

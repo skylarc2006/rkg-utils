@@ -184,16 +184,17 @@ impl CTGPFooter {
     /// - The footer version is not supported ([`CTGPFooterError::InvalidFooterVersion`]).
     /// - Any byte slice conversion, integer parse, category parse, or time parse fails.
     pub fn new(data: &[u8]) -> Result<Self, CTGPFooterError> {
+        // Minimum ~0x96 size for base RKG file
+        // + minimum 0xD0 size for CTGP footer
+        // + 0x04 for the trailing file CRC-32
+        if data.len() < 0x16A {
+            return Err(CTGPFooterError::DataLengthTooShort);
+        }
+
         let ghost_sha1 = compute_sha1_hex(data);
 
         let data = &data[..data.len() - 0x04];
         let end = data.len();
-
-        // Minimum ~0x96 size for base RKG file
-        // + minimum 0xD0 size for CTGP footer
-        if data.len() < 0x166 {
-            return Err(CTGPFooterError::DataLengthTooShort);
-        }
 
         if data[..0x04] != *b"RKGD" {
             return Err(CTGPFooterError::NotRKGD);
@@ -204,6 +205,10 @@ impl CTGPFooter {
         }
 
         let len = ByteHandler::try_from(&data[end - 0x08..][..0x04])?.copy_dword() as usize;
+
+        if len < 0xD0 || len > end - 0x88 - 0x08 {
+            return Err(CTGPFooterError::DataLengthTooShort);
+        }
 
         let footer_version = data[end - 0x09];
 
@@ -278,6 +283,10 @@ impl CTGPFooter {
         // Exact lap split calculation
         let lap_count = data[0x10] as usize;
 
+        if lap_count > 10 {
+            return Err(CTGPFooterError::LapSplitIndexError);
+        }
+
         let lap_time_data = &data[0x11..0x11 + (3 * lap_count)];
         let mut lap_times = Vec::new();
 
@@ -332,14 +341,7 @@ impl CTGPFooter {
 
             let true_ps =
                 lap_times[idx].to_milliseconds() as i64 * 1e+9 as i64 + true_time_ps_subtraction;
-            let true_sec = (true_ps / 1e+12 as i64) as u8;
-            let true_fractional_sec = true_ps % 1e+12 as i64;
-
-            *exact_lap_time = if true_ps > 0 {
-                ExactInGameTime::new(true_sec / 60, true_sec % 60, true_fractional_sec as u64)
-            } else {
-                ExactInGameTime::default()
-            };
+            *exact_lap_time = ExactInGameTime::from_picoseconds(true_ps);
         }
 
         let security_data_v5: Option<[u8; 12]> = if footer_version >= 5 {
@@ -400,14 +402,7 @@ impl CTGPFooter {
         let true_time_ps_subtraction = (finish_true_time_difference as f64 * 1e+9).floor() as i64;
 
         let true_ps = finish_time.to_milliseconds() as i64 * 1e+9 as i64 + true_time_ps_subtraction;
-        let true_sec = (true_ps / 1e+12 as i64) as u8;
-        let true_fractional_sec = true_ps % 1e+12 as i64;
-
-        let exact_finish_time = if true_ps > 0 {
-            ExactInGameTime::new(true_sec / 60, true_sec % 60, true_fractional_sec as u64)
-        } else {
-            ExactInGameTime::default()
-        };
+        let exact_finish_time = ExactInGameTime::from_picoseconds(true_ps);
 
         let player_id = u64::from_be_bytes(data[end - 0x74..][..0x08].try_into().unwrap());
         let track_sha1: [u8; 0x14] = data[end - 0x88..][..0x14].try_into().unwrap();
@@ -424,23 +419,25 @@ impl CTGPFooter {
         let mut pause_times = Vec::new();
         let input_data = if input_data[4..8] == [0x59, 0x61, 0x7A, 0x31] {
             // YAZ1 header, decompress
-            yaz1_decompress(&input_data[4..]).unwrap()
+            yaz1_decompress(&input_data[4..]).ok_or(CTGPFooterError::DataLengthTooShort)?
         } else {
             Vec::from(input_data)
         };
 
-        let face_input_count = u16::from_be_bytes([input_data[0], input_data[1]]);
+        let face_input_count = u16::from_be_bytes([input_data[0], input_data[1]]) as usize;
 
-        let mut current_input_byte = 8;
+        let mut current_input_byte = 8usize;
         let mut elapsed_frames = 1u32;
         while current_input_byte < 8 + face_input_count * 2 {
-            let idx = current_input_byte as usize;
-            let input = &input_data[idx..idx + 2];
+            let idx = current_input_byte;
+            let Some(input) = input_data.get(idx..idx + 2) else {
+                break;
+            };
 
             if contains_ctgp_pause(input[0]) {
                 // Convert frame count to InGameTime
                 // Subtract 240 frames for countdown, another 2 frames because CTGP logs the pause 2 frames after it actually happens
-                let mut pause_timestamp_seconds = (elapsed_frames - 242) as f64 / 59.94;
+                let mut pause_timestamp_seconds = elapsed_frames.saturating_sub(242) as f64 / 59.94;
                 let mut minutes = 0;
                 let mut seconds = 0;
 

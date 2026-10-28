@@ -60,11 +60,7 @@ impl ByteHandler {
             return false;
         }
 
-        #[cfg(target_endian = "little")]
-        return (unsafe { self.dword } & (1u32 << ((d % 8) + 8 * (3 - (d / 8))))) != 0;
-
-        #[cfg(target_endian = "big")]
-        return (unsafe { self.dword } & (1u32 << d)) != 0;
+        (unsafe { self.dword } & (1u32 << ((d % 8) + 8 * (3 - (d / 8))))) != 0
     }
 }
 

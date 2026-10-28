@@ -57,8 +57,7 @@ impl TryFrom<u8> for FaceButtons {
             buttons.push(FaceButton::Pause);
         }
 
-        // 0x40 is the CTGP pause mask and 0x10 is BrakeDrift — exclude both
-        if value & 0xE0 != 0 && value & 0x40 == 0 {
+        if value & 0xA0 != 0 {
             buttons.push(FaceButton::Unknown);
         }
 

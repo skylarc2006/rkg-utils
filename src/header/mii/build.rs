@@ -85,7 +85,7 @@ impl Build {
         if weight > 127 {
             return Err(BuildError::WeightInvalid);
         }
-        self.height = weight;
+        self.weight = weight;
         Ok(())
     }
 }

@@ -73,6 +73,16 @@ impl Shroomstrat {
         }
     }
 
+    
+    pub(crate) fn unused(lap_count: u8) -> Self {
+        Self {
+            shroom_1_usage: None,
+            shroom_2_usage: None,
+            shroom_3_usage: None,
+            lap_count,
+        }
+    }
+
     /// Returns the lap the first mushroom was used on, or `None` if it was never used.
     pub fn shroom_1_usage(&self) -> Option<u8> {
         self.shroom_1_usage
@@ -125,14 +135,12 @@ impl Shroomstrat {
 /// (see [`Shroomstrat::to_vec`]).
 impl Display for Shroomstrat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let v = self.to_vec();
-        let mut string = v[0].to_string();
-
-        if v.len() > 1 {
-            for lap in v[1..].iter() {
-                string += format!("-{}", lap).as_str();
-            }
-        }
+        let string = self
+            .to_vec()
+            .iter()
+            .map(u8::to_string)
+            .collect::<Vec<_>>()
+            .join("-");
         write!(f, "{string}")
     }
 }

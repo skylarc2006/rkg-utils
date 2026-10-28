@@ -21,7 +21,7 @@ pub enum SlotIdError {
 ///
 /// Each variant corresponds to a specific slot in the game's internal course
 /// table. Slot IDs are not assigned sequentially by cup order; for example,
-/// `GalaxyColosseum` (`0xC9`) is a special slot that can trigger unique behavior.
+/// `GalaxyColosseum` (`0x36`) is a special slot that can trigger unique behavior.
 ///
 /// <https://wiki.tockdom.com/wiki/List_of_Identifiers#Courses>
 /// <https://wiki.tockdom.com/wiki/Slot>
@@ -192,7 +192,7 @@ impl From<SlotId> for u8 {
             SlotId::N64Skscraper => 0x29,
             SlotId::GCNCookieLand => 0x25,
             SlotId::DSTwilightHouse => 0x26,
-            SlotId::GalaxyColosseum => 0xC9,
+            SlotId::GalaxyColosseum => 0x36,
             SlotId::WinningScene => 0x37,
             SlotId::LosingScene => 0x38,
             SlotId::Credits => 0x3A,
@@ -252,7 +252,7 @@ impl TryFrom<u8> for SlotId {
             0x29 => Ok(SlotId::N64Skscraper),
             0x25 => Ok(SlotId::GCNCookieLand),
             0x26 => Ok(SlotId::DSTwilightHouse),
-            0xC9 => Ok(SlotId::GalaxyColosseum),
+            0x36 => Ok(SlotId::GalaxyColosseum),
             0x37 => Ok(SlotId::WinningScene),
             0x38 => Ok(SlotId::LosingScene),
             0x3A => Ok(SlotId::Credits),

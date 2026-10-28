@@ -38,6 +38,23 @@ impl ExactInGameTime {
         }
     }
 
+    /// Creates an [`ExactInGameTime`] from a total number of picoseconds,
+    /// splitting it into minutes, seconds, and picoseconds.
+    ///
+    /// Negative totals yield the default (zero) time.
+    pub fn from_picoseconds(total_picoseconds: i64) -> Self {
+        if total_picoseconds <= 0 {
+            return Self::default();
+        }
+        let total_picoseconds = total_picoseconds as u64;
+        let total_seconds = total_picoseconds / PICOS_PER_SECOND;
+        Self::new(
+            u8::try_from(total_seconds / 60).unwrap_or(u8::MAX),
+            (total_seconds % 60) as u8,
+            total_picoseconds % PICOS_PER_SECOND,
+        )
+    }
+
     /// Returns the minutes component of the finish time.
     pub fn minutes(self) -> u8 {
         self.minutes

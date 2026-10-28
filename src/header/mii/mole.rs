@@ -144,7 +144,7 @@ impl FromByteHandler for Mole {
         Self::Err: From<T::Error>,
     {
         let mut handler = handler.try_into()?;
-        let has_mole = handler.read_bool(15);
+        let has_mole = handler.read_bool(7);
         handler.shift_right(1);
         let x = handler.copy_byte(1) & 0x1F;
         handler.shift_right(2);

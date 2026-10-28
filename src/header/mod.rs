@@ -198,10 +198,9 @@ impl Header {
 
         let lap_count = header_data[0x10];
         let mut lap_split_times = [InGameTime::default(); 11];
-        for idx in 0..lap_count {
-            let start = (0x11 + idx * 3) as usize;
-            lap_split_times[idx as usize] =
-                InGameTime::from_byte_handler(&header_data[start..start + 3])?;
+        for idx in 0..(lap_count as usize).min(lap_split_times.len()) {
+            let start = 0x11 + idx * 3;
+            lap_split_times[idx] = InGameTime::from_byte_handler(&header_data[start..start + 3])?;
         }
 
         let codes = ByteHandler::try_from(&header_data[0x34..=0x37]).unwrap();
@@ -249,6 +248,15 @@ impl Header {
 
     /// Returns the calculated raw 136-byte header block.
     pub fn raw_data(&self) -> [u8; 0x88] {
+        self.raw_data_with_input_info(self.is_compressed, self.decompressed_input_data_length)
+    }
+
+    
+    pub(crate) fn raw_data_with_input_info(
+        &self,
+        is_compressed: bool,
+        decompressed_input_data_length: u16,
+    ) -> [u8; 0x88] {
         let mut raw_data = [0u8; 0x88];
 
         raw_data[0x00..0x04].copy_from_slice(b"RKGD");
@@ -278,10 +286,10 @@ impl Header {
         write_bits(&mut raw_data, 0x0A, 3, 4, self.date_set.month() as u64);
         write_bits(&mut raw_data, 0x0A, 7, 5, self.date_set.day() as u64);
         write_bits(&mut raw_data, 0x0B, 4, 4, u8::from(self.controller) as u64);
-        write_bits(&mut raw_data, 0x0C, 4, 1, self.is_compressed as u64);
+        write_bits(&mut raw_data, 0x0C, 4, 1, is_compressed as u64);
         write_bits(&mut raw_data, 0x0C, 7, 7, u8::from(self.ghost_type) as u64);
         write_bits(&mut raw_data, 0x0D, 6, 1, self.is_automatic_drift as u64);
-        raw_data[0x0E..0x10].copy_from_slice(&self.decompressed_input_data_length.to_be_bytes());
+        raw_data[0x0E..0x10].copy_from_slice(&decompressed_input_data_length.to_be_bytes());
         raw_data[0x10] = self.lap_count;
         for idx in 0..11usize {
             write_in_game_time(&mut raw_data, 0x11 + idx * 3, 0, &self.lap_split_times[idx]);
@@ -435,7 +443,7 @@ impl Header {
     ///
     /// Does nothing if `idx` is greater than or equal to [`lap_count`](Header::lap_count).
     pub fn set_lap_split_time(&mut self, idx: usize, lap_split_time: InGameTime) {
-        if idx >= self.lap_count as usize {
+        if idx >= self.lap_count as usize || idx >= self.lap_split_times.len() {
             return;
         }
         self.lap_split_times[idx] = lap_split_time;

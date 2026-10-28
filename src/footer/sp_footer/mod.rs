@@ -1,4 +1,3 @@
-// TODO: eliminate the need for raw_data to be a struct member
 use crate::{
     byte_handler::{ByteHandler, FromByteHandler},
     footer::ctgp_footer::ExactInGameTime,
@@ -117,13 +116,14 @@ impl SPFooter {
             return Err(SPFooterError::NotSPGD);
         }
 
-        let footer_len = (u32::from_be_bytes(
+        let footer_len = u32::from_be_bytes(
             data[data.len() - 0x0C..data.len() - 0x08]
                 .try_into()
                 .unwrap(),
-        ) + 0x08) as usize;
+        ) as usize
+            + 0x08;
 
-        if data.len() < footer_len {
+        if footer_len < 0x50 || data.len() < 0x88 + footer_len + 0x04 {
             return Err(SPFooterError::DataLengthTooShort);
         }
 
@@ -147,6 +147,10 @@ impl SPFooter {
 
         // Exact lap split calculation
         let lap_count = data[0x10] as usize;
+
+        if lap_count == 0 || lap_count > 11 {
+            return Err(SPFooterError::LapSplitIndexError);
+        }
 
         let lap_time_data = &data[0x11..0x11 + (3 * lap_count)];
         let mut lap_times = Vec::new();
@@ -200,14 +204,7 @@ impl SPFooter {
 
             let true_ps =
                 lap_times[idx].to_milliseconds() as i64 * 1e+9 as i64 + true_time_ps_subtraction;
-            let true_sec = (true_ps / 1e+12 as i64) as u8;
-            let true_fractional_sec = true_ps % 1e+12 as i64;
-
-            *exact_lap_time = if true_ps > 0 {
-                ExactInGameTime::new(true_sec / 60, true_sec % 60, true_fractional_sec as u64)
-            } else {
-                ExactInGameTime::default()
-            };
+            *exact_lap_time = ExactInGameTime::from_picoseconds(true_ps);
         }
 
         let mut exact_finish_time: ExactInGameTime =
@@ -222,14 +219,7 @@ impl SPFooter {
             let total_picoseconds =
                 exact_finish_time.time_to_picoseconds() as i64 + true_time_ps_subtraction;
 
-            let true_sec = (total_picoseconds / 1e+12 as i64) as u8;
-            let true_fractional_sec = total_picoseconds % 1e+12 as i64;
-
-            exact_finish_time = if total_picoseconds > 0 {
-                ExactInGameTime::new(true_sec / 60, true_sec % 60, true_fractional_sec as u64)
-            } else {
-                ExactInGameTime::default()
-            };
+            exact_finish_time = ExactInGameTime::from_picoseconds(total_picoseconds);
 
             exact_finish_time_unreliable = false;
         } else {

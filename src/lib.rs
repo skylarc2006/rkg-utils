@@ -90,11 +90,7 @@ impl Ghost {
     /// `should_preserve_external_footer` is set to `false`.
     pub fn new(mut header: Header, input_data: InputData) -> Self {
         header.set_compressed(input_data.compressed());
-        let decompressed_len = 8u16
-            + input_data.face_button_input_count() * 2
-            + input_data.stick_input_count() * 2
-            + input_data.dpad_button_input_count() * 2;
-        header.set_decompressed_input_data_length(decompressed_len);
+        header.set_decompressed_input_data_length(input_data.decompressed_length());
         Self {
             header,
             input_data,
@@ -218,36 +214,50 @@ impl Ghost {
     /// Returns [`GhostError::InputDataError`] if the input data's uncompressed
     /// raw representation would exceed `0x2774` bytes.
     pub fn raw_data(&mut self) -> Result<Vec<u8>, GhostError> {
-        let mut buf = Vec::from(self.header.raw_data());
+        let compression_method = self.effective_compression_method();
+        self.input_data.set_compression_method(compression_method);
 
-        if let Some(FooterType::CTGPFooter(_)) = &self.footer()
-            && self.should_preserve_external_footer
-        {
-            let _ = &self
-                .input_data_mut()
-                .set_compression_method(CompressionMethod::CTGP);
-        } else if let Some(FooterType::SPFooter(_)) = &self.footer()
-            && self.should_preserve_external_footer
-        {
-            let _ = &self
-                .input_data_mut()
-                .set_compression_method(CompressionMethod::SP);
-        } else {
-            let _ = &self
-                .input_data_mut()
-                .set_compression_method(CompressionMethod::Vanilla);
-        }
+        let mut buf = self.header_and_input_bytes()?;
 
-        buf.extend_from_slice(&self.input_data.raw_data()?);
+        
+        self.header.set_compressed(self.input_data.compressed());
+        self.header
+            .set_decompressed_input_data_length(self.input_data.decompressed_length());
+
         let base_crc32 = crc32(&buf);
         buf.extend_from_slice(&base_crc32.to_be_bytes());
+
         if self.should_preserve_external_footer
             && let Some(footer) = &self.footer
         {
             buf.extend_from_slice(&footer.raw_data());
+            let file_crc32 = crc32(&buf);
+            buf.extend_from_slice(&file_crc32.to_be_bytes());
         }
-        let file_crc32 = crc32(&buf);
-        buf.extend_from_slice(&file_crc32.to_be_bytes());
+        Ok(buf)
+    }
+
+    fn effective_compression_method(&self) -> CompressionMethod {
+        match &self.footer {
+            Some(FooterType::CTGPFooter(_)) if self.should_preserve_external_footer => {
+                CompressionMethod::CTGP
+            }
+            Some(FooterType::SPFooter(_)) if self.should_preserve_external_footer => {
+                CompressionMethod::SP
+            }
+            _ => CompressionMethod::Vanilla,
+        }
+    }
+
+    fn header_and_input_bytes(&self) -> Result<Vec<u8>, GhostError> {
+        let input_data = self
+            .input_data
+            .raw_data_with_method(self.effective_compression_method())?;
+        let mut buf = Vec::from(self.header.raw_data_with_input_info(
+            self.input_data.compressed(),
+            self.input_data.decompressed_length(),
+        ));
+        buf.extend_from_slice(&input_data);
         Ok(buf)
     }
 
@@ -348,7 +358,7 @@ impl Ghost {
             shroom_usages[2],
             self.header().lap_count(),
         )
-        .unwrap()
+        .unwrap_or_else(|_| Shroomstrat::unused(self.header().lap_count()))
     }
 
     /// Returns the CRC-32 of the header and input data, excluding any footer.
@@ -358,9 +368,7 @@ impl Ghost {
     /// Returns [`GhostError::InputDataError`] if the input data's uncompressed
     /// raw representation would exceed `0x2774` bytes.
     pub fn base_crc32(&self) -> Result<u32, GhostError> {
-        let mut buf = Vec::from(self.header.raw_data());
-        buf.extend_from_slice(&self.input_data.raw_data()?);
-        Ok(crc32(&buf))
+        Ok(crc32(&self.header_and_input_bytes()?))
     }
 
     /// Returns the CRC-32 of the entire file excluding its final 4 bytes.

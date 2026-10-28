@@ -45,17 +45,14 @@ impl Date {
     /// Returns [`DateError::DayInvalid`] if `day` exceeds the maximum for the given
     /// month, accounting for leap years in February.
     pub fn new(year: u16, month: u8, day: u8) -> Result<Self, DateError> {
-        if year < 2000 {
+        if !(2000..=2099).contains(&year) {
             return Err(DateError::YearInvalid);
         }
 
         let year = (year - 2000) as u8;
 
-        if year > 99 {
-            return Err(DateError::YearInvalid);
-        }
-
         match month {
+            1..=12 if day == 0 => Err(DateError::DayInvalid),
             1 | 3 | 5 | 7 | 8 | 10 | 12 if day > 31 => Err(DateError::DayInvalid),
             4 | 6 | 9 | 11 if day > 30 => Err(DateError::DayInvalid),
             2 if year.is_multiple_of(4) && day > 29 => Err(DateError::DayInvalid),

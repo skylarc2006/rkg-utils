@@ -61,7 +61,8 @@ impl InGameTime {
     pub fn from_milliseconds(milliseconds: u32) -> Result<Self, InGameTimeError> {
         let millis = (milliseconds % 1000) as u16;
         let seconds = ((milliseconds / 1000) % 60) as u8;
-        let minutes = ((milliseconds / 60000) % 60) as u8;
+        let minutes = u8::try_from(milliseconds / 60000)
+            .map_err(|_| InGameTimeError::InGameTimeElementTooLarge)?;
 
         Self::new(minutes, seconds, millis)
     }

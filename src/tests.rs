@@ -1628,8 +1628,8 @@ fn slot_id_mario_circuit() {
 
 #[test]
 fn slot_id_galaxy_colosseum() {
-    assert_eq!(u8::from(SlotId::GalaxyColosseum), 0xC9);
-    assert_eq!(SlotId::try_from(0xC9u8).unwrap(), SlotId::GalaxyColosseum);
+    assert_eq!(u8::from(SlotId::GalaxyColosseum), 0x36);
+    assert_eq!(SlotId::try_from(0x36u8).unwrap(), SlotId::GalaxyColosseum);
 }
 
 #[test]

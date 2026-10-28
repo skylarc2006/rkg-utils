@@ -104,7 +104,12 @@ impl InputData {
         let input_data = if input_data[4..8] == *b"Yaz1" {
             // YAZ1 header, decompress
             compressed = true;
-            yaz1_decompress(&input_data[4..]).unwrap()
+            if input_data.len() >= 0x10
+                && u32::from_be_bytes(input_data[0x08..0x0C].try_into().unwrap()) > 0x2774
+            {
+                return Err(InputDataError::InputDataLengthTooLong);
+            }
+            yaz1_decompress(&input_data[4..]).ok_or(InputDataError::InputDataMalformed)?
         } else {
             compressed = false;
             Vec::from(input_data)
@@ -120,9 +125,10 @@ impl InputData {
         let dpad_button_input_count = read_u16(0x04);
         // bytes 0x06-0x07: padding
 
-        if (input_data.len() as u16)
-            < ((face_button_input_count + stick_input_count + dpad_button_input_count) * 2) + 0x08
-        {
+        let entry_count = face_button_input_count as usize
+            + stick_input_count as usize
+            + dpad_button_input_count as usize;
+        if input_data.len() < entry_count * 2 + 0x08 {
             return Err(InputDataError::InputDataMalformed);
         }
 
@@ -162,7 +168,7 @@ impl InputData {
         }
 
         // Combine adjacent inputs when the same button is held across multiple bytes
-        for idx in (0..face_button_inputs.len() - 1).rev() {
+        for idx in (0..face_button_inputs.len().saturating_sub(1)).rev() {
             if face_button_inputs[idx].0 == face_button_inputs[idx + 1].0 {
                 let f1 = face_button_inputs[idx].1;
                 let f2 = face_button_inputs[idx + 1].1;
@@ -171,7 +177,7 @@ impl InputData {
             }
         }
 
-        for idx in (0..stick_inputs.len() - 1).rev() {
+        for idx in (0..stick_inputs.len().saturating_sub(1)).rev() {
             if stick_inputs[idx].0 == stick_inputs[idx + 1].0 {
                 let f1 = stick_inputs[idx].1;
                 let f2 = stick_inputs[idx + 1].1;
@@ -180,7 +186,7 @@ impl InputData {
             }
         }
 
-        for idx in (0..dpad_button_inputs.len() - 1).rev() {
+        for idx in (0..dpad_button_inputs.len().saturating_sub(1)).rev() {
             if dpad_button_inputs[idx].0 == dpad_button_inputs[idx + 1].0 {
                 let f1 = dpad_button_inputs[idx].1;
                 let f2 = dpad_button_inputs[idx + 1].1;
@@ -421,6 +427,15 @@ impl InputData {
     ///
     /// Returns [`InputDataError::InputDataLengthTooLong`] if the uncompressed raw data representation exceeds `0x2774` bytes in size.
     pub fn raw_data(&self) -> Result<Vec<u8>, InputDataError> {
+        self.raw_data_with_method(self.compression_method)
+    }
+
+    /// Same as [`raw_data`](Self::raw_data), but compresses with
+    /// `compression_method` instead of the stored compression method.
+    pub(crate) fn raw_data_with_method(
+        &self,
+        compression_method: CompressionMethod,
+    ) -> Result<Vec<u8>, InputDataError> {
         let mut raw_data = Vec::new();
 
         // Input data header
@@ -505,7 +520,7 @@ impl InputData {
         }
 
         if self.compressed() {
-            match self.compression_method() {
+            match compression_method {
                 CompressionMethod::CTGP => Ok(ctgp_compress(&raw_data)),
                 CompressionMethod::Vanilla => Ok(yaz1_compress(&raw_data)),
                 CompressionMethod::SP => Ok(sp_compress(&raw_data)),
@@ -514,6 +529,14 @@ impl InputData {
             raw_data.resize(0x2774, 0x00);
             Ok(raw_data)
         }
+    }
+
+    
+    pub(crate) fn decompressed_length(&self) -> u16 {
+        let entries = self.face_button_input_count() as u32
+            + self.stick_input_count() as u32
+            + self.dpad_button_input_count() as u32;
+        u16::try_from(8 + entries * 2).unwrap_or(u16::MAX)
     }
 
     /// Returns the compression method used when serializing this input data.
@@ -694,7 +717,8 @@ fn assign_auto_detect_drift_flags(inputs: &mut [ControllerInput]) {
 /// size as a big-endian `u32` and 8 bytes of padding. The result is
 /// zero-padded to `0x2774` bytes.
 ///
-/// Returns `None` if the magic is missing, the data is truncated, or the
+/// Returns `None` if the magic is missing, the declared uncompressed size
+/// exceeds `0x2774` bytes, the data is truncated or malformed, or the
 /// decompressed output does not match the expected size.
 ///
 /// Adapted from <https://github.com/AtishaRibeiro/InputDisplay/blob/master/InputDisplay/Core/Yaz1dec.cs>.
@@ -705,6 +729,9 @@ pub(crate) fn yaz1_decompress(data: &[u8]) -> Option<Vec<u8>> {
     }
 
     let uncompressed_size = u32::from_be_bytes([data[4], data[5], data[6], data[7]]) as usize;
+    if uncompressed_size > 0x2774 {
+        return None;
+    }
 
     let mut result = Vec::with_capacity(uncompressed_size);
 
@@ -1047,7 +1074,7 @@ fn decompress_block(src: &[u8], offset: usize, uncompressed_size: usize) -> Opti
             src_pos += 1;
 
             let dist = (((byte1 & 0xF) as usize) << 8) | (byte2 as usize);
-            let copy_source = dst.len().wrapping_sub(dist + 1);
+            let copy_source = dst.len().checked_sub(dist + 1)?;
 
             let mut num_bytes = (byte1 >> 4) as usize;
             if num_bytes == 0 {

@@ -233,7 +233,7 @@ impl Mii {
         let birthday = Birthday::from_byte_handler(bytes)?;
 
         let favorite_color = FavoriteColor::from_byte_handler(raw_data[1])?;
-        let is_favorite = raw_data[1].is_multiple_of(2);
+        let is_favorite = raw_data[1] & 0x01 != 0;
 
         let name = utf16be_to_string(&raw_data[0x02..=0x15])?;
 
@@ -364,12 +364,13 @@ impl Mii {
         let mut mii_info_bytes = <[u8; 2]>::from(self.birthday);
         mii_info_bytes[0] |= (self.is_girl as u8) << 6;
         mii_info_bytes[1] |= u8::from(self.favorite_color) << 1;
-        mii_info_bytes[1] |= !self.is_favorite as u8;
+        mii_info_bytes[1] |= self.is_favorite as u8;
 
         raw_data.extend_from_slice(&mii_info_bytes);
         let mut name_bytes = [0u8; 0x14];
         let name_utf16 = string_to_utf16be(&self.name);
-        name_bytes[..name_utf16.len()].copy_from_slice(&name_utf16);
+        let name_len = name_utf16.len().min(name_bytes.len());
+        name_bytes[..name_len].copy_from_slice(&name_utf16[..name_len]);
         raw_data.extend_from_slice(&name_bytes);
         raw_data.extend_from_slice(&<[u8; 2]>::from(self.build));
         raw_data.extend_from_slice(&self.mii_id.to_be_bytes());
@@ -390,7 +391,8 @@ impl Mii {
         raw_data.extend_from_slice(&<[u8; 2]>::from(self.mole));
         let mut creator_name_bytes = [0u8; 0x14];
         let creator_utf16 = string_to_utf16be(&self.creator_name);
-        creator_name_bytes[..creator_utf16.len()].copy_from_slice(&creator_utf16);
+        let creator_len = creator_utf16.len().min(creator_name_bytes.len());
+        creator_name_bytes[..creator_len].copy_from_slice(&creator_utf16[..creator_len]);
         raw_data.extend_from_slice(&creator_name_bytes);
 
         raw_data.try_into().unwrap()
@@ -445,7 +447,7 @@ impl Mii {
     ///
     /// Names longer than 10 characters are silently ignored.
     pub fn set_name(&mut self, name: &str) {
-        if name.len() > 10 {
+        if name.encode_utf16().count() > 10 {
             return;
         }
         self.name = name.to_string();
@@ -626,7 +628,7 @@ impl Mii {
     ///
     /// Names longer than 10 characters are silently ignored.
     pub fn set_creator_name(&mut self, creator_name: &str) {
-        if creator_name.len() > 10 {
+        if creator_name.encode_utf16().count() > 10 {
             return;
         }
         self.creator_name = creator_name.to_string();
@@ -640,7 +642,7 @@ impl Default for Mii {
             false,
             Birthday::new(0, 0).unwrap(),
             FavoriteColor::Red,
-            true,
+            false,
             String::from("no name"),
             Build::new(64, 64).unwrap(),
             MiiType::Normal,

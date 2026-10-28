@@ -241,7 +241,7 @@ impl FromByteHandler for Eyebrows {
         let y = handler.copy_byte(3) >> 3;
         let size = handler.copy_byte(2) & 0x0F;
         handler.shift_right(2);
-        let rotation = handler.copy_byte(1) >> 3;
+        let rotation = (handler.copy_byte(1) >> 3) & 0x0F;
         Self::new(rotation, size, x, y, eyebrow_color, eyebrow_type)
     }
 }
